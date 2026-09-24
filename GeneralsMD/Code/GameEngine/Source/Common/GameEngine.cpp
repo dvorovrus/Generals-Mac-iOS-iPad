@@ -28,6 +28,10 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #include "Common/ActionManager.h"
 #include "Common/AudioAffect.h"
 #include "Common/BuildAssistant.h"
