@@ -510,6 +510,25 @@ void GameEngine::init()
 		}
 	}
 
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+	// Final iPad override layer. Documents is exposed through File Sharing,
+	// so the user can replace this tiny file without rebuilding the IPA.
+	// It loads after GameData.ini and SagePatch.ini by design.
+	{
+		const char *home = getenv("HOME");
+		if (home != nullptr)
+		{
+			AsciiString iPadOverridesPath;
+			iPadOverridesPath.format("%s/Documents/iPadOverrides.ini", home);
+			if (TheLocalFileSystem->doesFileExist(iPadOverridesPath.str()))
+			{
+				DEBUG_LOG(("Loading iPad File Sharing overrides: %s", iPadOverridesPath.str()));
+				ini.load(iPadOverridesPath, INI_LOAD_OVERWRITE, nullptr);
+			}
+		}
+	}
+#endif
+
 	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////
 	GetPrecisionTimer(&endTime64);//////////////////////////////////////////////////////////////////
 	sprintf(Buf,"----------------------------------------------------------------------------After  TheWritableGlobalData = %f seconds",((double)(endTime64-startTime64)/(double)(freq64)));
