@@ -384,6 +384,44 @@ int main(int argc, char* argv[])
 				snprintf(userDataDir, sizeof(userDataDir),
 				         "%s/Library/Application Support/GeneralsX/GeneralsZH", home);
 				snprintf(optionsPath, sizeof(optionsPath), "%s/Options.ini", userDataDir);
+
+				// iPad File Sharing bridge: Files/iTunes/Apple Devices can only see
+				// Documents, while GeneralsX keeps writable user data in Library.
+				// If the user drops Options.ini or SagePatch.ini into Documents,
+				// mirror it into the normal user-data directory before GameMain()
+				// starts so every existing settings consumer sees it naturally.
+				{
+					std::error_code dirError;
+					std::filesystem::create_directories(userDataDir, dirError);
+
+					char docsDir[1024];
+					snprintf(docsDir, sizeof(docsDir), "%s/Documents", home);
+
+					auto syncEditableConfig = [&](const char *fileName) {
+						char sourcePath[1024], destinationPath[1024];
+						snprintf(sourcePath, sizeof(sourcePath), "%s/%s", docsDir, fileName);
+						snprintf(destinationPath, sizeof(destinationPath), "%s/%s", userDataDir, fileName);
+
+						if (access(sourcePath, R_OK) == 0) {
+							std::error_code copyError;
+							std::filesystem::copy_file(
+								sourcePath,
+								destinationPath,
+								std::filesystem::copy_options::overwrite_existing,
+								copyError);
+							if (!copyError) {
+								fprintf(stderr, "INFO: iPad File Sharing applied %s\n", fileName);
+							} else {
+								fprintf(stderr, "WARNING: failed to apply Documents/%s: %s\n",
+								        fileName, copyError.message().c_str());
+							}
+						}
+					};
+
+					syncEditableConfig("Options.ini");
+					syncEditableConfig("SagePatch.ini");
+				}
+
 				if (access(optionsPath, F_OK) != 0 && access("DefaultOptions.ini", R_OK) == 0) {
 					std::error_code fsError;
 					std::filesystem::create_directories(userDataDir, fsError);
