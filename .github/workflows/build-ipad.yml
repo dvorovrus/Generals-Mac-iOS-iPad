@@ -292,18 +292,18 @@ jobs:
              "${EXTRA}/DefaultOptions.ini"
 
           cat > "${EXTRA}/README.txt" <<'EOF'
-This archive does NOT contain commercial Command & Conquer game assets.
-
-When producing a self-contained IPA:
-
-1. Extract GeneralsZH-iPad-unsigned.ipa.
-2. Create:
-   Payload/GeneralsXZH.app/GameData
-3. Copy your legally-owned Zero Hour game files into GameData.
-4. Copy fonts/, dxvk.conf and DefaultOptions.ini from this archive into GameData.
-5. Repack Payload as an IPA.
-6. Sign/sideload the resulting IPA using your own Apple account.
-EOF
+          This archive does NOT contain commercial Command & Conquer game assets.
+          
+          When producing a self-contained IPA:
+          
+          1. Extract GeneralsZH-iPad-unsigned.ipa.
+          2. Create:
+             Payload/GeneralsXZH.app/GameData
+          3. Copy your legally-owned Zero Hour game files into GameData.
+          4. Copy fonts/, dxvk.conf and DefaultOptions.ini from this archive into GameData.
+          5. Repack Payload as an IPA.
+          6. Sign/sideload the resulting IPA using your own Apple account.
+          EOF
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v7
