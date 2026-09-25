@@ -1089,7 +1089,15 @@ Int parseMod(char *args[], Int num)
 		if (statBuf.st_mode & _S_IFDIR)
 		{
 			if (!modPath.endsWith("\\") && !modPath.endsWith("/"))
+			{
+#if defined(_WIN32)
 				modPath.concat('\\');
+#else
+				// GeneralsX @bugfix dvorovrus 26/09/2026 Use the native
+				// directory separator for absolute mod directories on POSIX/iOS.
+				modPath.concat('/');
+#endif
+			}
 			DEBUG_LOG(("Mod dir is '%s'.", modPath.str()));
 			TheWritableGlobalData->m_modDir = modPath;
 		}
