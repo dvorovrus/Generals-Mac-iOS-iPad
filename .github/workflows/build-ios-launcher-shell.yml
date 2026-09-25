@@ -57,7 +57,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: '533a5fda5c0646d1771345fb572e759283444d5f'
+          vcpkgGitCommitId: '18ff00a7d2697e23f22e2a2293c3fa6468a50c06'
 
       - name: Install build tools
         run: |
