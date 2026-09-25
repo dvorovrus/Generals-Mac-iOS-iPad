@@ -80,8 +80,6 @@ target_sources(z_generals PRIVATE
 
 # GeneralsX @feature dvorovrus 25/09/2026 Embedded Vite/WKWebView profile launcher for iOS.
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    enable_language(OBJCXX)
-
     target_sources(z_generals PRIVATE
         IOSProfileLauncher.h
         IOSProfileLauncher.mm
