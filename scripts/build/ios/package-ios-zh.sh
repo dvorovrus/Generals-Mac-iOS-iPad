@@ -237,17 +237,13 @@ if [[ "${ALL_IN_ONE}" == "1" ]]; then
             --exclude="screenshots" \
             "${source_dir}/" "${target_dir}/"
 
-        while IFS= read -r -d '' file; do
-            local target="${file%.*}.big"
-            if [[ -e "${target}" ]]; then
-                echo "ERROR: cannot activate ${file}; target already exists: ${target}"
-                exit 1
-            fi
-            mv "${file}" "${target}"
-        done < <(find "${target_dir}" -type f \( -iname '*.zhe' -o -iname '*.ctr' \) -print0)
-
+        # Profiles passed to the macOS direct packager must already contain the
+        # desired active .big set. Do not blindly rename every .zhe/.ctr here:
+        # both Enhanced and Contra ship mutually exclusive optional archives.
+        # The Windows all-in-one builder applies the known launcher defaults.
         if ! find "${target_dir}" -type f -iname '*.big' -print -quit | grep -q .; then
             echo "ERROR: ${label} contains no active .big archives after staging."
+            echo "  Pass a prepared profile, or use build-all-in-one-ipa.py on Windows."
             exit 1
         fi
 
