@@ -11,20 +11,28 @@
 #      provisioning profile from step 1, preserving entitlements.
 #   5. Optional: install to the first connected device via devicectl.
 #
-# Usage: ./scripts/build/ios/package-ios-zh.sh [--dev] [--install]
-#   --dev      skip bundling the 2.7 GB of game assets (code-only iteration)
-#   --install  install the packaged app to the first connected device
+# Usage: ./scripts/build/ios/package-ios-zh.sh [--dev] [--all-in-one] [--install]
+#   --dev         skip bundling the 2.7 GB of game assets (code-only iteration)
+#   --all-in-one  bundle the Vite launcher + Enhanced + Contra X profile overlays
+#   --install     install the packaged app to the first connected device
 set -euo pipefail
 
 DEV_MODE=0
+ALL_IN_ONE=0
 DO_INSTALL=0
 for arg in "$@"; do
     case "$arg" in
-        --dev)     DEV_MODE=1 ;;
-        --install) DO_INSTALL=1 ;;
-        *) echo "ERROR: unknown argument '$arg' (usage: $0 [--dev] [--install])"; exit 1 ;;
+        --dev)        DEV_MODE=1 ;;
+        --all-in-one) ALL_IN_ONE=1 ;;
+        --install)    DO_INSTALL=1 ;;
+        *) echo "ERROR: unknown argument '$arg' (usage: $0 [--dev] [--all-in-one] [--install])"; exit 1 ;;
     esac
 done
+
+if [[ "${DEV_MODE}" == "1" && "${ALL_IN_ONE}" == "1" ]]; then
+    echo "ERROR: --dev and --all-in-one are mutually exclusive."
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -124,6 +132,9 @@ fi
 GAME_DATA_SRC="${GX_GAME_DATA:-${HOME}/GeneralsX/GeneralsZH}"
 FONTS_SRC="${GX_FONTS:-${HOME}/GeneralsX/ios-staging/fonts}"
 CONFIG_SRC="${GX_CONFIG:-${IOS_DIR}/config}"
+LAUNCHER_SRC="${GX_LAUNCHER_DIST:-${PROJECT_ROOT}/launcher_vite/dist}"
+ENHANCED_SRC="${GX_ENHANCED_DATA:-${HOME}/GeneralsX/Mods/ZeroHourEnhanced}"
+CONTRA_X_SRC="${GX_CONTRA_X_DATA:-${HOME}/GeneralsX/Mods/ContraX}"
 if [[ "${DEV_MODE}" != "1" ]]; then
     echo "==> Bundling game assets into the app"
     mkdir -p "${APP}/GameData"
@@ -155,6 +166,76 @@ if [[ "${DEV_MODE}" != "1" ]]; then
     cp "${CONFIG_SRC}/dxvk.conf" "${APP}/GameData/dxvk.conf"
     cp "${CONFIG_SRC}/Options.ini" "${APP}/GameData/DefaultOptions.ini"
     echo "    bundled $(du -sh "${APP}/GameData" | cut -f1) of game data"
+fi
+
+# GeneralsX @feature dvorovrus 25/09/2026 Bundle one launcher and two mod-only
+# overlays alongside the shared retail GameData. The engine's existing -mod
+# directory loader activates only the selected profile, so base assets are not
+# duplicated three times.
+if [[ "${ALL_IN_ONE}" == "1" ]]; then
+    echo "==> Bundling all-in-one launcher and profiles"
+
+    if [[ ! -f "${LAUNCHER_SRC}/index.html" ]]; then
+        if ! command -v npm >/dev/null 2>&1; then
+            echo "ERROR: launcher dist missing and npm is not installed."
+            echo "  Build it first: cd launcher_vite && npm install && npm run build"
+            exit 1
+        fi
+        echo "    building Vite launcher"
+        (cd "${PROJECT_ROOT}/launcher_vite" && npm install && npm run build)
+    fi
+
+    rm -rf "${APP}/Launcher"
+    mkdir -p "${APP}/Launcher"
+    rsync -a --delete "${LAUNCHER_SRC}/" "${APP}/Launcher/"
+    [[ -f "${APP}/Launcher/index.html" ]] || {
+        echo "ERROR: Launcher/index.html was not staged."
+        exit 1
+    }
+
+    copy_profile() {
+        local source_dir="$1"
+        local target_dir="$2"
+        local label="$3"
+
+        if [[ ! -d "${source_dir}" ]]; then
+            echo "ERROR: ${label} profile directory not found: ${source_dir}"
+            exit 1
+        fi
+
+        rm -rf "${target_dir}"
+        mkdir -p "${target_dir}"
+        rsync -a \
+            --exclude="*.exe" --exclude="*.EXE" \
+            --exclude="*.dll" --exclude="*.DLL" \
+            --exclude="*.bat" --exclude="*.BAT" \
+            --exclude="*.cmd" --exclude="*.CMD" \
+            --exclude="plugins" --exclude="reshade-shaders" \
+            --exclude="screenshots" \
+            "${source_dir}/" "${target_dir}/"
+
+        while IFS= read -r -d '' file; do
+            local target="${file%.*}.big"
+            if [[ -e "${target}" ]]; then
+                echo "ERROR: cannot activate ${file}; target already exists: ${target}"
+                exit 1
+            fi
+            mv "${file}" "${target}"
+        done < <(find "${target_dir}" -type f \( -iname '*.zhe' -o -iname '*.ctr' \) -print0)
+
+        if ! find "${target_dir}" -type f -iname '*.big' -print -quit | grep -q .; then
+            echo "ERROR: ${label} contains no active .big archives after staging."
+            exit 1
+        fi
+
+        echo "    ${label}: $(du -sh "${target_dir}" | cut -f1)"
+    }
+
+    mkdir -p "${APP}/Profiles"
+    copy_profile "${ENHANCED_SRC}" "${APP}/Profiles/enhanced" "Zero Hour Enhanced"
+    copy_profile "${CONTRA_X_SRC}" "${APP}/Profiles/contra-x" "Contra X Beta 2 + Patch 1"
+
+    echo "    launcher: $(du -sh "${APP}/Launcher" | cut -f1)"
 fi
 
 # Loose icon PNGs alongside the compiled asset catalog: SpringBoard on some
