@@ -130,12 +130,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
         );
         return;
       } on PlatformException catch (error) {
-        _notice('iOS bridge: ' + (error.message ?? error.code));
+        _notice('iOS bridge: ${error.message ?? error.code}');
         return;
       }
     }
 
-    _notice('Windows preview - PLAY ' + profile.name.toUpperCase());
+    _notice('Windows preview - PLAY ${profile.name.toUpperCase()}');
   }
 
   void _notice(String message) {
@@ -960,7 +960,7 @@ class _Footer extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          profile.name + ' - ' + profile.version,
+          '${profile.name} - ${profile.version}',
           style: TextStyle(
             color: Colors.white.withValues(alpha: .42),
             fontSize: 10,
