@@ -11,26 +11,33 @@
 #      provisioning profile from step 1, preserving entitlements.
 #   5. Optional: install to the first connected device via devicectl.
 #
-# Usage: ./scripts/build/ios/package-ios-zh.sh [--dev] [--all-in-one] [--install]
-#   --dev         skip bundling the 2.7 GB of game assets (code-only iteration)
+# Usage: ./scripts/build/ios/package-ios-zh.sh [--dev] [--all-in-one] [--unsigned] [--install]
+#   --dev         skip bundling retail game assets (code/launcher shell iteration)
 #   --all-in-one  bundle the Vite launcher + Enhanced + Contra X profile overlays
+#   --unsigned    build an unsigned IPA shell suitable for Windows-side asset injection/signing
 #   --install     install the packaged app to the first connected device
 set -euo pipefail
 
 DEV_MODE=0
 ALL_IN_ONE=0
+UNSIGNED=0
 DO_INSTALL=0
 for arg in "$@"; do
     case "$arg" in
         --dev)        DEV_MODE=1 ;;
         --all-in-one) ALL_IN_ONE=1 ;;
+        --unsigned)   UNSIGNED=1 ;;
         --install)    DO_INSTALL=1 ;;
-        *) echo "ERROR: unknown argument '$arg' (usage: $0 [--dev] [--all-in-one] [--install])"; exit 1 ;;
+        *) echo "ERROR: unknown argument '$arg' (usage: $0 [--dev] [--all-in-one] [--unsigned] [--install])"; exit 1 ;;
     esac
 done
 
 if [[ "${DEV_MODE}" == "1" && "${ALL_IN_ONE}" == "1" ]]; then
     echo "ERROR: --dev and --all-in-one are mutually exclusive."
+    exit 1
+fi
+if [[ "${UNSIGNED}" == "1" && "${DO_INSTALL}" == "1" ]]; then
+    echo "ERROR: --unsigned cannot be combined with --install."
     exit 1
 fi
 
@@ -59,14 +66,25 @@ fi
 echo "==> Generating Xcode project (xcodegen)"
 (cd "${IOS_DIR}" && xcodegen generate --quiet)
 
-echo "==> Building provisioning shell app"
-xcodebuild -project "${IOS_DIR}/${APP_NAME}.xcodeproj" \
-    -scheme "${APP_NAME}" -configuration Release \
-    -destination 'generic/platform=iOS' \
-    -derivedDataPath "${DERIVED}" \
-    DEVELOPMENT_TEAM="${TEAM_ID}" \
-    PRODUCT_BUNDLE_IDENTIFIER="${BUNDLE_ID}" \
-    -allowProvisioningUpdates build | tail -3
+if [[ "${UNSIGNED}" == "1" ]]; then
+    echo "==> Building unsigned shell app"
+    xcodebuild -project "${IOS_DIR}/${APP_NAME}.xcodeproj" \
+        -scheme "${APP_NAME}" -configuration Release \
+        -destination 'generic/platform=iOS' \
+        -derivedDataPath "${DERIVED}" \
+        PRODUCT_BUNDLE_IDENTIFIER="${BUNDLE_ID}" \
+        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+        build | tail -3
+else
+    echo "==> Building provisioning shell app"
+    xcodebuild -project "${IOS_DIR}/${APP_NAME}.xcodeproj" \
+        -scheme "${APP_NAME}" -configuration Release \
+        -destination 'generic/platform=iOS' \
+        -derivedDataPath "${DERIVED}" \
+        DEVELOPMENT_TEAM="${TEAM_ID}" \
+        PRODUCT_BUNDLE_IDENTIFIER="${BUNDLE_ID}" \
+        -allowProvisioningUpdates build | tail -3
+fi
 
 SHELL_APP="${DERIVED}/Build/Products/Release-iphoneos/${APP_NAME}.app"
 if [[ ! -d "${SHELL_APP}" ]]; then
@@ -172,8 +190,8 @@ fi
 # overlays alongside the shared retail GameData. The engine's existing -mod
 # directory loader activates only the selected profile, so base assets are not
 # duplicated three times.
-if [[ "${ALL_IN_ONE}" == "1" ]]; then
-    echo "==> Bundling all-in-one launcher and profiles"
+if [[ "${ALL_IN_ONE}" == "1" || "${UNSIGNED}" == "1" ]]; then
+    echo "==> Bundling Vite launcher"
 
     if [[ ! -f "${LAUNCHER_SRC}/index.html" ]]; then
         if ! command -v npm >/dev/null 2>&1; then
@@ -192,6 +210,11 @@ if [[ "${ALL_IN_ONE}" == "1" ]]; then
         echo "ERROR: Launcher/index.html was not staged."
         exit 1
     }
+    echo "    launcher: $(du -sh "${APP}/Launcher" | cut -f1)"
+fi
+
+if [[ "${ALL_IN_ONE}" == "1" ]]; then
+    echo "==> Bundling Enhanced and Contra X profiles"
 
     copy_profile() {
         local source_dir="$1"
@@ -234,8 +257,6 @@ if [[ "${ALL_IN_ONE}" == "1" ]]; then
     mkdir -p "${APP}/Profiles"
     copy_profile "${ENHANCED_SRC}" "${APP}/Profiles/enhanced" "Zero Hour Enhanced"
     copy_profile "${CONTRA_X_SRC}" "${APP}/Profiles/contra-x" "Contra X Beta 2 + Patch 1"
-
-    echo "    launcher: $(du -sh "${APP}/Launcher" | cut -f1)"
 fi
 
 # Loose icon PNGs alongside the compiled asset catalog: SpringBoard on some
@@ -252,20 +273,34 @@ fi
 # Point the executable's rpath at the embedded frameworks
 install_name_tool -add_rpath "@executable_path/Frameworks" "${APP}/${APP_NAME}" 2>/dev/null || true
 
-echo "==> Re-signing"
-ENTITLEMENTS="${OUT_DIR}/entitlements.plist"
-codesign -d --entitlements - --xml "${SHELL_APP}" > "${ENTITLEMENTS}" 2>/dev/null
+if [[ "${UNSIGNED}" == "1" ]]; then
+    echo "==> Leaving app unsigned"
+    find "${APP}" -name "_CodeSignature" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    rm -f "${APP}/embedded.mobileprovision"
 
-for f in "${APP}/Frameworks/"*.dylib; do
-    [[ -f "$f" ]] && codesign --force --sign "${IDENTITY}" --timestamp=none "$f"
-done
-if [[ -d "${APP}/Frameworks/MoltenVK.framework" ]]; then
-    codesign --force --sign "${IDENTITY}" --timestamp=none "${APP}/Frameworks/MoltenVK.framework"
+    IPA_STAGE="${OUT_DIR}/ipa-stage"
+    IPA_PATH="${OUT_DIR}/GeneralsXZH-launcher-unsigned.ipa"
+    rm -rf "${IPA_STAGE}" "${IPA_PATH}"
+    mkdir -p "${IPA_STAGE}/Payload"
+    cp -R "${APP}" "${IPA_STAGE}/Payload/"
+    (cd "${IPA_STAGE}" && /usr/bin/zip -qry "${IPA_PATH}" Payload)
+    echo "==> Unsigned IPA ready: ${IPA_PATH}"
+else
+    echo "==> Re-signing"
+    ENTITLEMENTS="${OUT_DIR}/entitlements.plist"
+    codesign -d --entitlements - --xml "${SHELL_APP}" > "${ENTITLEMENTS}" 2>/dev/null
+
+    for f in "${APP}/Frameworks/"*.dylib; do
+        [[ -f "$f" ]] && codesign --force --sign "${IDENTITY}" --timestamp=none "$f"
+    done
+    if [[ -d "${APP}/Frameworks/MoltenVK.framework" ]]; then
+        codesign --force --sign "${IDENTITY}" --timestamp=none "${APP}/Frameworks/MoltenVK.framework"
+    fi
+    codesign --force --sign "${IDENTITY}" --timestamp=none \
+        --entitlements "${ENTITLEMENTS}" "${APP}"
+
+    codesign --verify --deep "${APP}" && echo "    signature OK"
 fi
-codesign --force --sign "${IDENTITY}" --timestamp=none \
-    --entitlements "${ENTITLEMENTS}" "${APP}"
-
-codesign --verify --deep "${APP}" && echo "    signature OK"
 
 echo "==> App ready: ${APP}"
 
