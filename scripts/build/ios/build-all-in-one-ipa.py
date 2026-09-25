@@ -56,9 +56,10 @@ ZHE_ACTIVATE = {
 ZHE_KEEP_INI = {"zhepatch.ini", "defaultpreset.ini"}
 
 # Defaults mirrored from the current official Contra X Beta 2 launcher:
-# base content always on, English voices, original English hotkeys, standard music,
-# normal portraits, Contra control bar (no optional control-bar archive), HD cameos
-# on widescreen, fog effects disabled, water effects enabled, Patch 1 enabled.
+# base content always on, English language/voices, original English hotkeys,
+# standard music, normal portraits, Control Bar Pro, HD cameos on widescreen,
+# fog effects disabled, water effects enabled, extra building props enabled,
+# and Patch 1 enabled.
 CONTRA_REQUIRED_CTR_SUFFIXES = {
     "_ini.ctr",
     "_maps.ctr",
@@ -74,6 +75,7 @@ CONTRA_REQUIRED_CTR_SUFFIXES = {
     "_patch1.ctr",
 }
 CONTRA_OPTIONAL_DEFAULT_CTR_SUFFIXES = {
+    "_controlbarpro.ctr",
     "_cameoshd.ctr",
     "_disablefogeffects.ctr",
 }
