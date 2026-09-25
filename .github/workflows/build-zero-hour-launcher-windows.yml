@@ -43,6 +43,10 @@ jobs:
       - name: Generate Windows runner
         run: flutter create --platforms=windows .
 
+      - name: Remove generated sample test
+        shell: pwsh
+        run: Remove-Item test/widget_test.dart -ErrorAction SilentlyContinue
+
       - name: Get dependencies
         run: flutter pub get
 
