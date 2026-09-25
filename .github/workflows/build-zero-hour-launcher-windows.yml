@@ -9,6 +9,12 @@ on:
     paths:
       - 'launcher_flutter/**'
       - '.github/workflows/build-zero-hour-launcher-windows.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'launcher_flutter/**'
+      - '.github/workflows/build-zero-hour-launcher-windows.yml'
 
 permissions:
   contents: read
