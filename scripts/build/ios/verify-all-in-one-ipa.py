@@ -54,8 +54,9 @@ def main() -> None:
         names_lower = lower_names(names)
         app = find_app(names)
 
-        require_file(names_lower, app + "Launcher/index.html", "Vite launcher")
         require_file(names_lower, app + "Info.plist", "Info.plist")
+        if any(n.startswith((app + "Launcher/").lower()) for n in names_lower):
+            fail("legacy web Launcher directory leaked into native all-in-one IPA")
 
         executable_candidates = [
             n for n in names
