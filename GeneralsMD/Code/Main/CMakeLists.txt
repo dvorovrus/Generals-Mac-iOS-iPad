@@ -101,9 +101,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         COMPILE_OPTIONS "-fobjc-arc"
     )
 
+    # The launcher is a standalone Objective-C++ dylib. Unlike the main
+    # executable, it must link its Foundation and Objective-C runtime
+    # dependencies explicitly instead of inheriting them from other targets.
+    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
     find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
+    find_library(OBJC_LIBRARY objc REQUIRED)
     target_link_libraries(generalsx_ios_launcher PRIVATE
+        ${FOUNDATION_FRAMEWORK}
         ${UIKIT_FRAMEWORK}
+        ${OBJC_LIBRARY}
     )
     target_link_libraries(z_generals PRIVATE
         generalsx_ios_launcher
