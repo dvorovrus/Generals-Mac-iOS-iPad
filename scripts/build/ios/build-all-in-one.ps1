@@ -2,6 +2,7 @@ param(
     [string]$Shell = "GeneralsXZH-launcher-unsigned.ipa",
     [string]$BaseIpa = "GeneralsZH-FULL-unsigned.ipa",
     [string]$Enhanced = "ZHE",
+    [string]$EnhancedPatch = "ZHE8Patch_99.zip",
     [string]$ContraBeta2 = "ContraXBeta2.zip",
     [string]$ContraPatch1 = "ContraXBeta2Patch1.zip",
     [string]$Output = "GeneralsZH-AllInOne-unsigned.ipa"
@@ -31,6 +32,7 @@ Require-Path $Verifier "IPA verifier"
 Require-Path $Shell "Launcher shell IPA"
 Require-Path $BaseIpa "Zero Hour 1.04 base IPA"
 Require-Path $Enhanced "Zero Hour Enhanced source"
+Require-Path $EnhancedPatch "Zero Hour Enhanced V1.0 patch"
 Require-Path $ContraBeta2 "Contra X Beta 2 archive"
 Require-Path $ContraPatch1 "Contra X Beta 2 Patch 1 archive"
 
@@ -41,6 +43,7 @@ Write-Host "=== Zero Hour All-In-One iPad Builder ===" -ForegroundColor Yellow
 Write-Host "Shell:          $Shell"
 Write-Host "Base 1.04:      $BaseIpa"
 Write-Host "Enhanced:       $Enhanced"
+Write-Host "Enhanced patch: $EnhancedPatch"
 Write-Host "Contra Beta 2:  $ContraBeta2"
 Write-Host "Contra Patch 1: $ContraPatch1"
 Write-Host "Output:         $Output"
@@ -50,6 +53,7 @@ Write-Host ""
     --shell $Shell `
     --base-ipa $BaseIpa `
     --enhanced $Enhanced `
+    --enhanced-patch $EnhancedPatch `
     --contra-beta2 $ContraBeta2 `
     --contra-patch1 $ContraPatch1 `
     --output $Output
