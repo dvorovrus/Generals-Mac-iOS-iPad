@@ -175,7 +175,7 @@ def main() -> None:
             rel = name[len(base_prefix):]
             if not rel:
                 continue
-            base_bytes += b.zip_copy(shell if False else base, info, out, shell_app + "GameData/" + rel)
+            base_bytes += b.zip_copy(base, info, out, shell_app + "GameData/" + rel)
             base_files += 1
         if base_files == 0:
             b.die("base IPA contains no GameData files")
