@@ -82,7 +82,25 @@ $target = Join-Path $ShellDir "GeneralsXZH-launcher-unsigned.ipa"
 Copy-Item $ipa.FullName $target -Force
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
+$ProjectVersion = "0.0.0"
+$LauncherVersion = "0.0.0"
+$VersionFile = Join-Path $Workspace "repo\ios\version.env"
+if (Test-Path -LiteralPath $VersionFile) {
+    foreach ($line in Get-Content -LiteralPath $VersionFile) {
+        if ($line -match '^PROJECT_VERSION=(.+)) {
+            $ProjectVersion = $Matches[1].Trim()
+        }
+        elseif ($line -match '^LAUNCHER_VERSION=(.+)) {
+            $LauncherVersion = $Matches[1].Trim()
+        }
+    }
+}
+
+$versionedTarget = Join-Path $ShellDir "GeneralsZH-iPad-$ProjectVersion-Launcher-$LauncherVersion-unsigned.ipa"
+Copy-Item $target $versionedTarget -Force
+
 $size = [math]::Round((Get-Item $target).Length / 1MB, 1)
 Write-Host ""
 Write-Host "READY: $target ($size MB)" -ForegroundColor Green
+Write-Host "ALIAS: $versionedTarget"
 Write-Host "Source workflow: $Workflow / run $runId"
