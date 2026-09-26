@@ -25,13 +25,23 @@ EXTRACTED="${TMP}/ipa"
 LAUNCHER_LIB="${TMP}/libGeneralsXLauncher.dylib"
 mkdir -p "${EXTRACTED}"
 
+LAUNCHER_COMMIT="${GX_LAUNCHER_COMMIT:-${GITHUB_SHA:-unknown}}"
+ENGINE_COMMIT="${GX_ENGINE_COMMIT:-unknown}"
+BASE_SHELL_RUN="${GX_BASE_SHELL_RUN:-unknown}"
+
 echo "==> Compiling native launcher only"
+echo "    launcher commit: ${LAUNCHER_COMMIT}"
+echo "    engine commit:   ${ENGINE_COMMIT}"
+echo "    base shell run:  ${BASE_SHELL_RUN}"
 xcrun --sdk iphoneos clang++ \
   -target arm64-apple-ios16.0 \
   -std=c++17 \
   -fobjc-arc \
   -fblocks \
   -dynamiclib \
+  "-DGX_LAUNCHER_COMMIT=\"${LAUNCHER_COMMIT}\"" \
+  "-DGX_ENGINE_COMMIT=\"${ENGINE_COMMIT}\"" \
+  "-DGX_BASE_SHELL_RUN=\"${BASE_SHELL_RUN}\"" \
   -Wl,-install_name,@rpath/libGeneralsXLauncher.dylib \
   -framework Foundation \
   -framework UIKit \
