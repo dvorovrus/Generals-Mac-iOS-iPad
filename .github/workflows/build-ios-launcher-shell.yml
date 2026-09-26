@@ -55,8 +55,8 @@ jobs:
           fetch-depth: 0
           submodules: false
 
-      - name: Checkout iOS DXVK submodule only
-        run: git submodule update --init --depth 1 references/fbraz3-dxvk
+      - name: Checkout iOS DXVK submodule tree
+        run: git submodule update --init --recursive --depth 1 references/fbraz3-dxvk
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
