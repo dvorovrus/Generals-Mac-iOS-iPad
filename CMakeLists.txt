@@ -44,7 +44,7 @@ endif()
 # Linux port: Make CompatLib headers globally accessible so Core libraries (WWLib, WWMath, etc.)
 # can access platform compatibility types when building for non-Windows platforms
 if(UNIX)
-    include_directories(${CMAKE_SOURCE_DIR}/Generals/Code/CompatLib/Include)
+    include_directories(${CMAKE_SOURCE_DIR}/GeneralsMD/Code/CompatLib/Include)
 endif()
 
 # Compiler cache (ccache) – must be included before compilers.cmake so the
@@ -147,13 +147,6 @@ if(RTS_BUILD_ZEROHOUR)
     add_subdirectory(GeneralsMD)
     if(TARGET sage_patch)
         add_dependencies(z_generals sage_patch)
-    endif()
-endif()
-
-if(RTS_BUILD_GENERALS)
-    add_subdirectory(Generals)
-    if(TARGET sage_patch)
-        add_dependencies(g_generals sage_patch)
     endif()
 endif()
 
