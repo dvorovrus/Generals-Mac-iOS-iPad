@@ -42,6 +42,17 @@ NSString *IPadOverridesPath()
     return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/iPadOverrides.ini"];
 }
 
+bool ProfileDirectoryExists(NSString *profileDirectory)
+{
+    NSString *resourcePath = [[NSBundle mainBundle] resourcePath];
+    NSString *path = [[resourcePath stringByAppendingPathComponent:@"Profiles"]
+                      stringByAppendingPathComponent:profileDirectory];
+
+    BOOL isDirectory = NO;
+    return [[NSFileManager defaultManager] fileExistsAtPath:path
+                                               isDirectory:&isDirectory] && isDirectory;
+}
+
 NSString *DefaultIPadOverrides()
 {
     // GeneralsX @feature dvorovrus 26/09/2026 Default shared iPad tuning.
@@ -152,17 +163,35 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     subtitle.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
     UIButton *vanilla = MakeButton(@"Zero Hour 1.04", self, @selector(launchVanilla));
-    UIButton *enhanced = MakeButton(@"Zero Hour Enhanced", self, @selector(launchEnhanced));
-    UIButton *contra = MakeButton(@"Contra X Beta 2 + Patch 1", self, @selector(launchContra));
     UIButton *settings = MakeButton(@"Settings", self, @selector(showSettings));
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
 
-    for (UIButton *button in @[vanilla, enhanced, contra, settings])
+    NSMutableArray<UIView *> *views = [NSMutableArray arrayWithObjects:title, subtitle, vanilla, nil];
+    NSMutableArray<UIButton *> *buttons = [NSMutableArray arrayWithObject:vanilla];
+
+    if (ProfileDirectoryExists(@"enhanced"))
+    {
+        UIButton *enhanced = MakeButton(@"Zero Hour Enhanced", self, @selector(launchEnhanced));
+        [views addObject:enhanced];
+        [buttons addObject:enhanced];
+        fprintf(stderr, "INFO: iOS launcher found Enhanced profile\n");
+    }
+
+    if (ProfileDirectoryExists(@"contra-x"))
+    {
+        UIButton *contra = MakeButton(@"Contra X Beta 2 + Patch 1", self, @selector(launchContra));
+        [views addObject:contra];
+        [buttons addObject:contra];
+        fprintf(stderr, "INFO: iOS launcher found Contra X profile\n");
+    }
+
+    [views addObject:settings];
+    [buttons addObject:settings];
+
+    for (UIButton *button in buttons)
         [button.widthAnchor constraintEqualToConstant:460.0].active = YES;
 
-    self.menuStack = [[UIStackView alloc] initWithArrangedSubviews:@[
-        title, subtitle, vanilla, enhanced, contra, settings
-    ]];
+    self.menuStack = [[UIStackView alloc] initWithArrangedSubviews:views];
     self.menuStack.translatesAutoresizingMaskIntoConstraints = NO;
     self.menuStack.axis = UILayoutConstraintAxisVertical;
     self.menuStack.alignment = UIStackViewAlignmentCenter;
