@@ -9,6 +9,7 @@ on:
       - 'GeneralsMD/Code/Main/IOSProfileLauncher.mm'
       - 'GeneralsMD/Code/Main/IOSProfileLauncher.h'
       - 'scripts/build/ios/package-launcher-fast.sh'
+      - 'ios/version.env'
       - '.github/workflows/build-ios-launcher-fast.yml'
 
 permissions:
