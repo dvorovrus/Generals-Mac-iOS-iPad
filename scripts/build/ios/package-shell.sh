@@ -12,6 +12,15 @@ DERIVED="${IOS_DIR}/build"
 OUT_DIR="${PROJECT_ROOT}/build/ios-package"
 APP_NAME="GeneralsXZH"
 BUNDLE_ID="${GX_BUNDLE_ID:-com.dvorov.generalszh.launcher}"
+VERSION_FILE="${IOS_DIR}/version.env"
+
+PROJECT_VERSION="0.0.0"
+ENGINE_VERSION="0.0.0"
+LAUNCHER_VERSION="0.0.0"
+if [[ -f "${VERSION_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${VERSION_FILE}"
+fi
 
 GAME_BIN="${BUILD_DIR}/GeneralsMD/GeneralsXZH.app/GeneralsXZH"
 DXVK_BUILD="${BUILD_DIR}/_deps/dxvk-build-macos"
@@ -54,6 +63,11 @@ rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 cp -R "${SHELL_APP}" "${OUT_DIR}/"
 APP="${OUT_DIR}/${APP_NAME}.app"
+
+PLIST="${APP}/Info.plist"
+if [[ -f "${PLIST}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${PROJECT_VERSION}" "${PLIST}"
+fi
 
 cp "${GAME_BIN}" "${APP}/${APP_NAME}"
 mkdir -p "${APP}/Frameworks"
