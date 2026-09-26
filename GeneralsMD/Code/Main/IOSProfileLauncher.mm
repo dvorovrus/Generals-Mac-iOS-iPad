@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <cstdio>
 #include <unistd.h>
 
 namespace
@@ -54,7 +55,7 @@ UIWindowScene *FindActiveWindowScene()
 }
 }
 
-@interface GXProfileLauncherViewController : UIViewController <WKScriptMessageHandler>
+@interface GXProfileLauncherViewController : UIViewController <WKScriptMessageHandler, WKNavigationDelegate>
 @property(nonatomic, strong) WKWebView *webView;
 @end
 
@@ -69,9 +70,11 @@ UIWindowScene *FindActiveWindowScene()
     WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
     WKUserContentController *contentController = [[WKUserContentController alloc] init];
     [contentController addScriptMessageHandler:self name:@"launchProfile"];
+    [contentController addScriptMessageHandler:self name:@"launcherLog"];
     configuration.userContentController = contentController;
 
     self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:configuration];
+    self.webView.navigationDelegate = self;
     self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.webView.opaque = NO;
     self.webView.backgroundColor = [UIColor blackColor];
@@ -91,6 +94,7 @@ UIWindowScene *FindActiveWindowScene()
     }
 
     NSURL *readAccessURL = [indexURL URLByDeletingLastPathComponent];
+    fprintf(stderr, "INFO: iOS launcher loading %s\n", indexURL.fileSystemRepresentation);
     [self.webView loadFileURL:indexURL allowingReadAccessToURL:readAccessURL];
 }
 
@@ -112,6 +116,13 @@ UIWindowScene *FindActiveWindowScene()
 - (void)userContentController:(WKUserContentController *)userContentController
       didReceiveScriptMessage:(WKScriptMessage *)message
 {
+    if ([message.name isEqualToString:@"launcherLog"])
+    {
+        fprintf(stderr, "INFO: iOS launcher JS: %s\n",
+                [[message.body description] UTF8String]);
+        return;
+    }
+
     if (![message.name isEqualToString:@"launchProfile"])
         return;
 
@@ -123,12 +134,42 @@ UIWindowScene *FindActiveWindowScene()
     if (![value isKindOfClass:[NSString class]])
         return;
 
+    fprintf(stderr, "INFO: iOS launcher profile message: %s\n",
+            [(NSString *)value UTF8String]);
     SetSelectedProfile((NSString *)value);
+}
+
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation
+{
+    (void)webView;
+    (void)navigation;
+    fprintf(stderr, "INFO: iOS launcher WKWebView finished navigation\n");
+}
+
+- (void)webView:(WKWebView *)webView
+didFailProvisionalNavigation:(WKNavigation *)navigation
+      withError:(NSError *)error
+{
+    (void)webView;
+    (void)navigation;
+    fprintf(stderr, "ERROR: iOS launcher provisional navigation failed: %s\n",
+            [[error description] UTF8String]);
+}
+
+- (void)webView:(WKWebView *)webView
+didFailNavigation:(WKNavigation *)navigation
+      withError:(NSError *)error
+{
+    (void)webView;
+    (void)navigation;
+    fprintf(stderr, "ERROR: iOS launcher navigation failed: %s\n",
+            [[error description] UTF8String]);
 }
 
 - (void)dealloc
 {
     [self.webView.configuration.userContentController removeScriptMessageHandlerForName:@"launchProfile"];
+    [self.webView.configuration.userContentController removeScriptMessageHandlerForName:@"launcherLog"];
 }
 
 @end
