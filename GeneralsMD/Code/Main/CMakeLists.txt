@@ -78,6 +78,29 @@ target_sources(z_generals PRIVATE
     $<$<NOT:$<BOOL:${WIN32}>>:LinuxStubs.cpp>
 )
 
+# GeneralsX @feature dvorovrus 25/09/2026 Embedded Vite/WKWebView profile launcher for iOS.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    target_sources(z_generals PRIVATE
+        IOSProfileLauncher.h
+        IOSProfileLauncher.mm
+    )
+
+    # GeneralsX @build dvorovrus 26/09/2026 Objective-C++ ARC cannot reuse
+    # the target's non-ARC C++ precompiled header. Compile this one bridge source
+    # without PCH and enable ARC explicitly.
+    set_source_files_properties(IOSProfileLauncher.mm PROPERTIES
+        SKIP_PRECOMPILE_HEADERS ON
+        COMPILE_OPTIONS "-fobjc-arc"
+    )
+
+    find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
+    find_library(WEBKIT_FRAMEWORK WebKit REQUIRED)
+    target_link_libraries(z_generals PRIVATE
+        ${UIKIT_FRAMEWORK}
+        ${WEBKIT_FRAMEWORK}
+    )
+endif()
+
 # RC files optional for MinGW builds
 # Icon: LoadIcon() handles missing resource gracefully (uses default system icon)
 # Manifest: DPI awareness metadata (nice to have but not essential)
