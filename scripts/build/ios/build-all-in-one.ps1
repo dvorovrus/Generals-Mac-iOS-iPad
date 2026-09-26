@@ -24,8 +24,10 @@ function Require-Path([string]$Path, [string]$Label) {
 }
 
 $Builder = Join-Path $PSScriptRoot "build-all-in-one-ipa.py"
+$Verifier = Join-Path $PSScriptRoot "verify-all-in-one-ipa.py"
 
 Require-Path $Builder "IPA builder"
+Require-Path $Verifier "IPA verifier"
 Require-Path $Shell "Launcher shell IPA"
 Require-Path $BaseIpa "Zero Hour 1.04 base IPA"
 Require-Path $Enhanced "Zero Hour Enhanced source"
@@ -57,6 +59,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Require-Path $Output "Final unsigned IPA"
+
+& $Python $Verifier $Output
+if ($LASTEXITCODE -ne 0) {
+    throw "Final IPA validation failed with exit code $LASTEXITCODE."
+}
 
 $sizeMb = [math]::Round((Get-Item -LiteralPath $Output).Length / 1MB, 1)
 Write-Host ""
