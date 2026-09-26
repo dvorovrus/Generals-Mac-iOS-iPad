@@ -85,7 +85,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         IOSProfileLauncher.mm
     )
 
+    # GeneralsX @build dvorovrus 26/09/2026 Objective-C++ ARC cannot reuse
+    # the target's non-ARC C++ precompiled header. Compile this one bridge source
+    # without PCH and enable ARC explicitly.
     set_source_files_properties(IOSProfileLauncher.mm PROPERTIES
+        SKIP_PRECOMPILE_HEADERS ON
         COMPILE_OPTIONS "-fobjc-arc"
     )
 
