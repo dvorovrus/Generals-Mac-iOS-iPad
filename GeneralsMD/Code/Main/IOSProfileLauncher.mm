@@ -46,15 +46,15 @@ NSString *DefaultIPadOverrides()
 {
     // GeneralsX @feature dvorovrus 26/09/2026 Default shared iPad tuning.
     return @"GameData\n"
-            "  MaxCameraHeight = 550.0\n"
-            "  MinCameraHeight = 70.0\n"
-            "  CameraPitch = 37.0\n"
-            "  EnforceMaxCameraHeight = No\n"
-            "  KeyboardScrollSpeedFactor = 1.0\n"
-            "  TerrainDrawDistanceScale = 1.20\n"
-            "  UseFPSLimit = Yes\n"
-            "  FramesPerSecondLimit = 60\n"
-            "End\n";
+            @"  MaxCameraHeight = 550.0\n"
+            @"  MinCameraHeight = 70.0\n"
+            @"  CameraPitch = 37.0\n"
+            @"  EnforceMaxCameraHeight = No\n"
+            @"  KeyboardScrollSpeedFactor = 1.0\n"
+            @"  TerrainDrawDistanceScale = 1.20\n"
+            @"  UseFPSLimit = Yes\n"
+            @"  FramesPerSecondLimit = 60\n"
+            @"End\n";
 }
 
 void EnsureDefaultIPadOverrides()
