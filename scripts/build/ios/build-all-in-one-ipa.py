@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Build one unsigned iOS IPA containing:
-- the current GeneralsXZH engine + embedded Vite launcher (from CI shell IPA),
+- the current GeneralsXZH engine + native UIKit launcher (from CI shell IPA),
 - shared Zero Hour 1.04 GameData (copied from a user's existing full IPA),
 - Zero Hour Enhanced as an isolated -mod profile,
 - Contra X Beta 2 + Patch 1 as an isolated -mod profile.
@@ -594,17 +594,10 @@ def main() -> None:
         shell_app = find_single_app(shell.namelist())
         base_app = find_single_app(base.namelist())
 
-        launcher_index = shell_app + "Launcher/index.html"
-        if launcher_index not in shell.namelist():
-            die(
-                "shell IPA does not contain Launcher/index.html; "
-                "download the all-in-one launcher shell artifact from GitHub Actions"
-            )
-
         print(f"Shell app:    {shell_app}")
         print(f"Base app:     {base_app}")
 
-        # Start with current engine, frameworks, native bridge and Vite launcher.
+        # Start with current engine, frameworks and native UIKit launcher.
         skipped_prefixes = (
             shell_app + "GameData/",
             shell_app + "Profiles/",
