@@ -55,9 +55,18 @@ jobs:
             exit 1
           }
 
+          BASE_HEAD_SHA="$(gh run view "${BASE_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json headSha \
+            --jq '.headSha')"
+
+          test -n "${BASE_HEAD_SHA}" || BASE_HEAD_SHA="unknown"
+
           echo "BASE_RUN_ID=${BASE_RUN_ID}" >> "${GITHUB_ENV}"
           echo "BASE_IPA=${BASE_IPA}" >> "${GITHUB_ENV}"
-          echo "Using full shell from run #${BASE_RUN_ID}"
+          echo "GX_ENGINE_COMMIT=${BASE_HEAD_SHA}" >> "${GITHUB_ENV}"
+          echo "GX_BASE_SHELL_RUN=${BASE_RUN_ID}" >> "${GITHUB_ENV}"
+          echo "Using full shell from run #${BASE_RUN_ID} (${BASE_HEAD_SHA})"
 
       - name: Compile and inject launcher
         shell: bash
