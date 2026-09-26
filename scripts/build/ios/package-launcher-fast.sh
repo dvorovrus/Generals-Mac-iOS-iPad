@@ -14,6 +14,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 LAUNCHER_SRC="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSProfileLauncher.mm"
 LAUNCHER_HEADER="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSProfileLauncher.h"
+VERSION_FILE="${PROJECT_ROOT}/ios/version.env"
+
+PROJECT_VERSION="0.0.0"
+ENGINE_VERSION="0.0.0"
+LAUNCHER_VERSION="0.0.0"
+if [[ -f "${VERSION_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${VERSION_FILE}"
+fi
 
 test -f "${BASE_IPA}" || { echo "ERROR: base shell IPA not found: ${BASE_IPA}" >&2; exit 1; }
 test -f "${LAUNCHER_SRC}" || { echo "ERROR: launcher source not found: ${LAUNCHER_SRC}" >&2; exit 1; }
@@ -28,6 +37,7 @@ mkdir -p "${EXTRACTED}"
 LAUNCHER_COMMIT="${GX_LAUNCHER_COMMIT:-${GITHUB_SHA:-unknown}}"
 ENGINE_COMMIT="${GX_ENGINE_COMMIT:-unknown}"
 BASE_SHELL_RUN="${GX_BASE_SHELL_RUN:-unknown}"
+LAUNCHER_RUN="${GX_LAUNCHER_RUN:-${GITHUB_RUN_ID:-unknown}}"
 
 echo "==> Compiling native launcher only"
 echo "    launcher commit: ${LAUNCHER_COMMIT}"
@@ -39,9 +49,13 @@ xcrun --sdk iphoneos clang++ \
   -fobjc-arc \
   -fblocks \
   -dynamiclib \
+  "-DGX_PROJECT_VERSION=\"${PROJECT_VERSION}\"" \
+  "-DGX_ENGINE_VERSION=\"${ENGINE_VERSION}\"" \
+  "-DGX_LAUNCHER_VERSION=\"${LAUNCHER_VERSION}\"" \
   "-DGX_LAUNCHER_COMMIT=\"${LAUNCHER_COMMIT}\"" \
   "-DGX_ENGINE_COMMIT=\"${ENGINE_COMMIT}\"" \
   "-DGX_BASE_SHELL_RUN=\"${BASE_SHELL_RUN}\"" \
+  "-DGX_LAUNCHER_RUN=\"${LAUNCHER_RUN}\"" \
   -Wl,-install_name,@rpath/libGeneralsXLauncher.dylib \
   -framework Foundation \
   -framework UIKit \
@@ -72,6 +86,11 @@ otool -L "${ENGINE}" | grep -q "@rpath/libGeneralsXLauncher.dylib" || {
 
 echo "==> Replacing libGeneralsXLauncher.dylib"
 cp "${LAUNCHER_LIB}" "${TARGET_LIB}"
+
+PLIST="${APP}/Info.plist"
+if [[ -f "${PLIST}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${PROJECT_VERSION}" "${PLIST}"
+fi
 
 # The artifact must remain unsigned. Sideloadly/AltStore/etc. signs the final IPA.
 find "${APP}" -name "_CodeSignature" -type d -prune -exec rm -rf {} + 2>/dev/null || true
