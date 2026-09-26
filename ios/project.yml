@@ -32,7 +32,7 @@ targets:
       path: Stub/Info.plist
       properties:
         CFBundleDisplayName: Generals ZH
-        CFBundleShortVersionString: "1.04"
+        CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "10"
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
