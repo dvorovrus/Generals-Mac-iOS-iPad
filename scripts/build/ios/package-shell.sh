@@ -15,9 +15,15 @@ BUNDLE_ID="${GX_BUNDLE_ID:-com.dvorov.generalszh.launcher}"
 
 GAME_BIN="${BUILD_DIR}/GeneralsMD/GeneralsXZH.app/GeneralsXZH"
 DXVK_BUILD="${BUILD_DIR}/_deps/dxvk-build-macos"
+GAMESPY_LIB="$(find "${BUILD_DIR}" -type f -name 'libgamespy.dylib' -print -quit)"
 
 test -f "${GAME_BIN}" || {
   echo "ERROR: missing engine binary: ${GAME_BIN}"
+  exit 1
+}
+
+test -n "${GAMESPY_LIB}" && test -f "${GAMESPY_LIB}" || {
+  echo "ERROR: missing GameSpy runtime library (libgamespy.dylib) under ${BUILD_DIR}"
   exit 1
 }
 
@@ -51,7 +57,8 @@ for lib in \
   "${DXVK_BUILD}/src/d3d9/libdxvk_d3d9.0.dylib" \
   "${BUILD_DIR}/_deps/sdl3-build/libSDL3.0.dylib" \
   "${BUILD_DIR}/_deps/sdl3_image-build/libSDL3_image.0.dylib" \
-  "${BUILD_DIR}/_deps/openal_soft-build/libopenal.1.24.2.dylib"; do
+  "${BUILD_DIR}/_deps/openal_soft-build/libopenal.1.24.2.dylib" \
+  "${GAMESPY_LIB}"; do
   test -f "${lib}" || {
     echo "ERROR: required runtime library missing: ${lib}"
     exit 1
@@ -78,6 +85,22 @@ if [[ -f "${ICON_SRC}" ]]; then
 fi
 
 install_name_tool -add_rpath "@executable_path/Frameworks" "${APP}/${APP_NAME}" 2>/dev/null || true
+
+# Fail packaging if the executable references an @rpath runtime that was not
+# embedded. Missing dylibs are fatal before main(), so our in-app stderr log
+# cannot report them on device.
+echo "==> Auditing Mach-O runtime dependencies"
+while IFS= read -r dependency; do
+  [[ -n "${dependency}" ]] || continue
+  relative="${dependency#@rpath/}"
+  candidate="${APP}/Frameworks/${relative}"
+  if [[ ! -e "${candidate}" ]]; then
+    echo "ERROR: missing embedded runtime dependency: ${dependency}"
+    echo "       expected: ${candidate}"
+    exit 1
+  fi
+  echo "OK: ${dependency}"
+done < <(otool -L "${APP}/${APP_NAME}" | awk '$1 ~ /^@rpath\// { print $1 }')
 
 find "${APP}" -name "_CodeSignature" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 rm -f "${APP}/embedded.mobileprovision"
