@@ -139,13 +139,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         ${OBJC_LIBRARY}
     )
     target_compile_definitions(generalsx_ios_launcher PRIVATE
-        GX_PROJECT_VERSION="\"${GX_PROJECT_VERSION}\""
-        GX_ENGINE_VERSION="\"${GX_ENGINE_VERSION}\""
-        GX_LAUNCHER_VERSION="\"${GX_LAUNCHER_VERSION}\""
-        GX_LAUNCHER_COMMIT="\"${GX_BUILD_COMMIT}\""
-        GX_ENGINE_COMMIT="\"${GX_BUILD_COMMIT}\""
-        GX_BASE_SHELL_RUN="\"${GX_BUILD_RUN}\""
-        GX_LAUNCHER_RUN="\"${GX_BUILD_RUN}\""
+        GX_PROJECT_VERSION=\"${GX_PROJECT_VERSION}\"
+        GX_ENGINE_VERSION=\"${GX_ENGINE_VERSION}\"
+        GX_LAUNCHER_VERSION=\"${GX_LAUNCHER_VERSION}\"
+        GX_LAUNCHER_COMMIT=\"${GX_BUILD_COMMIT}\"
+        GX_ENGINE_COMMIT=\"${GX_BUILD_COMMIT}\"
+        GX_BASE_SHELL_RUN=\"${GX_BUILD_RUN}\"
+        GX_LAUNCHER_RUN=\"${GX_BUILD_RUN}\"
     )
     target_link_libraries(z_generals PRIVATE
         generalsx_ios_launcher
