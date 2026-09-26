@@ -82,6 +82,32 @@ target_sources(z_generals PRIVATE
 # Keep launcher UI in its own dylib: launcher-only changes can then be rebuilt and
 # repackaged without recompiling the whole GeneralsX engine.
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(GX_PROJECT_VERSION "0.0.0")
+    set(GX_ENGINE_VERSION "0.0.0")
+    set(GX_LAUNCHER_VERSION "0.0.0")
+    set(GX_VERSION_FILE "${CMAKE_SOURCE_DIR}/ios/version.env")
+    if(EXISTS "${GX_VERSION_FILE}")
+        file(STRINGS "${GX_VERSION_FILE}" GX_VERSION_LINES)
+        foreach(GX_VERSION_LINE IN LISTS GX_VERSION_LINES)
+            if(GX_VERSION_LINE MATCHES "^PROJECT_VERSION=(.+)$")
+                set(GX_PROJECT_VERSION "${CMAKE_MATCH_1}")
+            elseif(GX_VERSION_LINE MATCHES "^ENGINE_VERSION=(.+)$")
+                set(GX_ENGINE_VERSION "${CMAKE_MATCH_1}")
+            elseif(GX_VERSION_LINE MATCHES "^LAUNCHER_VERSION=(.+)$")
+                set(GX_LAUNCHER_VERSION "${CMAKE_MATCH_1}")
+            endif()
+        endforeach()
+    endif()
+
+    set(GX_BUILD_COMMIT "$ENV{GITHUB_SHA}")
+    if(GX_BUILD_COMMIT STREQUAL "")
+        set(GX_BUILD_COMMIT "unknown")
+    endif()
+    set(GX_BUILD_RUN "$ENV{GITHUB_RUN_ID}")
+    if(GX_BUILD_RUN STREQUAL "")
+        set(GX_BUILD_RUN "unknown")
+    endif()
+
     add_library(generalsx_ios_launcher SHARED
         IOSProfileLauncher.h
         IOSProfileLauncher.mm
@@ -111,6 +137,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         ${FOUNDATION_FRAMEWORK}
         ${UIKIT_FRAMEWORK}
         ${OBJC_LIBRARY}
+    )
+    target_compile_definitions(generalsx_ios_launcher PRIVATE
+        GX_PROJECT_VERSION="\"${GX_PROJECT_VERSION}\""
+        GX_ENGINE_VERSION="\"${GX_ENGINE_VERSION}\""
+        GX_LAUNCHER_VERSION="\"${GX_LAUNCHER_VERSION}\""
+        GX_LAUNCHER_COMMIT="\"${GX_BUILD_COMMIT}\""
+        GX_ENGINE_COMMIT="\"${GX_BUILD_COMMIT}\""
+        GX_BASE_SHELL_RUN="\"${GX_BUILD_RUN}\""
+        GX_LAUNCHER_RUN="\"${GX_BUILD_RUN}\""
     )
     target_link_libraries(z_generals PRIVATE
         generalsx_ios_launcher
