@@ -120,10 +120,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     button.layer.borderWidth = 1.0;
     button.layer.borderColor = [UIColor colorWithWhite:0.28 alpha:1.0].CGColor;
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
-    [NSLayoutConstraint activateConstraints:@[
-        [button.widthAnchor constraintEqualToConstant:460.0],
-        [button.heightAnchor constraintEqualToConstant:58.0],
-    ]];
+    [button.heightAnchor constraintEqualToConstant:58.0].active = YES;
     return button;
 }
 }
@@ -159,6 +156,9 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     UIButton *contra = MakeButton(@"Contra X Beta 2 + Patch 1", self, @selector(launchContra));
     UIButton *settings = MakeButton(@"Settings", self, @selector(showSettings));
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
+
+    for (UIButton *button in @[vanilla, enhanced, contra, settings])
+        [button.widthAnchor constraintEqualToConstant:460.0].active = YES;
 
     self.menuStack = [[UIStackView alloc] initWithArrangedSubviews:@[
         title, subtitle, vanilla, enhanced, contra, settings
