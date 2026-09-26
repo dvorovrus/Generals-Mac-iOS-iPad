@@ -11,10 +11,73 @@
 #include <cmath>
 #include <unistd.h>
 
+#ifndef GX_LAUNCHER_COMMIT
+#define GX_LAUNCHER_COMMIT "unknown"
+#endif
+#ifndef GX_ENGINE_COMMIT
+#define GX_ENGINE_COMMIT "unknown"
+#endif
+#ifndef GX_BASE_SHELL_RUN
+#define GX_BASE_SHELL_RUN "unknown"
+#endif
+
 namespace
 {
 std::atomic<bool> gLauncherFinished(false);
 char gSelectedProfile[32] = "vanilla";
+
+NSString *ShortBuildIdentifier(const char *raw)
+{
+    if (raw == nullptr || raw[0] == '\0')
+        return @"unknown";
+
+    NSString *value = [NSString stringWithUTF8String:raw];
+    if (value == nil || value.length == 0)
+        return @"unknown";
+
+    if ([value isEqualToString:@"unknown"] || value.length <= 10)
+        return value;
+
+    return [value substringToIndex:10];
+}
+
+NSString *DocumentsFilePath(NSString *name)
+{
+    return [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"]
+            stringByAppendingPathComponent:name];
+}
+
+unsigned long long FileSizeAtPath(NSString *path)
+{
+    NSDictionary<NSFileAttributeKey, id> *attributes =
+        [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+    return attributes != nil ? [attributes fileSize] : 0;
+}
+
+NSString *HumanReadableBytes(unsigned long long bytes)
+{
+    return [NSByteCountFormatter stringFromByteCount:(long long)bytes
+                                          countStyle:NSByteCountFormatterCountStyleFile];
+}
+
+unsigned long long DirectorySizeAtPath(NSString *path)
+{
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSDirectoryEnumerator<NSString *> *enumerator = [fileManager enumeratorAtPath:path];
+    if (enumerator == nil)
+        return 0;
+
+    unsigned long long total = 0;
+    for (NSString *relativePath in enumerator)
+    {
+        NSString *fullPath = [path stringByAppendingPathComponent:relativePath];
+        NSDictionary<NSFileAttributeKey, id> *attributes =
+            [fileManager attributesOfItemAtPath:fullPath error:nil];
+        if ([[attributes fileType] isEqualToString:NSFileTypeRegular])
+            total += [attributes fileSize];
+    }
+    return total;
+}
 
 bool IsSupportedProfile(const char *profile)
 {
@@ -155,6 +218,10 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UILabel *fpsValue;
 @property(nonatomic, strong) UISwitch *enforceMaxSwitch;
 @property(nonatomic, strong) UISwitch *fpsLimitSwitch;
+@property(nonatomic, strong) UIView *diagnosticsView;
+@property(nonatomic, strong) UILabel *diagnosticsText;
+@property(nonatomic, strong) UIButton *shareDiagnosticsButton;
+@property(nonatomic, assign) BOOL diagnosticsScanRunning;
 @end
 
 @implementation GXProfileLauncherViewController
@@ -168,6 +235,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     [self buildMenu];
     [self buildSettings];
+    [self buildDiagnostics];
 }
 
 - (void)buildMenu
@@ -178,7 +246,9 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     UIButton *vanilla = MakeButton(@"Zero Hour 1.04", self, @selector(launchVanilla));
     UIButton *settings = MakeButton(@"Settings", self, @selector(showSettings));
+    UIButton *diagnostics = MakeButton(@"Diagnostics", self, @selector(showDiagnostics));
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
+    diagnostics.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
 
     NSMutableArray<UIView *> *views = [NSMutableArray arrayWithObjects:title, subtitle, vanilla, nil];
     NSMutableArray<UIButton *> *buttons = [NSMutableArray arrayWithObject:vanilla];
@@ -201,6 +271,8 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     [views addObject:settings];
     [buttons addObject:settings];
+    [views addObject:diagnostics];
+    [buttons addObject:diagnostics];
 
     for (UIButton *button in buttons)
         [button.widthAnchor constraintEqualToConstant:460.0].active = YES;
@@ -394,6 +466,230 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     ]];
 
     [self resetSettingsControls];
+}
+
+
+- (NSString *)diagnosticsTextWithGameDataSize:(NSString *)gameDataSize
+{
+    NSBundle *bundle = [NSBundle mainBundle];
+    NSString *shortVersion = [bundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
+    NSString *buildVersion = [bundle objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"unknown";
+    NSString *resourcePath = bundle.resourcePath ?: @"";
+    NSString *gameDataPath = [resourcePath stringByAppendingPathComponent:@"GameData"];
+
+    BOOL gameDataExists = [[NSFileManager defaultManager] fileExistsAtPath:gameDataPath];
+    BOOL enhancedInstalled = ProfileDirectoryExists(@"enhanced");
+    BOOL contraInstalled = ProfileDirectoryExists(@"contra-x");
+
+    NSString *currentLog = DocumentsFilePath(@"generals-stderr.log");
+    NSString *previousLog = DocumentsFilePath(@"generals-stderr-prev.log");
+    NSString *settingsPath = IPadOverridesPath();
+
+    BOOL currentLogExists = [[NSFileManager defaultManager] fileExistsAtPath:currentLog];
+    BOOL previousLogExists = [[NSFileManager defaultManager] fileExistsAtPath:previousLog];
+    BOOL settingsExists = [[NSFileManager defaultManager] fileExistsAtPath:settingsPath];
+
+    NSString *currentLogText = currentLogExists
+        ? [NSString stringWithFormat:@"Yes (%@)", HumanReadableBytes(FileSizeAtPath(currentLog))]
+        : @"No";
+    NSString *previousLogText = previousLogExists
+        ? [NSString stringWithFormat:@"Yes (%@)", HumanReadableBytes(FileSizeAtPath(previousLog))]
+        : @"No";
+
+    return [NSString stringWithFormat:
+        @"APP\n"
+         "Version: %@ (%@)\n"
+         "iOS: %@\n"
+         "Device: %@\n\n"
+         "BUILD\n"
+         "Launcher: %@\n"
+         "Engine: %@\n"
+         "Base shell run: %@\n\n"
+         "CONTENT\n"
+         "GameData: %@\n"
+         "GameData size: %@\n"
+         "Enhanced: %@\n"
+         "Contra X: %@\n\n"
+         "FILES\n"
+         "Settings: %@\n"
+         "Current log: %@\n"
+         "Previous log: %@\n",
+        shortVersion,
+        buildVersion,
+        UIDevice.currentDevice.systemVersion,
+        UIDevice.currentDevice.model,
+        ShortBuildIdentifier(GX_LAUNCHER_COMMIT),
+        ShortBuildIdentifier(GX_ENGINE_COMMIT),
+        ShortBuildIdentifier(GX_BASE_SHELL_RUN),
+        gameDataExists ? @"Installed" : @"Missing",
+        gameDataSize,
+        enhancedInstalled ? @"Installed" : @"Not installed",
+        contraInstalled ? @"Installed" : @"Not installed",
+        settingsExists ? @"Present" : @"Missing",
+        currentLogText,
+        previousLogText];
+}
+
+- (void)buildDiagnostics
+{
+    self.diagnosticsView = [[UIView alloc] init];
+    self.diagnosticsView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.diagnosticsView.backgroundColor = UIColor.blackColor;
+    self.diagnosticsView.hidden = YES;
+    [self.view addSubview:self.diagnosticsView];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [self.diagnosticsView.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:28.0],
+        [self.diagnosticsView.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-28.0],
+        [self.diagnosticsView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:18.0],
+        [self.diagnosticsView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-18.0],
+    ]];
+
+    UILabel *title = MakeLabel(@"Diagnostics", 26.0, UIFontWeightBold);
+    title.textAlignment = NSTextAlignmentLeft;
+
+    UILabel *note = MakeLabel(@"Build, installed content and crash logs. GameData size is calculated in the background.", 13.0, UIFontWeightRegular);
+    note.textAlignment = NSTextAlignmentLeft;
+    note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+
+    UIScrollView *scroll = [[UIScrollView alloc] init];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.alwaysBounceVertical = YES;
+    scroll.showsVerticalScrollIndicator = YES;
+
+    self.diagnosticsText = MakeLabel(@"", 15.0, UIFontWeightRegular);
+    self.diagnosticsText.textAlignment = NSTextAlignmentLeft;
+    self.diagnosticsText.font = [UIFont monospacedSystemFontOfSize:15.0 weight:UIFontWeightRegular];
+    [scroll addSubview:self.diagnosticsText];
+
+    UIButton *refresh = MakeButton(@"Refresh", self, @selector(refreshDiagnostics));
+    self.shareDiagnosticsButton = MakeButton(@"Share report + logs", self, @selector(shareDiagnostics));
+    UIButton *back = MakeButton(@"Back", self, @selector(hideDiagnostics));
+
+    [refresh.widthAnchor constraintEqualToConstant:180.0].active = YES;
+    [self.shareDiagnosticsButton.widthAnchor constraintEqualToConstant:220.0].active = YES;
+    [back.widthAnchor constraintEqualToConstant:180.0].active = YES;
+
+    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[
+        refresh, self.shareDiagnosticsButton, back
+    ]];
+    buttons.translatesAutoresizingMaskIntoConstraints = NO;
+    buttons.axis = UILayoutConstraintAxisHorizontal;
+    buttons.alignment = UIStackViewAlignmentCenter;
+    buttons.spacing = 12.0;
+
+    [self.diagnosticsView addSubview:title];
+    [self.diagnosticsView addSubview:note];
+    [self.diagnosticsView addSubview:scroll];
+    [self.diagnosticsView addSubview:buttons];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [title.leadingAnchor constraintEqualToAnchor:self.diagnosticsView.leadingAnchor],
+        [title.trailingAnchor constraintEqualToAnchor:self.diagnosticsView.trailingAnchor],
+        [title.topAnchor constraintEqualToAnchor:self.diagnosticsView.topAnchor],
+
+        [note.leadingAnchor constraintEqualToAnchor:self.diagnosticsView.leadingAnchor],
+        [note.trailingAnchor constraintEqualToAnchor:self.diagnosticsView.trailingAnchor],
+        [note.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:4.0],
+
+        [scroll.leadingAnchor constraintEqualToAnchor:self.diagnosticsView.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:self.diagnosticsView.trailingAnchor],
+        [scroll.topAnchor constraintEqualToAnchor:note.bottomAnchor constant:14.0],
+        [scroll.bottomAnchor constraintEqualToAnchor:buttons.topAnchor constant:-14.0],
+
+        [self.diagnosticsText.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [self.diagnosticsText.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [self.diagnosticsText.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [self.diagnosticsText.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [self.diagnosticsText.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
+
+        [buttons.centerXAnchor constraintEqualToAnchor:self.diagnosticsView.centerXAnchor],
+        [buttons.bottomAnchor constraintEqualToAnchor:self.diagnosticsView.bottomAnchor],
+    ]];
+}
+
+- (void)showDiagnostics
+{
+    self.menuStack.hidden = YES;
+    self.settingsView.hidden = YES;
+    self.diagnosticsView.hidden = NO;
+    [self refreshDiagnostics];
+}
+
+- (void)hideDiagnostics
+{
+    self.diagnosticsView.hidden = YES;
+    self.menuStack.hidden = NO;
+}
+
+- (void)refreshDiagnostics
+{
+    if (self.diagnosticsScanRunning)
+        return;
+
+    self.diagnosticsScanRunning = YES;
+    self.diagnosticsText.text = [self diagnosticsTextWithGameDataSize:@"Calculating…"];
+
+    NSString *resourcePath = [NSBundle mainBundle].resourcePath ?: @"";
+    NSString *gameDataPath = [resourcePath stringByAppendingPathComponent:@"GameData"];
+    BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:gameDataPath];
+
+    __weak GXProfileLauncherViewController *weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        unsigned long long bytes = exists ? DirectorySizeAtPath(gameDataPath) : 0;
+        NSString *sizeText = exists ? HumanReadableBytes(bytes) : @"n/a";
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            GXProfileLauncherViewController *strongSelf = weakSelf;
+            if (strongSelf == nil)
+                return;
+
+            strongSelf.diagnosticsScanRunning = NO;
+            strongSelf.diagnosticsText.text =
+                [strongSelf diagnosticsTextWithGameDataSize:sizeText];
+        });
+    });
+}
+
+- (void)shareDiagnostics
+{
+    NSMutableArray *items = [NSMutableArray array];
+
+    NSString *reportPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"GeneralsZH-Diagnostics.txt"];
+    NSError *writeError = nil;
+    BOOL wroteReport = [self.diagnosticsText.text writeToFile:reportPath
+                                                  atomically:YES
+                                                    encoding:NSUTF8StringEncoding
+                                                       error:&writeError];
+    if (wroteReport)
+        [items addObject:[NSURL fileURLWithPath:reportPath]];
+    else
+        [items addObject:self.diagnosticsText.text ?: @"Generals ZH diagnostics unavailable"];
+
+    for (NSString *name in @[@"generals-stderr.log", @"generals-stderr-prev.log"])
+    {
+        NSString *path = DocumentsFilePath(name);
+        if ([[NSFileManager defaultManager] fileExistsAtPath:path])
+            [items addObject:[NSURL fileURLWithPath:path]];
+    }
+
+    UIActivityViewController *activity =
+        [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
+
+    UIPopoverPresentationController *popover = activity.popoverPresentationController;
+    if (popover != nil)
+    {
+        popover.sourceView = self.shareDiagnosticsButton;
+        popover.sourceRect = self.shareDiagnosticsButton.bounds;
+    }
+
+    [self presentViewController:activity animated:YES completion:nil];
+
+    if (!wroteReport && writeError != nil)
+    {
+        fprintf(stderr, "WARNING: failed to write diagnostics report: %s\n",
+                [[writeError description] UTF8String]);
+    }
 }
 
 - (BOOL)prefersStatusBarHidden
