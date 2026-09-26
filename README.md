@@ -21,15 +21,23 @@ Profiles:
 
 The Settings screen edits the shared `Documents/iPadOverrides.ini`, which the engine loads as the final GameData override layer for every profile.
 
-## GitHub build
+## GitHub builds
 
-Workflow:
+Full engine/shell workflow:
 
 `.github/workflows/build-ios-shell.yml`
 
-Artifact:
+Fast launcher-only workflow:
+
+`.github/workflows/build-ios-launcher-fast.yml`
+
+Both publish:
 
 `GeneralsXZH-launcher-unsigned`
+
+The fast workflow reuses the latest successful full shell, recompiles only
+`IOSProfileLauncher.mm` into `libGeneralsXLauncher.dylib`, injects that library
+into the IPA, verifies the Mach-O linkage, and uploads the refreshed shell.
 
 ## Windows final assembly
 
@@ -77,9 +85,28 @@ Available scripts:
 .\repo\scripts\build\ios\windows\build-all.ps1
 ```
 
-`build-launcher.ps1` starts the macOS GitHub Actions shell build, waits for it,
-and downloads the resulting `GeneralsXZH-launcher-unsigned.ipa` into `shell/`.
-Pass `-NoBuild` to download the latest successful shell without starting a new run.
+`build-launcher.ps1` now uses the fast launcher-only GitHub workflow by default,
+waits for it, and downloads `GeneralsXZH-launcher-unsigned.ipa` into `shell/`.
+
+Use:
+
+```powershell
+.\repo\scripts\build\ios\windows\build-launcher.ps1
+```
+
+for a fast launcher-only rebuild after UI/settings changes.
+
+Use:
+
+```powershell
+.\repo\scripts\build\ios\windows\build-launcher.ps1 -FullBuild
+```
+
+when the engine/runtime itself changed and a full iOS shell rebuild is required.
+
+Pass `-NoBuild` to download the latest successful fast launcher artifact without
+starting a new run. Combine `-NoBuild -FullBuild` to download the latest successful
+full-shell artifact instead.
 
 The native launcher detects which profile directories exist in the assembled IPA,
 so single-mod builds only show the games that are actually installed.
