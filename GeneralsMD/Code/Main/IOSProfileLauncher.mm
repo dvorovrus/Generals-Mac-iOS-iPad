@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstring>
 #include <cstdio>
+#include <cmath>
 #include <unistd.h>
 
 namespace
@@ -139,8 +140,21 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @interface GXProfileLauncherViewController : UIViewController
 @property(nonatomic, strong) UIStackView *menuStack;
 @property(nonatomic, strong) UIView *settingsView;
-@property(nonatomic, strong) UITextView *settingsEditor;
 @property(nonatomic, strong) UILabel *settingsStatus;
+@property(nonatomic, strong) UISlider *maxCameraSlider;
+@property(nonatomic, strong) UISlider *minCameraSlider;
+@property(nonatomic, strong) UISlider *cameraPitchSlider;
+@property(nonatomic, strong) UISlider *scrollSpeedSlider;
+@property(nonatomic, strong) UISlider *drawDistanceSlider;
+@property(nonatomic, strong) UISlider *fpsSlider;
+@property(nonatomic, strong) UILabel *maxCameraValue;
+@property(nonatomic, strong) UILabel *minCameraValue;
+@property(nonatomic, strong) UILabel *cameraPitchValue;
+@property(nonatomic, strong) UILabel *scrollSpeedValue;
+@property(nonatomic, strong) UILabel *drawDistanceValue;
+@property(nonatomic, strong) UILabel *fpsValue;
+@property(nonatomic, strong) UISwitch *enforceMaxSwitch;
+@property(nonatomic, strong) UISwitch *fpsLimitSwitch;
 @end
 
 @implementation GXProfileLauncherViewController
@@ -206,6 +220,65 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     ]];
 }
 
+- (UISlider *)makeSliderWithMin:(float)minimum max:(float)maximum
+{
+    UISlider *slider = [[UISlider alloc] init];
+    slider.translatesAutoresizingMaskIntoConstraints = NO;
+    slider.minimumValue = minimum;
+    slider.maximumValue = maximum;
+    slider.minimumTrackTintColor = UIColor.whiteColor;
+    slider.maximumTrackTintColor = [UIColor colorWithWhite:0.25 alpha:1.0];
+    [slider addTarget:self action:@selector(settingsSliderChanged:) forControlEvents:UIControlEventValueChanged];
+    return slider;
+}
+
+- (UILabel *)makeValueLabel
+{
+    UILabel *label = MakeLabel(@"", 15.0, UIFontWeightSemibold);
+    label.textAlignment = NSTextAlignmentRight;
+    label.font = [UIFont monospacedDigitSystemFontOfSize:15.0 weight:UIFontWeightSemibold];
+    [label.widthAnchor constraintEqualToConstant:72.0].active = YES;
+    return label;
+}
+
+- (UIStackView *)sliderRow:(NSString *)title slider:(UISlider *)slider value:(UILabel *)value
+{
+    UILabel *name = MakeLabel(title, 15.0, UIFontWeightMedium);
+    name.textAlignment = NSTextAlignmentLeft;
+
+    UIStackView *line = [[UIStackView alloc] initWithArrangedSubviews:@[slider, value]];
+    line.axis = UILayoutConstraintAxisHorizontal;
+    line.alignment = UIStackViewAlignmentCenter;
+    line.spacing = 14.0;
+
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[name, line]];
+    row.axis = UILayoutConstraintAxisVertical;
+    row.alignment = UIStackViewAlignmentFill;
+    row.spacing = 7.0;
+    row.layoutMargins = UIEdgeInsetsMake(10.0, 14.0, 10.0, 14.0);
+    row.layoutMarginsRelativeArrangement = YES;
+    row.backgroundColor = [UIColor colorWithWhite:0.055 alpha:1.0];
+    row.layer.cornerRadius = 9.0;
+    return row;
+}
+
+- (UIStackView *)switchRow:(NSString *)title control:(UISwitch *)control
+{
+    UILabel *name = MakeLabel(title, 15.0, UIFontWeightMedium);
+    name.textAlignment = NSTextAlignmentLeft;
+
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[name, control]];
+    row.axis = UILayoutConstraintAxisHorizontal;
+    row.alignment = UIStackViewAlignmentCenter;
+    row.distribution = UIStackViewDistributionFill;
+    row.spacing = 18.0;
+    row.layoutMargins = UIEdgeInsetsMake(10.0, 14.0, 10.0, 14.0);
+    row.layoutMarginsRelativeArrangement = YES;
+    row.backgroundColor = [UIColor colorWithWhite:0.055 alpha:1.0];
+    row.layer.cornerRadius = 9.0;
+    return row;
+}
+
 - (void)buildSettings
 {
     self.settingsView = [[UIView alloc] init];
@@ -217,32 +290,55 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     [NSLayoutConstraint activateConstraints:@[
         [self.settingsView.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:28.0],
         [self.settingsView.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-28.0],
-        [self.settingsView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:20.0],
-        [self.settingsView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-20.0],
+        [self.settingsView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:18.0],
+        [self.settingsView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-18.0],
     ]];
 
-    UILabel *title = MakeLabel(@"iPadOverrides.ini", 26.0, UIFontWeightBold);
+    UILabel *title = MakeLabel(@"Game settings", 26.0, UIFontWeightBold);
     title.textAlignment = NSTextAlignmentLeft;
 
-    UILabel *note = MakeLabel(@"Shared settings — applied to Zero Hour, Enhanced and Contra X on the next launch.", 13.0, UIFontWeightRegular);
+    UILabel *note = MakeLabel(@"Shared settings for every installed profile. Changes apply on the next game launch.", 13.0, UIFontWeightRegular);
     note.textAlignment = NSTextAlignmentLeft;
     note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
-    self.settingsEditor = [[UITextView alloc] init];
-    self.settingsEditor.translatesAutoresizingMaskIntoConstraints = NO;
-    self.settingsEditor.backgroundColor = [UIColor colorWithWhite:0.055 alpha:1.0];
-    self.settingsEditor.textColor = UIColor.whiteColor;
-    self.settingsEditor.tintColor = UIColor.whiteColor;
-    self.settingsEditor.font = [UIFont monospacedSystemFontOfSize:17.0 weight:UIFontWeightRegular];
-    self.settingsEditor.layer.cornerRadius = 8.0;
-    self.settingsEditor.layer.borderWidth = 1.0;
-    self.settingsEditor.layer.borderColor = [UIColor colorWithWhite:0.25 alpha:1.0].CGColor;
-    self.settingsEditor.textContainerInset = UIEdgeInsetsMake(14.0, 14.0, 14.0, 14.0);
-    self.settingsEditor.autocorrectionType = UITextAutocorrectionTypeNo;
-    self.settingsEditor.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    self.settingsEditor.smartQuotesType = UITextSmartQuotesTypeNo;
-    self.settingsEditor.smartDashesType = UITextSmartDashesTypeNo;
-    self.settingsEditor.spellCheckingType = UITextSpellCheckingTypeNo;
+    self.maxCameraSlider = [self makeSliderWithMin:300.0f max:800.0f];
+    self.minCameraSlider = [self makeSliderWithMin:40.0f max:150.0f];
+    self.cameraPitchSlider = [self makeSliderWithMin:20.0f max:60.0f];
+    self.scrollSpeedSlider = [self makeSliderWithMin:0.5f max:2.0f];
+    self.drawDistanceSlider = [self makeSliderWithMin:0.5f max:2.0f];
+    self.fpsSlider = [self makeSliderWithMin:30.0f max:120.0f];
+
+    self.maxCameraValue = [self makeValueLabel];
+    self.minCameraValue = [self makeValueLabel];
+    self.cameraPitchValue = [self makeValueLabel];
+    self.scrollSpeedValue = [self makeValueLabel];
+    self.drawDistanceValue = [self makeValueLabel];
+    self.fpsValue = [self makeValueLabel];
+
+    self.enforceMaxSwitch = [[UISwitch alloc] init];
+    self.fpsLimitSwitch = [[UISwitch alloc] init];
+    [self.fpsLimitSwitch addTarget:self action:@selector(fpsLimitChanged:) forControlEvents:UIControlEventValueChanged];
+
+    UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:@[
+        [self sliderRow:@"Maximum camera height" slider:self.maxCameraSlider value:self.maxCameraValue],
+        [self sliderRow:@"Minimum camera height" slider:self.minCameraSlider value:self.minCameraValue],
+        [self sliderRow:@"Camera pitch" slider:self.cameraPitchSlider value:self.cameraPitchValue],
+        [self switchRow:@"Enforce maximum camera height" control:self.enforceMaxSwitch],
+        [self sliderRow:@"Keyboard / edge scroll speed" slider:self.scrollSpeedSlider value:self.scrollSpeedValue],
+        [self sliderRow:@"Terrain draw distance" slider:self.drawDistanceSlider value:self.drawDistanceValue],
+        [self switchRow:@"FPS limit" control:self.fpsLimitSwitch],
+        [self sliderRow:@"Frames per second" slider:self.fpsSlider value:self.fpsValue],
+    ]];
+    controls.translatesAutoresizingMaskIntoConstraints = NO;
+    controls.axis = UILayoutConstraintAxisVertical;
+    controls.alignment = UIStackViewAlignmentFill;
+    controls.spacing = 9.0;
+
+    UIScrollView *scroll = [[UIScrollView alloc] init];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.alwaysBounceVertical = YES;
+    scroll.showsVerticalScrollIndicator = YES;
+    [scroll addSubview:controls];
 
     UIButton *save = MakeButton(@"Save", self, @selector(saveSettings));
     UIButton *reset = MakeButton(@"Reset defaults", self, @selector(resetSettings));
@@ -265,7 +361,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     [self.settingsView addSubview:title];
     [self.settingsView addSubview:note];
-    [self.settingsView addSubview:self.settingsEditor];
+    [self.settingsView addSubview:scroll];
     [self.settingsView addSubview:buttons];
     [self.settingsView addSubview:self.settingsStatus];
 
@@ -278,18 +374,26 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
         [note.trailingAnchor constraintEqualToAnchor:self.settingsView.trailingAnchor],
         [note.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:4.0],
 
-        [self.settingsEditor.leadingAnchor constraintEqualToAnchor:self.settingsView.leadingAnchor],
-        [self.settingsEditor.trailingAnchor constraintEqualToAnchor:self.settingsView.trailingAnchor],
-        [self.settingsEditor.topAnchor constraintEqualToAnchor:note.bottomAnchor constant:14.0],
-        [self.settingsEditor.bottomAnchor constraintEqualToAnchor:buttons.topAnchor constant:-14.0],
+        [scroll.leadingAnchor constraintEqualToAnchor:self.settingsView.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:self.settingsView.trailingAnchor],
+        [scroll.topAnchor constraintEqualToAnchor:note.bottomAnchor constant:12.0],
+        [scroll.bottomAnchor constraintEqualToAnchor:buttons.topAnchor constant:-12.0],
+
+        [controls.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [controls.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [controls.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [controls.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [controls.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
 
         [buttons.centerXAnchor constraintEqualToAnchor:self.settingsView.centerXAnchor],
-        [buttons.bottomAnchor constraintEqualToAnchor:self.settingsStatus.topAnchor constant:-8.0],
+        [buttons.bottomAnchor constraintEqualToAnchor:self.settingsStatus.topAnchor constant:-7.0],
 
         [self.settingsStatus.leadingAnchor constraintEqualToAnchor:self.settingsView.leadingAnchor],
         [self.settingsStatus.trailingAnchor constraintEqualToAnchor:self.settingsView.trailingAnchor],
         [self.settingsStatus.bottomAnchor constraintEqualToAnchor:self.settingsView.bottomAnchor],
     ]];
+
+    [self resetSettingsControls];
 }
 
 - (BOOL)prefersStatusBarHidden
@@ -322,7 +426,57 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     SetSelectedProfile(@"contra-x");
 }
 
-- (void)showSettings
+- (NSString *)valueForKey:(NSString *)key inContents:(NSString *)contents
+{
+    NSString *prefix = [key stringByAppendingString:@"="];
+    for (NSString *line in [contents componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]])
+    {
+        NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        NSString *compact = [trimmed stringByReplacingOccurrencesOfString:@" " withString:@""];
+        if ([compact hasPrefix:prefix])
+        {
+            NSRange equals = [trimmed rangeOfString:@"="];
+            if (equals.location != NSNotFound)
+            {
+                return [[trimmed substringFromIndex:equals.location + 1]
+                        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            }
+        }
+    }
+    return nil;
+}
+
+- (float)floatSetting:(NSString *)key contents:(NSString *)contents fallback:(float)fallback
+{
+    NSString *value = [self valueForKey:key inContents:contents];
+    return value.length > 0 ? value.floatValue : fallback;
+}
+
+- (BOOL)boolSetting:(NSString *)key contents:(NSString *)contents fallback:(BOOL)fallback
+{
+    NSString *value = [[self valueForKey:key inContents:contents] lowercaseString];
+    if ([value isEqualToString:@"yes"] || [value isEqualToString:@"true"] || [value isEqualToString:@"1"])
+        return YES;
+    if ([value isEqualToString:@"no"] || [value isEqualToString:@"false"] || [value isEqualToString:@"0"])
+        return NO;
+    return fallback;
+}
+
+- (void)resetSettingsControls
+{
+    self.maxCameraSlider.value = 550.0f;
+    self.minCameraSlider.value = 70.0f;
+    self.cameraPitchSlider.value = 37.0f;
+    self.enforceMaxSwitch.on = NO;
+    self.scrollSpeedSlider.value = 1.0f;
+    self.drawDistanceSlider.value = 1.20f;
+    self.fpsLimitSwitch.on = YES;
+    self.fpsSlider.value = 60.0f;
+    [self settingsSliderChanged:nil];
+    [self fpsLimitChanged:self.fpsLimitSwitch];
+}
+
+- (void)loadSettingsControls
 {
     NSError *error = nil;
     NSString *contents = [NSString stringWithContentsOfFile:IPadOverridesPath()
@@ -330,45 +484,92 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
                                                       error:&error];
     if (contents == nil)
     {
-        contents = DefaultIPadOverrides();
-        self.settingsStatus.text = @"Using defaults; Save will create iPadOverrides.ini.";
+        [self resetSettingsControls];
+        self.settingsStatus.text = @"Using defaults.";
         if (error != nil)
         {
             fprintf(stderr, "WARNING: iOS launcher could not read iPadOverrides.ini: %s\n",
                     [[error description] UTF8String]);
         }
-    }
-    else
-    {
-        self.settingsStatus.text = @"";
+        return;
     }
 
-    self.settingsEditor.text = contents;
+    self.maxCameraSlider.value = [self floatSetting:@"MaxCameraHeight" contents:contents fallback:550.0f];
+    self.minCameraSlider.value = [self floatSetting:@"MinCameraHeight" contents:contents fallback:70.0f];
+    self.cameraPitchSlider.value = [self floatSetting:@"CameraPitch" contents:contents fallback:37.0f];
+    self.enforceMaxSwitch.on = [self boolSetting:@"EnforceMaxCameraHeight" contents:contents fallback:NO];
+    self.scrollSpeedSlider.value = [self floatSetting:@"KeyboardScrollSpeedFactor" contents:contents fallback:1.0f];
+    self.drawDistanceSlider.value = [self floatSetting:@"TerrainDrawDistanceScale" contents:contents fallback:1.20f];
+    self.fpsLimitSwitch.on = [self boolSetting:@"UseFPSLimit" contents:contents fallback:YES];
+    self.fpsSlider.value = [self floatSetting:@"FramesPerSecondLimit" contents:contents fallback:60.0f];
+    [self settingsSliderChanged:nil];
+    [self fpsLimitChanged:self.fpsLimitSwitch];
+    self.settingsStatus.text = @"";
+}
+
+- (void)showSettings
+{
+    [self loadSettingsControls];
     self.menuStack.hidden = YES;
     self.settingsView.hidden = NO;
 }
 
 - (void)hideSettings
 {
-    [self.settingsEditor resignFirstResponder];
     self.settingsView.hidden = YES;
     self.menuStack.hidden = NO;
 }
 
+- (void)settingsSliderChanged:(UISlider *)sender
+{
+    auto snap = [](float value, float step) -> float {
+        return roundf(value / step) * step;
+    };
+
+    self.maxCameraSlider.value = snap(self.maxCameraSlider.value, 10.0f);
+    self.minCameraSlider.value = snap(self.minCameraSlider.value, 5.0f);
+    self.cameraPitchSlider.value = snap(self.cameraPitchSlider.value, 1.0f);
+    self.scrollSpeedSlider.value = snap(self.scrollSpeedSlider.value, 0.1f);
+    self.drawDistanceSlider.value = snap(self.drawDistanceSlider.value, 0.05f);
+    self.fpsSlider.value = snap(self.fpsSlider.value, 5.0f);
+
+    self.maxCameraValue.text = [NSString stringWithFormat:@"%.0f", self.maxCameraSlider.value];
+    self.minCameraValue.text = [NSString stringWithFormat:@"%.0f", self.minCameraSlider.value];
+    self.cameraPitchValue.text = [NSString stringWithFormat:@"%.0f°", self.cameraPitchSlider.value];
+    self.scrollSpeedValue.text = [NSString stringWithFormat:@"%.1fx", self.scrollSpeedSlider.value];
+    self.drawDistanceValue.text = [NSString stringWithFormat:@"%.2fx", self.drawDistanceSlider.value];
+    self.fpsValue.text = [NSString stringWithFormat:@"%.0f", self.fpsSlider.value];
+}
+
+- (void)fpsLimitChanged:(UISwitch *)sender
+{
+    BOOL enabled = self.fpsLimitSwitch.on;
+    self.fpsSlider.enabled = enabled;
+    self.fpsSlider.alpha = enabled ? 1.0 : 0.35;
+    self.fpsValue.alpha = enabled ? 1.0 : 0.35;
+}
+
 - (void)saveSettings
 {
-    NSString *contents = self.settingsEditor.text ?: @"";
-    NSString *trimmed = [contents stringByTrimmingCharactersInSet:
-                         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-
-    if (trimmed.length == 0 ||
-        [contents rangeOfString:@"GameData"].location == NSNotFound ||
-        [contents rangeOfString:@"End"].location == NSNotFound)
-    {
-        self.settingsStatus.text = @"Not saved: the file must contain GameData ... End.";
-        self.settingsStatus.textColor = [UIColor systemRedColor];
-        return;
-    }
+    NSString *contents = [NSString stringWithFormat:
+        @"GameData\n"
+         "  MaxCameraHeight = %.1f\n"
+         "  MinCameraHeight = %.1f\n"
+         "  CameraPitch = %.1f\n"
+         "  EnforceMaxCameraHeight = %@\n"
+         "  KeyboardScrollSpeedFactor = %.1f\n"
+         "  TerrainDrawDistanceScale = %.2f\n"
+         "  UseFPSLimit = %@\n"
+         "  FramesPerSecondLimit = %.0f\n"
+         "End\n",
+        self.maxCameraSlider.value,
+        self.minCameraSlider.value,
+        self.cameraPitchSlider.value,
+        self.enforceMaxSwitch.on ? @"Yes" : @"No",
+        self.scrollSpeedSlider.value,
+        self.drawDistanceSlider.value,
+        self.fpsLimitSwitch.on ? @"Yes" : @"No",
+        self.fpsSlider.value];
 
     NSError *error = nil;
     BOOL ok = [contents writeToFile:IPadOverridesPath()
@@ -377,7 +578,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
                               error:&error];
     if (ok)
     {
-        self.settingsStatus.text = @"Saved. These values will apply to every profile on launch.";
+        self.settingsStatus.text = @"Saved. Changes apply on the next game launch.";
         self.settingsStatus.textColor = [UIColor systemGreenColor];
         fprintf(stderr, "INFO: iOS launcher saved %s\n",
                 IPadOverridesPath().fileSystemRepresentation);
@@ -393,7 +594,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
 - (void)resetSettings
 {
-    self.settingsEditor.text = DefaultIPadOverrides();
+    [self resetSettingsControls];
     self.settingsStatus.text = @"Default values loaded. Tap Save to apply.";
     self.settingsStatus.textColor = [UIColor colorWithWhite:0.65 alpha:1.0];
 }
