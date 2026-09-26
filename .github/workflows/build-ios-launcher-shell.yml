@@ -14,7 +14,9 @@ on:
       - 'Patches/dxvk-ios.patch'
       - 'ios/**'
       - 'launcher_vite/**'
-      - 'scripts/build/ios/**'
+      - 'scripts/build/ios/package-ios-zh.sh'
+      - 'scripts/build/ios/fetch-moltenvk.sh'
+      - 'scripts/build/ios/stage-fonts.sh'
       - '.github/workflows/build-ios-launcher-shell.yml'
   pull_request:
     branches:
@@ -28,7 +30,9 @@ on:
       - 'Patches/dxvk-ios.patch'
       - 'ios/**'
       - 'launcher_vite/**'
-      - 'scripts/build/ios/**'
+      - 'scripts/build/ios/package-ios-zh.sh'
+      - 'scripts/build/ios/fetch-moltenvk.sh'
+      - 'scripts/build/ios/stage-fonts.sh'
       - '.github/workflows/build-ios-launcher-shell.yml'
 
 permissions:
