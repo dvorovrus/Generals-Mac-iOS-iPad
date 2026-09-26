@@ -53,4 +53,6 @@ add_subdirectory(GameEngine)
 # Platform specific GameEngine code
 add_subdirectory(GameEngineDevice)
 
-add_subdirectory(Tools)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_subdirectory(Tools)
+endif()
