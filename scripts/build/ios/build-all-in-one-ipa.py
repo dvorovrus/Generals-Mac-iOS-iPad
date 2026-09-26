@@ -15,7 +15,6 @@ Typical Windows usage:
       --shell GeneralsXZH-launcher-unsigned.ipa ^
       --base-ipa GeneralsZH-FULL-unsigned.ipa ^
       --enhanced ZHE ^
-      --enhanced-patch ZHE8Patch_99.zip ^
       --contra-beta2 ContraXBeta2.zip ^
       --contra-patch1 ContraXBeta2Patch1.zip
 
@@ -168,6 +167,24 @@ def md5_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(4 * 1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def contains_enhanced_patch(path: Path) -> bool:
+    """Return True when the 28/03/2024 Enhanced patch is already present."""
+    wanted = "!!zhe8patch_99.big"
+    if path.is_dir():
+        return any(
+            p.is_file() and p.name.lower() == wanted
+            for p in path.rglob("*")
+        )
+    if path.is_file() and zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path, "r") as z:
+            return any(
+                PurePosixPath(info.filename.replace("\\", "/")).name.lower() == wanted
+                for info in z.infolist()
+                if not info.is_dir()
+            )
+    return False
 
 
 @dataclass
@@ -459,8 +476,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--enhanced-patch",
         type=Path,
-        default=Path("ZHE8Patch_99.zip"),
-        help="Zero Hour Enhanced V1.0 Patch (28/03/2024) ZIP/directory.",
+        default=None,
+        help=(
+            "Optional Zero Hour Enhanced V1.0 Patch (28/03/2024) ZIP/directory. "
+            "Omit this when the patch is already extracted into --enhanced."
+        ),
     )
     parser.add_argument(
         "--contra-beta2",
@@ -493,17 +513,26 @@ def validate_inputs(args: argparse.Namespace) -> None:
         ("launcher shell IPA", args.shell),
         ("base full IPA", args.base_ipa),
         ("Enhanced", args.enhanced),
-        ("Enhanced V1.0 patch", args.enhanced_patch),
         ("Contra X Beta 2", args.contra_beta2),
         ("Contra X Patch 1", args.contra_patch1),
     ):
         if not path.exists():
             die(f"{label} not found: {path}")
 
+    if args.enhanced_patch is not None and not args.enhanced_patch.exists():
+        die(f"Enhanced V1.0 patch not found: {args.enhanced_patch}")
+
     if not zipfile.is_zipfile(args.shell):
         die(f"shell is not a valid IPA/ZIP: {args.shell}")
     if not zipfile.is_zipfile(args.base_ipa):
         die(f"base IPA is not a valid IPA/ZIP: {args.base_ipa}")
+
+    if args.enhanced_patch is None and not contains_enhanced_patch(args.enhanced):
+        die(
+            "Enhanced patch 28/03/2024 is not present in --enhanced. "
+            "Either extract ZHE8Patch_99 into the Enhanced folder or pass "
+            "--enhanced-patch explicitly."
+        )
 
     if not args.skip_md5:
         for label, path, expected in (
@@ -532,17 +561,26 @@ def main() -> None:
     print(f"Shell:       {args.shell}")
     print(f"Base 1.04:   {args.base_ipa}")
     print(f"Enhanced:    {args.enhanced}")
-    print(f"Enhanced P:  {args.enhanced_patch}")
+    print(
+        "Enhanced P:  "
+        + (str(args.enhanced_patch) if args.enhanced_patch is not None else "already merged")
+    )
     print(f"Contra B2:   {args.contra_beta2}")
     print(f"Contra P1:   {args.contra_patch1}")
     print(f"Output:      {args.output}")
     print()
 
+    enhanced_patch_context = (
+        ModSource(args.enhanced_patch)
+        if args.enhanced_patch is not None
+        else contextlib.nullcontext(None)
+    )
+
     with (
         zipfile.ZipFile(args.shell, "r") as shell,
         zipfile.ZipFile(args.base_ipa, "r") as base,
         ModSource(args.enhanced) as enhanced_source,
-        ModSource(args.enhanced_patch) as enhanced_patch_source,
+        enhanced_patch_context as enhanced_patch_source,
         ModSource(args.contra_beta2) as contra_beta_source,
         ModSource(args.contra_patch1) as contra_patch_source,
         zipfile.ZipFile(
@@ -598,9 +636,10 @@ def main() -> None:
         if base_files == 0:
             die("base IPA contains no GameData files")
 
-        enhanced_entries = build_enhanced_entries(
-            (enhanced_source, enhanced_patch_source)
-        )
+        enhanced_sources = [enhanced_source]
+        if enhanced_patch_source is not None:
+            enhanced_sources.append(enhanced_patch_source)
+        enhanced_entries = build_enhanced_entries(enhanced_sources)
         enhanced_bytes = 0
         for entry, rel in enhanced_entries:
             target = shell_app + "Profiles/enhanced/" + normalized_rel(rel)
