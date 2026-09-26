@@ -15,6 +15,7 @@ Typical Windows usage:
       --shell GeneralsXZH-launcher-unsigned.ipa ^
       --base-ipa GeneralsZH-FULL-unsigned.ipa ^
       --enhanced ZHE ^
+      --enhanced-patch ZHE8Patch_99.zip ^
       --contra-beta2 ContraXBeta2.zip ^
       --contra-patch1 ContraXBeta2Patch1.zip
 
@@ -274,11 +275,26 @@ def should_skip_common(rel: str) -> bool:
     return False
 
 
-def build_enhanced_entries(source: ModSource) -> list[tuple[SourceEntry, str]]:
+def build_enhanced_entries(
+    sources: Iterable[ModSource],
+) -> list[tuple[SourceEntry, str]]:
+    # Later sources overwrite earlier sources case-insensitively, matching
+    # "extract patch over full version" installation semantics.
+    merged: dict[str, SourceEntry] = {}
+    for source in sources:
+        for entry in source.entries:
+            rel = normalized_rel(entry.rel)
+            merged[rel.lower()] = SourceEntry(
+                rel=rel,
+                open_stream=entry.open_stream,
+                zip_info=entry.zip_info,
+                disk_path=entry.disk_path,
+            )
+
     result: list[tuple[SourceEntry, str]] = []
     seen: set[str] = set()
 
-    for entry in source.entries:
+    for entry in sorted(merged.values(), key=lambda e: e.rel.lower()):
         rel = normalized_rel(entry.rel)
         p = PurePosixPath(rel)
         lower_name = p.name.lower()
@@ -441,6 +457,12 @@ def parse_args() -> argparse.Namespace:
         help="Extracted Zero Hour Enhanced directory or ZIP.",
     )
     parser.add_argument(
+        "--enhanced-patch",
+        type=Path,
+        default=Path("ZHE8Patch_99.zip"),
+        help="Zero Hour Enhanced V1.0 Patch (28/03/2024) ZIP/directory.",
+    )
+    parser.add_argument(
         "--contra-beta2",
         type=Path,
         default=Path("ContraXBeta2.zip"),
@@ -471,6 +493,7 @@ def validate_inputs(args: argparse.Namespace) -> None:
         ("launcher shell IPA", args.shell),
         ("base full IPA", args.base_ipa),
         ("Enhanced", args.enhanced),
+        ("Enhanced V1.0 patch", args.enhanced_patch),
         ("Contra X Beta 2", args.contra_beta2),
         ("Contra X Patch 1", args.contra_patch1),
     ):
@@ -509,6 +532,7 @@ def main() -> None:
     print(f"Shell:       {args.shell}")
     print(f"Base 1.04:   {args.base_ipa}")
     print(f"Enhanced:    {args.enhanced}")
+    print(f"Enhanced P:  {args.enhanced_patch}")
     print(f"Contra B2:   {args.contra_beta2}")
     print(f"Contra P1:   {args.contra_patch1}")
     print(f"Output:      {args.output}")
@@ -518,6 +542,7 @@ def main() -> None:
         zipfile.ZipFile(args.shell, "r") as shell,
         zipfile.ZipFile(args.base_ipa, "r") as base,
         ModSource(args.enhanced) as enhanced_source,
+        ModSource(args.enhanced_patch) as enhanced_patch_source,
         ModSource(args.contra_beta2) as contra_beta_source,
         ModSource(args.contra_patch1) as contra_patch_source,
         zipfile.ZipFile(
@@ -573,7 +598,9 @@ def main() -> None:
         if base_files == 0:
             die("base IPA contains no GameData files")
 
-        enhanced_entries = build_enhanced_entries(enhanced_source)
+        enhanced_entries = build_enhanced_entries(
+            (enhanced_source, enhanced_patch_source)
+        )
         enhanced_bytes = 0
         for entry, rel in enhanced_entries:
             target = shell_app + "Profiles/enhanced/" + normalized_rel(rel)
