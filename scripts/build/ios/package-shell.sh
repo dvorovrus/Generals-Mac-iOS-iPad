@@ -16,6 +16,7 @@ BUNDLE_ID="${GX_BUNDLE_ID:-com.dvorov.generalszh.launcher}"
 GAME_BIN="${BUILD_DIR}/GeneralsMD/GeneralsXZH.app/GeneralsXZH"
 DXVK_BUILD="${BUILD_DIR}/_deps/dxvk-build-macos"
 GAMESPY_LIB="$(find "${BUILD_DIR}" -type f -name 'libgamespy.dylib' -print -quit)"
+LAUNCHER_LIB="$(find "${BUILD_DIR}" -type f -name 'libGeneralsXLauncher.dylib' -print -quit)"
 
 test -f "${GAME_BIN}" || {
   echo "ERROR: missing engine binary: ${GAME_BIN}"
@@ -24,6 +25,11 @@ test -f "${GAME_BIN}" || {
 
 test -n "${GAMESPY_LIB}" && test -f "${GAMESPY_LIB}" || {
   echo "ERROR: missing GameSpy runtime library (libgamespy.dylib) under ${BUILD_DIR}"
+  exit 1
+}
+
+test -n "${LAUNCHER_LIB}" && test -f "${LAUNCHER_LIB}" || {
+  echo "ERROR: missing native launcher runtime library (libGeneralsXLauncher.dylib) under ${BUILD_DIR}"
   exit 1
 }
 
@@ -58,7 +64,8 @@ for lib in \
   "${BUILD_DIR}/_deps/sdl3-build/libSDL3.0.dylib" \
   "${BUILD_DIR}/_deps/sdl3_image-build/libSDL3_image.0.dylib" \
   "${BUILD_DIR}/_deps/openal_soft-build/libopenal.1.24.2.dylib" \
-  "${GAMESPY_LIB}"; do
+  "${GAMESPY_LIB}" \
+  "${LAUNCHER_LIB}"; do
   test -f "${lib}" || {
     echo "ERROR: required runtime library missing: ${lib}"
     exit 1
