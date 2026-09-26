@@ -79,23 +79,34 @@ target_sources(z_generals PRIVATE
 )
 
 # GeneralsX @feature dvorovrus 26/09/2026 Native UIKit profile launcher for iOS.
+# Keep launcher UI in its own dylib: launcher-only changes can then be rebuilt and
+# repackaged without recompiling the whole GeneralsX engine.
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    target_sources(z_generals PRIVATE
+    add_library(generalsx_ios_launcher SHARED
         IOSProfileLauncher.h
         IOSProfileLauncher.mm
     )
+    set_target_properties(generalsx_ios_launcher PROPERTIES
+        OUTPUT_NAME "GeneralsXLauncher"
+        MACOSX_RPATH ON
+        BUILD_WITH_INSTALL_RPATH ON
+        INSTALL_NAME_DIR "@rpath"
+    )
+    target_include_directories(generalsx_ios_launcher PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 
-    # GeneralsX @build dvorovrus 26/09/2026 Objective-C++ ARC cannot reuse
-    # the target's non-ARC C++ precompiled header. Compile this one bridge source
-    # without PCH and enable ARC explicitly.
     set_source_files_properties(IOSProfileLauncher.mm PROPERTIES
         SKIP_PRECOMPILE_HEADERS ON
         COMPILE_OPTIONS "-fobjc-arc"
     )
 
     find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
-    target_link_libraries(z_generals PRIVATE
+    target_link_libraries(generalsx_ios_launcher PRIVATE
         ${UIKIT_FRAMEWORK}
+    )
+    target_link_libraries(z_generals PRIVATE
+        generalsx_ios_launcher
     )
 endif()
 
