@@ -62,10 +62,11 @@ jobs:
       - name: Install build tools
         run: |
           brew update
-          brew install cmake ninja meson pkg-config autoconf autoconf-archive automake libtool xcodegen
+          brew install cmake ninja meson pkg-config autoconf autoconf-archive automake libtool xcodegen glslang
           cmake --version
           ninja --version
           meson --version
+          glslangValidator --version
           xcodegen --version
           xcodebuild -version
 
