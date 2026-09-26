@@ -20,6 +20,18 @@
 #ifndef GX_BASE_SHELL_RUN
 #define GX_BASE_SHELL_RUN "unknown"
 #endif
+#ifndef GX_PROJECT_VERSION
+#define GX_PROJECT_VERSION "0.0.0"
+#endif
+#ifndef GX_ENGINE_VERSION
+#define GX_ENGINE_VERSION "0.0.0"
+#endif
+#ifndef GX_LAUNCHER_VERSION
+#define GX_LAUNCHER_VERSION "0.0.0"
+#endif
+#ifndef GX_LAUNCHER_RUN
+#define GX_LAUNCHER_RUN "unknown"
+#endif
 
 namespace
 {
@@ -498,12 +510,14 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     return [NSString stringWithFormat:
         @"APP\n"
-         "Version: %@ (%@)\n"
+         "Project: %s\n"
+         "Bundle: %@ (%@)\n"
          "iOS: %@\n"
          "Device: %@\n\n"
          "BUILD\n"
-         "Launcher: %@\n"
-         "Engine: %@\n"
+         "Launcher: v%s · %@\n"
+         "Launcher run: %@\n"
+         "Engine: v%s · %@\n"
          "Base shell run: %@\n\n"
          "CONTENT\n"
          "GameData: %@\n"
@@ -514,11 +528,15 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
          "Settings: %@\n"
          "Current log: %@\n"
          "Previous log: %@\n",
+        GX_PROJECT_VERSION,
         shortVersion,
         buildVersion,
         UIDevice.currentDevice.systemVersion,
         UIDevice.currentDevice.model,
+        GX_LAUNCHER_VERSION,
         ShortBuildIdentifier(GX_LAUNCHER_COMMIT),
+        ShortBuildIdentifier(GX_LAUNCHER_RUN),
+        GX_ENGINE_VERSION,
         ShortBuildIdentifier(GX_ENGINE_COMMIT),
         ShortBuildIdentifier(GX_BASE_SHELL_RUN),
         gameDataExists ? @"Installed" : @"Missing",
