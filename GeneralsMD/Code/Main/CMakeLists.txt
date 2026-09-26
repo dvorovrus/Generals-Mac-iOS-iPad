@@ -78,7 +78,7 @@ target_sources(z_generals PRIVATE
     $<$<NOT:$<BOOL:${WIN32}>>:LinuxStubs.cpp>
 )
 
-# GeneralsX @feature dvorovrus 25/09/2026 Embedded Vite/WKWebView profile launcher for iOS.
+# GeneralsX @feature dvorovrus 26/09/2026 Native UIKit profile launcher for iOS.
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     target_sources(z_generals PRIVATE
         IOSProfileLauncher.h
@@ -94,10 +94,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     )
 
     find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
-    find_library(WEBKIT_FRAMEWORK WebKit REQUIRED)
     target_link_libraries(z_generals PRIVATE
         ${UIKIT_FRAMEWORK}
-        ${WEBKIT_FRAMEWORK}
     )
 endif()
 
