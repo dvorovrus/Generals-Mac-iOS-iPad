@@ -110,3 +110,20 @@ full-shell artifact instead.
 
 The native launcher detects which profile directories exist in the assembled IPA,
 so single-mod builds only show the games that are actually installed.
+
+## Versioning
+
+Semantic versions are defined in `ios/version.env`:
+
+- `PROJECT_VERSION` — overall iPad port version
+- `ENGINE_VERSION` — engine/runtime baseline
+- `LAUNCHER_VERSION` — native launcher UI version
+
+Launcher-only releases can bump `LAUNCHER_VERSION` without changing
+`ENGINE_VERSION`. Diagnostics also show launcher/engine commits and the
+GitHub run identifiers used to produce the installed shell.
+
+The Windows launcher downloader keeps the stable
+`GeneralsXZH-launcher-unsigned.ipa` path used by packaging scripts and also
+writes a versioned alias such as
+`GeneralsZH-iPad-0.1.0-Launcher-0.1.0-unsigned.ipa`.
