@@ -57,3 +57,29 @@ powershell -NoProfile -ExecutionPolicy Bypass -File \
 ```
 
 Retail game data and mod archives are never stored in this repository.
+
+
+## Windows one-command builds
+
+From the workspace folder `Generals-iPad`, the tracked scripts automatically use:
+
+- `input/` for retail/mod sources
+- `shell/` for the GitHub-built native iOS shell
+- `output/` for generated IPAs
+
+Available scripts:
+
+```powershell
+.\repo\scripts\build\ios\windows\build-launcher.ps1
+.\repo\scripts\build\ios\windows\build-original.ps1
+.\repo\scripts\build\ios\windows\build-enhanced.ps1
+.\repo\scripts\build\ios\windows\build-contra.ps1
+.\repo\scripts\build\ios\windows\build-all.ps1
+```
+
+`build-launcher.ps1` starts the macOS GitHub Actions shell build, waits for it,
+and downloads the resulting `GeneralsXZH-launcher-unsigned.ipa` into `shell/`.
+Pass `-NoBuild` to download the latest successful shell without starting a new run.
+
+The native launcher detects which profile directories exist in the assembled IPA,
+so single-mod builds only show the games that are actually installed.
