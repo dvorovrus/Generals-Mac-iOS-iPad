@@ -217,7 +217,6 @@ BOOL WriteKeyValueFile(NSString *path, NSDictionary<NSString *, NSString *> *val
 NSDictionary<NSString *, NSString *> *DefaultContraSettings()
 {
     return @{
-        @"QuickStart": @"No",
         @"ControlBar": @"Contra",
         @"Cameos": @"Standard",
         @"Music": @"Standard",
@@ -241,7 +240,7 @@ NSDictionary<NSString *, NSString *> *DefaultContraSettings()
         @"TextureReduction": @"0",
         @"MaxParticleCount": @"2500",
         @"TextureFilter": @"Anisotropic",
-        @"AnisotropyLevel": @"8",
+        @"AnisotropyLevel": @"8"
     };
 }
 
@@ -257,12 +256,6 @@ void EnsureDefaultContraSettings()
         fprintf(stderr, "ERROR: failed to seed ContraSettings.ini: %s\n",
                 error != nil ? [[error description] UTF8String] : "unknown");
     }
-}
-
-BOOL ContraQuickStartEnabled()
-{
-    EnsureDefaultContraSettings();
-    return SettingBoolValue(ReadKeyValueFile(ContraSettingsPath()), @"QuickStart", NO);
 }
 
 bool ProfileDirectoryExists(NSString *profileDirectory)
@@ -378,7 +371,6 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UISwitch *enforceMaxSwitch;
 @property(nonatomic, strong) UISwitch *fpsLimitSwitch;
 
-@property(nonatomic, strong) UISwitch *contraQuickStartSwitch;
 @property(nonatomic, strong) UISegmentedControl *contraControlBarSegment;
 @property(nonatomic, strong) UISegmentedControl *contraCameosSegment;
 @property(nonatomic, strong) UISegmentedControl *contraMusicSegment;
@@ -614,7 +606,6 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     note.textAlignment = NSTextAlignmentLeft;
     note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
-    self.contraQuickStartSwitch = [[UISwitch alloc] init];
     self.contraControlBarSegment = [self makeSegmented:@[@"Contra", @"Pro", @"Standard"]];
     self.contraCameosSegment = [self makeSegmented:@[@"Standard", @"HD"]];
     self.contraMusicSegment = [self makeSegmented:@[@"Standard", @"Enhanced", @"The Score"]];
@@ -660,7 +651,6 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:@[
         [self sectionLabel:@"CONTRA X"],
-        [self switchRow:@"Quick Start (skip this launcher next time)" control:self.contraQuickStartSwitch],
         [self segmentedRow:@"Control Bar" control:self.contraControlBarSegment],
         [self segmentedRow:@"Icon / cameo quality" control:self.contraCameosSegment],
         [self segmentedRow:@"Music" control:self.contraMusicSegment],
@@ -1076,7 +1066,6 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 - (void)resetContraSettingsControls
 {
     NSDictionary<NSString *, NSString *> *defaults = DefaultContraSettings();
-    self.contraQuickStartSwitch.on = SettingBoolValue(defaults, @"QuickStart", NO);
     self.contraControlBarSegment.selectedSegmentIndex = 0;
     self.contraCameosSegment.selectedSegmentIndex = 0;
     self.contraMusicSegment.selectedSegmentIndex = 0;
@@ -1108,7 +1097,6 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     EnsureDefaultContraSettings();
     NSDictionary<NSString *, NSString *> *values = ReadKeyValueFile(ContraSettingsPath());
 
-    self.contraQuickStartSwitch.on = SettingBoolValue(values, @"QuickStart", NO);
     self.contraControlBarSegment.selectedSegmentIndex =
         [self segmentIndexForValue:SettingValue(values, @"ControlBar", @"Contra")
                            choices:@[@"Contra", @"Pro", @"Standard"]
@@ -1282,7 +1270,6 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     NSString *filter = filters[MAX(0, MIN(2, self.textureFilterSegment.selectedSegmentIndex))];
 
     NSMutableDictionary<NSString *, NSString *> *contra = [DefaultContraSettings() mutableCopy];
-    contra[@"QuickStart"] = self.contraQuickStartSwitch.on ? @"Yes" : @"No";
     contra[@"ControlBar"] = controlBars[self.contraControlBarSegment.selectedSegmentIndex];
     contra[@"Cameos"] = cameos[self.contraCameosSegment.selectedSegmentIndex];
     contra[@"Music"] = music[self.contraMusicSegment.selectedSegmentIndex];
@@ -1404,7 +1391,7 @@ const char *GeneralsXRunIOSProfileLauncher()
         const char *utf8 = [autoProfile UTF8String];
         strlcpy(gSelectedProfile, utf8, sizeof(gSelectedProfile));
 
-        if (![autoProfile isEqualToString:@"contra-x"] || ContraQuickStartEnabled())
+        if (![autoProfile isEqualToString:@"contra-x"])
         {
             fprintf(stderr, "INFO: iOS launcher auto-selected bundled profile: %s\n",
                     gSelectedProfile);
@@ -1412,7 +1399,7 @@ const char *GeneralsXRunIOSProfileLauncher()
         }
 
         fprintf(stderr,
-                "[CONTRA-SETTINGS] dedicated Contra launcher shown because QuickStart=No\n");
+                "[CONTRA-SETTINGS] dedicated Contra launcher shown for settings access\n");
     }
 
     gLauncherFinished.store(false, std::memory_order_release);
