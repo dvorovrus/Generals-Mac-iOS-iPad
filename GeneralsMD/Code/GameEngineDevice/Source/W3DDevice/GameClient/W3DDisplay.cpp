@@ -1039,6 +1039,32 @@ void W3DDisplay::init()
 				TheWritableGlobalData->m_textureFilteringMode = WW3D::Get_Texture_Filter();
 				WW3D::Set_Anisotropy_Level(TheWritableGlobalData->m_textureAnisotropyLevel);
 				TheWritableGlobalData->m_textureAnisotropyLevel = WW3D::Get_Anisotropy_Level();
+
+				auto *caps = DX8Wrapper::Get_Current_Caps();
+				fprintf(stderr,
+				        "[GRAPHICS-DIAG] render-device width=%d height=%d bitDepth=%d windowed=%d backBufferFormat=%d viewportHeightScale=%.3f msaa=%u filter=%d anisotropy=%u\n",
+				        getWidth(),
+				        getHeight(),
+				        getBitDepth(),
+				        getWindowed() ? 1 : 0,
+				        (int)DX8Wrapper::getBackBufferFormat(),
+				        (double)TheGlobalData->m_viewportHeightScale,
+				        (unsigned)TheWritableGlobalData->m_antiAliasLevel,
+				        (int)TheWritableGlobalData->m_textureFilteringMode,
+				        (unsigned)TheWritableGlobalData->m_textureAnisotropyLevel);
+
+				if (caps != nullptr)
+				{
+					fprintf(stderr,
+					        "[GRAPHICS-DIAG] texture-formats A8R8G8B8=%d X8R8G8B8=%d A4R4G4B4=%d R5G6B5=%d DXT1=%d DXT3=%d DXT5=%d\n",
+					        caps->Support_Texture_Format(WW3D_FORMAT_A8R8G8B8) ? 1 : 0,
+					        caps->Support_Texture_Format(WW3D_FORMAT_X8R8G8B8) ? 1 : 0,
+					        caps->Support_Texture_Format(WW3D_FORMAT_A4R4G4B4) ? 1 : 0,
+					        caps->Support_Texture_Format(WW3D_FORMAT_R5G6B5) ? 1 : 0,
+					        caps->Support_Texture_Format(WW3D_FORMAT_DXT1) ? 1 : 0,
+					        caps->Support_Texture_Format(WW3D_FORMAT_DXT3) ? 1 : 0,
+					        caps->Support_Texture_Format(WW3D_FORMAT_DXT5) ? 1 : 0);
+				}
 			}
 
 			++attempt;
