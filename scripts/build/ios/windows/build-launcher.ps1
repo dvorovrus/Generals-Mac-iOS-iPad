@@ -87,10 +87,10 @@ $LauncherVersion = "0.0.0"
 $VersionFile = Join-Path $Workspace "repo\ios\version.env"
 if (Test-Path -LiteralPath $VersionFile) {
     foreach ($line in Get-Content -LiteralPath $VersionFile) {
-        if ($line -match '^PROJECT_VERSION=(.+)
+        if ($line -match '^PROJECT_VERSION=(.+)$') {
             $ProjectVersion = $Matches[1].Trim()
         }
-        elseif ($line -match '^LAUNCHER_VERSION=(.+)
+        elseif ($line -match '^LAUNCHER_VERSION=(.+)$') {
             $LauncherVersion = $Matches[1].Trim()
         }
     }
@@ -107,7 +107,7 @@ Write-Host "Source workflow: $Workflow / run $runId"
 ) {
             $ProjectVersion = $Matches[1].Trim()
         }
-        elseif ($line -match '^LAUNCHER_VERSION=(.+)) {
+        elseif ($line -match '^LAUNCHER_VERSION=(.+)$') {
             $LauncherVersion = $Matches[1].Trim()
         }
     }
@@ -138,7 +138,7 @@ Write-Host "Source workflow: $Workflow / run $runId"
 ) {
             $ProjectVersion = $Matches[1].Trim()
         }
-        elseif ($line -match '^LAUNCHER_VERSION=(.+)
+        elseif ($line -match '^LAUNCHER_VERSION=(.+)$') {
             $LauncherVersion = $Matches[1].Trim()
         }
     }
