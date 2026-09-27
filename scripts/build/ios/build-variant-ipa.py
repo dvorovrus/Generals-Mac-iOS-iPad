@@ -209,6 +209,13 @@ def main() -> None:
                     out,
                 )
 
+        # A dedicated Contra-only IPA should behave like a standalone game:
+        # skip the profile picker and boot Contra directly. The native launcher
+        # reads this marker before presenting any UI. All-in-one intentionally
+        # has no marker and keeps the normal profile chooser.
+        if args.variant == "contra":
+            out.writestr(shell_app + "AutoLaunchProfile.txt", "contra-x\n")
+
     print()
     print("DONE")
     print(f"Shell/runtime: {shell_bytes / 1024 / 1024:.1f} MB raw")
