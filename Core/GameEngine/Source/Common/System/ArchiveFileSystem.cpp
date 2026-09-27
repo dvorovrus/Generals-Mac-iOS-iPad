@@ -233,6 +233,24 @@ void ArchiveFileSystem::loadMods()
 		MAYBE_UNUSED Bool ret = loadBigFilesFromDirectory(TheGlobalData->m_modDir, "*.big", TRUE);
 		(void)ret;
 		DEBUG_ASSERTLOG(ret, ("loadBigFilesFromDirectory(%s) returned FALSE!", TheGlobalData->m_modDir.str()));
+
+		// iOS/portable mod diagnostics: identify which archive actually wins for
+		// files that are critical to skirmish AI. Presence of !ContraXBeta2_AI.big
+		// alone is not enough if another archive shadows its contents.
+		static const char *criticalAIPaths[] = {
+			"Data\\Scripts\\SkirmishScripts.scb",
+			"Data\\INI\\AIData.ini",
+			"Data\\INI\\Default\\AIData.ini",
+			nullptr
+		};
+		for (Int i = 0; criticalAIPaths[i] != nullptr; ++i)
+		{
+			ArchiveFile *resolvedArchive = getArchiveFile(criticalAIPaths[i], 0);
+			fprintf(stderr,
+			        "[AI-DIAG] archive-resolution file='%s' archive='%s'\n",
+			        criticalAIPaths[i],
+			        resolvedArchive != nullptr ? resolvedArchive->getName().str() : "<missing>");
+		}
 	}
 }
 
