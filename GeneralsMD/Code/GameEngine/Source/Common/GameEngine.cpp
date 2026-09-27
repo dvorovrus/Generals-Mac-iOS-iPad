@@ -30,6 +30,7 @@
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
+#include <mach/mach.h>
 #endif
 
 #include "Common/ActionManager.h"
@@ -1017,6 +1018,38 @@ void GameEngine::update()
 			// for scripted camera movements while the time is frozen.
 			TheScriptEngine->UPDATE();
 		}
+
+#if defined(__APPLE__)
+		// Long iOS matches can be terminated by memory pressure without a useful
+		// in-process crash stack. Keep a lightweight footprint trail in stderr so
+		// retained session logs show whether memory is climbing before an exit.
+		if (TheGameLogic != nullptr && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame())
+		{
+			static UnsignedInt nextMemoryDiagFrame = 0;
+			const UnsignedInt frame = TheGameLogic->getFrame();
+			if (frame >= nextMemoryDiagFrame)
+			{
+				task_vm_info_data_t vmInfo = {};
+				mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+				const kern_return_t kr = task_info(
+					mach_task_self(),
+					TASK_VM_INFO,
+					reinterpret_cast<task_info_t>(&vmInfo),
+					&count);
+
+				if (kr == KERN_SUCCESS)
+				{
+					fprintf(stderr,
+					        "[MEMORY-DIAG] frame=%u footprintMB=%.1f residentMB=%.1f virtualMB=%.1f\n",
+					        (unsigned)frame,
+					        (double)vmInfo.phys_footprint / (1024.0 * 1024.0),
+					        (double)vmInfo.resident_size / (1024.0 * 1024.0),
+					        (double)vmInfo.virtual_size / (1024.0 * 1024.0));
+				}
+				nextMemoryDiagFrame = frame + 300;
+			}
+		}
+#endif
 	}
 }
 
