@@ -123,7 +123,7 @@ if [[ ! -d "${APP}" ]]; then
     echo "ERROR: VULKAN_SDK is required for the first local package."
     exit 6
   }
-  "${ROOT}/scripts/build/macos/package-macos-contra-dev.sh"
+  bash "${ROOT}/scripts/build/macos/package-macos-contra-dev.sh"
 else
   echo "==> Refreshing existing app bundle"
   cp "${GAME_BIN}" "${APP}/Contents/Resources/bin/GeneralsXZH"
