@@ -757,6 +757,8 @@ int main(int argc, char* argv[])
 		if (diagHome != nullptr) {
 			char diagPath[1024];
 			char prevPath[1024];
+			char prev2Path[1024];
+			char prev3Path[1024];
 			// Documents, not Library/Caches: Caches is purgeable (a device restart or
 			// storage pressure can empty it), and Documents is user-reachable via the
 			// Files app since the bundle enables UIFileSharingEnabled.
@@ -764,6 +766,15 @@ int main(int argc, char* argv[])
 			// Keep the previous session's log: a session that ends in a memory kill
 			// leaves no OS crash report, so the prior log is often the only evidence.
 			snprintf(prevPath, sizeof(prevPath), "%s/Documents/generals-stderr-prev.log", diagHome);
+			snprintf(prev2Path, sizeof(prev2Path), "%s/Documents/generals-stderr-prev2.log", diagHome);
+			snprintf(prev3Path, sizeof(prev3Path), "%s/Documents/generals-stderr-prev3.log", diagHome);
+			// Keep four sessions total. A crash log used to be lost after two app
+			// launches because current -> prev overwrote the only retained session.
+			// Multiple retained generations make long-session crashes reproducible
+			// without requiring the user to copy the log before reopening the app.
+			unlink(prev3Path);
+			rename(prev2Path, prev3Path);
+			rename(prevPath, prev2Path);
 			rename(diagPath, prevPath);
 			// Filtered + capped sink instead of a raw freopen: per-frame debug spam
 			// (upstream [GX-ISSUE144] font traces, [INI] loader traces, residual DXVK

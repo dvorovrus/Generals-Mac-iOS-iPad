@@ -1103,23 +1103,37 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 	Real s = sin(angle);
 	Real c = cos(angle);
 
-	BuildListInfo *cur = list;
-	while (cur) {
-		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(cur->getTemplateName());
-		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER)) {
-			Coord3D curPos = *cur->getLocation();
-			// Transform to new coords.
-			curPos.x -= buildPos.x;
-			curPos.y -= buildPos.y;
-			Real newX = curPos.x*c - curPos.y*s;
-			Real newY = curPos.y*c + curPos.x*s;
-			curPos.x = newX + startPos.x;
-			curPos.y = newY + startPos.y;
-			cur->setLocation(curPos);
-			cur->setAngle(cur->getAngle());
-		}
-		cur = cur->getNext();
+	// Every entry in the side build plan is positioned relative to the template
+	// command center. Transform the whole plan to the selected skirmish start.
+	// The previous iOS fix accidentally changed the legacy constant CC check to a
+	// per-entry check, which moved only the command center and left every later
+	// building at the template's original map coordinates. That made AI behavior
+	// depend on the chosen start slot: dozers/workers spawned, but most structures
+	// could never be placed.
+	Int transformedEntries = 0;
+	for (BuildListInfo *cur = list; cur; cur = cur->getNext())
+	{
+		Coord3D curPos = *cur->getLocation();
+		curPos.x -= buildPos.x;
+		curPos.y -= buildPos.y;
+		Real newX = curPos.x*c - curPos.y*s;
+		Real newY = curPos.y*c + curPos.x*s;
+		curPos.x = newX + startPos.x;
+		curPos.y = newY + startPos.y;
+		cur->setLocation(curPos);
+		++transformedEntries;
 	}
+
+	fprintf(stderr,
+	        "[AI-DIAG] build-list-transform playerIndex=%d side='%s' entries=%d start=%.1f,%.1f templateAnchor=%.1f,%.1f angle=%.3f\n",
+	        (int)m_player->getPlayerIndex(),
+	        m_player->getSide().str(),
+	        (int)transformedEntries,
+	        (double)startPos.x,
+	        (double)startPos.y,
+	        (double)buildPos.x,
+	        (double)buildPos.y,
+	        (double)angle);
 
 }
 
