@@ -1094,6 +1094,20 @@ void ControlBar::init()
 		id = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ControlBarParent" );
 		m_contextParent[ CP_MASTER ] = TheWindowManager->winGetWindowFromId( nullptr, id );
 	m_contextParent[ CP_MASTER ]->winGetPosition(&m_defaultControlBarPosition.x, &m_defaultControlBarPosition.y);
+		{
+			Int controlBarWidth = 0;
+			Int controlBarHeight = 0;
+			m_contextParent[ CP_MASTER ]->winGetSize(&controlBarWidth, &controlBarHeight);
+			fprintf(stderr,
+			        "[CONTROLBAR-ACTIVE] init display=%dx%d parentPos=%d,%d parentSize=%d,%d viewportScale=%.3f\n",
+			        TheDisplay != nullptr ? TheDisplay->getWidth() : -1,
+			        TheDisplay != nullptr ? TheDisplay->getHeight() : -1,
+			        m_defaultControlBarPosition.x,
+			        m_defaultControlBarPosition.y,
+			        controlBarWidth,
+			        controlBarHeight,
+			        TheGlobalData != nullptr ? (double)TheGlobalData->m_viewportHeightScale : -1.0);
+		}
 
 		m_scienceLayout = TheWindowManager->winCreateLayout("GeneralsExpPoints.wnd");
 		m_scienceLayout->hide(TRUE);
@@ -3057,6 +3071,24 @@ void ControlBar::setDefaultControlBarConfig()
 	repopulateBuildTooltipLayout();
 	setUpDownImages();
 
+	{
+		Int x = 0;
+		Int y = 0;
+		Int width = 0;
+		Int height = 0;
+		m_contextParent[ CP_MASTER ]->winGetPosition(&x, &y);
+		m_contextParent[ CP_MASTER ]->winGetSize(&width, &height);
+		fprintf(stderr,
+		        "[CONTROLBAR-ACTIVE] default display=%dx%d parentPos=%d,%d parentSize=%d,%d viewportScale=%.3f\n",
+		        TheDisplay != nullptr ? TheDisplay->getWidth() : -1,
+		        TheDisplay != nullptr ? TheDisplay->getHeight() : -1,
+		        x,
+		        y,
+		        width,
+		        height,
+		        TheGlobalData != nullptr ? (double)TheGlobalData->m_viewportHeightScale : -1.0);
+	}
+
 }
 
 void ControlBar::setSquishedControlBarConfig()
@@ -3088,6 +3120,21 @@ void ControlBar::setLowControlBarConfig()
 	m_contextParent[ CP_MASTER ]->winSetPosition(pos.x, pos.y);
 	m_contextParent[ CP_MASTER ]->winHide(FALSE);
 	setUpDownImages();
+
+	{
+		Int width = 0;
+		Int height = 0;
+		m_contextParent[ CP_MASTER ]->winGetSize(&width, &height);
+		fprintf(stderr,
+		        "[CONTROLBAR-ACTIVE] low display=%dx%d parentPos=%d,%d parentSize=%d,%d viewportScale=%.3f\n",
+		        TheDisplay != nullptr ? TheDisplay->getWidth() : -1,
+		        TheDisplay != nullptr ? TheDisplay->getHeight() : -1,
+		        pos.x,
+		        pos.y,
+		        width,
+		        height,
+		        TheGlobalData != nullptr ? (double)TheGlobalData->m_viewportHeightScale : -1.0);
+	}
 
 }
 
