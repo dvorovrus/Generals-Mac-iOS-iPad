@@ -111,6 +111,60 @@ full-shell artifact instead.
 The native launcher detects which profile directories exist in the assembled IPA,
 so single-mod builds only show the games that are actually installed.
 
+## macOS Contra debug loop
+
+For renderer and gameplay debugging on Apple Silicon, use two modes in parallel:
+
+### 1. Stable GitHub artifact
+
+Download the latest successful `Build macOS Contra Dev` artifact:
+
+```bash
+./scripts/build/macos/download-macos-contra-artifact.sh
+```
+
+It is extracted to:
+
+```text
+build/macos-stable/GeneralsZH-ContraX-Dev.app
+```
+
+On the first Mac setup, run:
+
+```text
+build/macos-stable/Install Contra Data.command
+```
+
+and select your own `GeneralsZH-ContraX-unsigned.ipa`. Retail Zero Hour and Contra data are copied to `~/GeneralsX` and are not included in GitHub artifacts.
+
+### 2. Local incremental build
+
+The first local build needs the same build prerequisites as CI, plus `VCPKG_ROOT` and `VULKAN_SDK`. Configure and build once:
+
+```bash
+export VCPKG_ROOT="$HOME/vcpkg"
+export VULKAN_SDK="$HOME/VulkanSDK/1.4.341.1/macOS"
+
+./scripts/build/macos/build-macos-contra-local.sh --configure
+```
+
+After that, the normal renderer-debug loop is:
+
+```bash
+git pull
+./scripts/build/macos/build-macos-contra-local.sh --run
+```
+
+CMake/Ninja only rebuilds changed targets. The script then replaces `GeneralsXZH` inside the existing local app, ad-hoc signs it again, and launches Contra. It does **not** recopy the retail/mod data on every iteration.
+
+Runtime log:
+
+```text
+~/Library/Logs/GeneralsXZH/contra-dev.log
+```
+
+Use the GitHub artifact as the reproducible baseline and the local incremental app for fast code changes. iPad remains the final check for bugs that reproduce only through the iOS/DXVK/MoltenVK path.
+
 ## Versioning
 
 Semantic versions are defined in `ios/version.env`:
