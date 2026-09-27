@@ -431,6 +431,8 @@ static bool IOSPrepareContraRuntimeProfile(
     }
 
     auto settings = IOSLoadContraSettings();
+    fprintf(stderr, "[CONTRA-SETTINGS] runtime-overlay-version=1 settings='%s'\n",
+            IOSContraSettingsPath().string().c_str());
     const std::string controlBar =
         IOSContraLower(IOSContraSetting(settings, "ControlBar", "Contra"));
     if (forceFullViewport != nullptr)
