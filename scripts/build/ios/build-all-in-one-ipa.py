@@ -74,9 +74,10 @@ CONTRA_REQUIRED_CTR_SUFFIXES = {
     "_hotkeysoriginal_english.ctr",
     "_patch1.ctr",
 }
+# iPad fallback defaults mirror the official Contra launcher for a non-16:9
+# display without GenTool: native Contra control bar, standard cameos, fog
+# effects disabled. Runtime settings can still activate any packaged .ctr.
 CONTRA_OPTIONAL_DEFAULT_CTR_SUFFIXES = {
-    "_controlbarpro.ctr",
-    "_cameoshd.ctr",
     "_disablefogeffects.ctr",
 }
 
