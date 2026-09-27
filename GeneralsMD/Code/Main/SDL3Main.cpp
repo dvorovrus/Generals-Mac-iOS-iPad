@@ -43,6 +43,8 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <string>
+#include <fstream>
+#include <unordered_map>
 #endif
 #include <cstdlib>
 #include <cctype>
@@ -250,6 +252,295 @@ GameEngine *CreateGameEngine(void)
  * @return Exit code (0 = success)
  */
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+static std::string IOSContraTrim(const std::string &value)
+{
+    size_t first = 0;
+    while (first < value.size() && std::isspace((unsigned char)value[first]))
+        ++first;
+
+    size_t last = value.size();
+    while (last > first && std::isspace((unsigned char)value[last - 1]))
+        --last;
+
+    return value.substr(first, last - first);
+}
+
+static std::string IOSContraLower(std::string value)
+{
+    for (char &c : value)
+        c = (char)std::tolower((unsigned char)c);
+    return value;
+}
+
+static bool IOSContraEndsWith(const std::string &value, const char *suffix)
+{
+    const size_t suffixLength = strlen(suffix);
+    return value.size() >= suffixLength &&
+           value.compare(value.size() - suffixLength, suffixLength, suffix) == 0;
+}
+
+static std::filesystem::path IOSContraSettingsPath()
+{
+    const char *home = getenv("HOME");
+    if (home == nullptr || home[0] == '\0')
+        return std::filesystem::path("ContraSettings.ini");
+    return std::filesystem::path(home) / "Documents" / "ContraSettings.ini";
+}
+
+static std::unordered_map<std::string, std::string> IOSLoadContraSettings()
+{
+    std::unordered_map<std::string, std::string> values;
+    std::ifstream input(IOSContraSettingsPath());
+    std::string line;
+    while (std::getline(input, line))
+    {
+        line = IOSContraTrim(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';')
+            continue;
+
+        const size_t equals = line.find('=');
+        if (equals == std::string::npos)
+            continue;
+
+        std::string key = IOSContraLower(IOSContraTrim(line.substr(0, equals)));
+        std::string value = IOSContraTrim(line.substr(equals + 1));
+        if (!key.empty())
+            values[key] = value;
+    }
+    return values;
+}
+
+static std::string IOSContraSetting(
+    const std::unordered_map<std::string, std::string> &settings,
+    const char *key,
+    const char *fallback)
+{
+    auto it = settings.find(IOSContraLower(key));
+    return it == settings.end() || it->second.empty() ? fallback : it->second;
+}
+
+static bool IOSContraSettingBool(
+    const std::unordered_map<std::string, std::string> &settings,
+    const char *key,
+    bool fallback)
+{
+    std::string value = IOSContraLower(IOSContraSetting(settings, key, fallback ? "Yes" : "No"));
+    return value == "yes" || value == "true" || value == "1" || value == "on";
+}
+
+static bool IOSContraCoreArchive(const std::string &logicalCtr)
+{
+    static const char *required[] = {
+        "_ini.ctr",
+        "_maps.ctr",
+        "_ai.ctr",
+        "_terrain.ctr",
+        "_textures.ctr",
+        "_w3d.ctr",
+        "_window.ctr",
+        "_audio.ctr",
+        "_gamedata.ctr",
+        "_patch1.ctr",
+        nullptr
+    };
+
+    for (int i = 0; required[i] != nullptr; ++i)
+    {
+        if (IOSContraEndsWith(logicalCtr, required[i]))
+            return true;
+    }
+    return false;
+}
+
+static bool IOSContraArchiveShouldBeActive(
+    const std::filesystem::path &source,
+    const std::unordered_map<std::string, std::string> &settings)
+{
+    std::string lower = IOSContraLower(source.filename().string());
+    const bool distributedActive = IOSContraEndsWith(lower, ".big");
+
+    if (distributedActive)
+        lower.replace(lower.size() - 4, 4, ".ctr");
+
+    if (IOSContraCoreArchive(lower))
+        return true;
+
+    const std::string voices = IOSContraLower(IOSContraSetting(settings, "UnitVoices", "English"));
+    if (IOSContraEndsWith(lower, "_unitvoicesenglish.ctr"))
+        return voices != "native";
+    if (IOSContraEndsWith(lower, "_unitvoicesnative.ctr"))
+        return voices == "native";
+
+    const std::string hotkeys = IOSContraLower(IOSContraSetting(settings, "Hotkeys", "Original"));
+    const std::string hotkeyLanguage =
+        IOSContraLower(IOSContraSetting(settings, "HotkeyLanguage", "English"));
+    if (IOSContraEndsWith(lower, "_hotkeysoriginal_english.ctr"))
+        return hotkeys == "original" && hotkeyLanguage == "english";
+    if (IOSContraEndsWith(lower, "_hotkeysoriginal_russian.ctr"))
+        return hotkeys == "original" && hotkeyLanguage == "russian";
+    if (IOSContraEndsWith(lower, "_hotkeysleikeze_english.ctr"))
+        return hotkeys == "leikeze" && hotkeyLanguage == "english";
+    if (IOSContraEndsWith(lower, "_hotkeysleikeze_russian.ctr"))
+        return hotkeys == "leikeze" && hotkeyLanguage == "russian";
+
+    const std::string controlBar = IOSContraLower(IOSContraSetting(settings, "ControlBar", "Contra"));
+    if (IOSContraEndsWith(lower, "_controlbarpro.ctr"))
+        return controlBar == "pro";
+    if (IOSContraEndsWith(lower, "_controlbarstandard.ctr"))
+        return controlBar == "standard";
+
+    const std::string cameos = IOSContraLower(IOSContraSetting(settings, "Cameos", "Standard"));
+    if (IOSContraEndsWith(lower, "_cameoshd.ctr"))
+        return cameos == "hd";
+
+    const std::string music = IOSContraLower(IOSContraSetting(settings, "Music", "Standard"));
+    if (IOSContraEndsWith(lower, "_musicenhanced.ctr") || IOSContraEndsWith(lower, "_newmusic.ctr"))
+        return music == "enhanced";
+    if (IOSContraEndsWith(lower, "_musicthescore.ctr"))
+        return music == "the score";
+
+    const std::string portraits = IOSContraLower(IOSContraSetting(settings, "Portraits", "Standard"));
+    if (IOSContraEndsWith(lower, "_funnygeneralportraits.ctr"))
+        return portraits == "funny";
+
+    if (IOSContraEndsWith(lower, "_disablefogeffects.ctr"))
+        return !IOSContraSettingBool(settings, "FogEffects", false);
+    if (IOSContraEndsWith(lower, "_disablewatereffects.ctr"))
+        return !IOSContraSettingBool(settings, "WaterEffects", true);
+    if (IOSContraEndsWith(lower, "_disableextrabuildingprops.ctr"))
+        return !IOSContraSettingBool(settings, "ExtraBuildingProps", true);
+
+    // Keep unknown distributed .big files active and unknown .ctr files inactive.
+    return distributedActive;
+}
+
+static bool IOSPrepareContraRuntimeProfile(
+    const char *sourceProfilePath,
+    char *runtimePath,
+    size_t runtimePathSize,
+    bool *forceFullViewport)
+{
+    if (sourceProfilePath == nullptr || runtimePath == nullptr || runtimePathSize == 0)
+        return false;
+
+    const char *home = getenv("HOME");
+    if (home == nullptr || home[0] == '\0')
+    {
+        fprintf(stderr, "[CONTRA-SETTINGS] HOME is unavailable; using bundled profile\n");
+        return false;
+    }
+
+    auto settings = IOSLoadContraSettings();
+    const std::string controlBar =
+        IOSContraLower(IOSContraSetting(settings, "ControlBar", "Contra"));
+    if (forceFullViewport != nullptr)
+        *forceFullViewport = controlBar == "pro";
+
+    std::filesystem::path source(sourceProfilePath);
+    std::filesystem::path runtime =
+        std::filesystem::path(home) / "Documents" / "ContraRuntime";
+
+    std::error_code ec;
+    std::filesystem::remove_all(runtime, ec);
+    ec.clear();
+    std::filesystem::create_directories(runtime, ec);
+    if (ec)
+    {
+        fprintf(stderr, "[CONTRA-SETTINGS] failed to create runtime profile: %s\n",
+                ec.message().c_str());
+        return false;
+    }
+
+    int activeArchives = 0;
+    int inactiveArchives = 0;
+    int linkedEntries = 0;
+
+    for (std::filesystem::directory_iterator it(source, ec), end; !ec && it != end; it.increment(ec))
+    {
+        const std::filesystem::path sourceEntry = it->path();
+        std::filesystem::path targetName = sourceEntry.filename();
+
+        std::error_code typeError;
+        if (it->is_directory(typeError) && !typeError)
+        {
+            std::filesystem::path target = runtime / targetName;
+            std::error_code linkError;
+            std::filesystem::create_directory_symlink(sourceEntry, target, linkError);
+            if (linkError)
+            {
+                fprintf(stderr,
+                        "[CONTRA-SETTINGS] directory-link-failed source='%s' error='%s'\n",
+                        sourceEntry.string().c_str(),
+                        linkError.message().c_str());
+                return false;
+            }
+            ++linkedEntries;
+            continue;
+        }
+
+        std::string ext = IOSContraLower(sourceEntry.extension().string());
+        if (ext == ".big" || ext == ".ctr")
+        {
+            const bool active = IOSContraArchiveShouldBeActive(sourceEntry, settings);
+            targetName.replace_extension(active ? ".big" : ".ctr");
+            if (active)
+                ++activeArchives;
+            else
+                ++inactiveArchives;
+
+            fprintf(stderr,
+                    "[CONTRA-SETTINGS] archive='%s' state=%s runtime='%s'\n",
+                    sourceEntry.filename().string().c_str(),
+                    active ? "active" : "inactive",
+                    targetName.string().c_str());
+        }
+
+        std::filesystem::path target = runtime / targetName;
+        std::error_code linkError;
+        std::filesystem::create_symlink(sourceEntry, target, linkError);
+        if (linkError)
+        {
+            fprintf(stderr,
+                    "[CONTRA-SETTINGS] file-link-failed source='%s' target='%s' error='%s'\n",
+                    sourceEntry.string().c_str(),
+                    target.string().c_str(),
+                    linkError.message().c_str());
+            return false;
+        }
+        ++linkedEntries;
+    }
+
+    if (ec)
+    {
+        fprintf(stderr, "[CONTRA-SETTINGS] runtime scan failed: %s\n", ec.message().c_str());
+        return false;
+    }
+
+    const std::string runtimeString = runtime.string();
+    if (runtimeString.size() + 1 > runtimePathSize)
+    {
+        fprintf(stderr, "[CONTRA-SETTINGS] runtime path is too long\n");
+        return false;
+    }
+    strlcpy(runtimePath, runtimeString.c_str(), runtimePathSize);
+
+    fprintf(stderr,
+            "[CONTRA-SETTINGS] runtime-ready path='%s' controlBar='%s' cameos='%s' music='%s' voices='%s' hotkeys='%s/%s' active=%d inactive=%d entries=%d forceFullViewport=%d\n",
+            runtimePath,
+            IOSContraSetting(settings, "ControlBar", "Contra").c_str(),
+            IOSContraSetting(settings, "Cameos", "Standard").c_str(),
+            IOSContraSetting(settings, "Music", "Standard").c_str(),
+            IOSContraSetting(settings, "UnitVoices", "English").c_str(),
+            IOSContraSetting(settings, "Hotkeys", "Original").c_str(),
+            IOSContraSetting(settings, "HotkeyLanguage", "English").c_str(),
+            activeArchives,
+            inactiveArchives,
+            linkedEntries,
+            forceFullViewport != nullptr && *forceFullViewport ? 1 : 0);
+
+    return true;
+}
+
 static void LogIOSProfileContents(const char *modPath)
 {
     if (modPath == nullptr || modPath[0] == '\0')
@@ -259,7 +550,10 @@ static void LogIOSProfileContents(const char *modPath)
 
     std::error_code ec;
     std::filesystem::path root(modPath);
-    std::filesystem::recursive_directory_iterator it(root, ec);
+    std::filesystem::recursive_directory_iterator it(
+        root,
+        std::filesystem::directory_options::follow_directory_symlink,
+        ec);
     std::filesystem::recursive_directory_iterator end;
 
     int activeBigCount = 0;
@@ -341,39 +635,61 @@ static void InjectIOSProfileModArgument(const char *profileId)
         return;
 
     const size_t appDirLength = (size_t)(slash - __argv[0]);
-    static char modPath[1024];
-    if (appDirLength + strlen(profileDir) + 12 >= sizeof(modPath))
+    static char bundledModPath[1024];
+    if (appDirLength + strlen(profileDir) + 12 >= sizeof(bundledModPath))
     {
         fprintf(stderr, "ERROR: iOS launcher: profile path is too long\n");
         return;
     }
 
-    memcpy(modPath, __argv[0], appDirLength);
-    modPath[appDirLength] = '\0';
-    strncat(modPath, "/Profiles/", sizeof(modPath) - strlen(modPath) - 1);
-    strncat(modPath, profileDir, sizeof(modPath) - strlen(modPath) - 1);
+    memcpy(bundledModPath, __argv[0], appDirLength);
+    bundledModPath[appDirLength] = '\0';
+    strncat(bundledModPath, "/Profiles/", sizeof(bundledModPath) - strlen(bundledModPath) - 1);
+    strncat(bundledModPath, profileDir, sizeof(bundledModPath) - strlen(bundledModPath) - 1);
 
-    if (access(modPath, R_OK) != 0)
+    if (access(bundledModPath, R_OK) != 0)
     {
         fprintf(stderr, "ERROR: iOS launcher: selected profile '%s' is missing at %s\n",
-                profileId, modPath);
+                profileId, bundledModPath);
         return;
+    }
+
+    static char runtimeModPath[1024];
+    const char *selectedModPath = bundledModPath;
+    bool forceFullViewport = false;
+
+    if (isContra &&
+        IOSPrepareContraRuntimeProfile(
+            bundledModPath,
+            runtimeModPath,
+            sizeof(runtimeModPath),
+            &forceFullViewport))
+    {
+        selectedModPath = runtimeModPath;
+    }
+    else if (isContra)
+    {
+        auto settings = IOSLoadContraSettings();
+        forceFullViewport =
+            IOSContraLower(IOSContraSetting(settings, "ControlBar", "Contra")) == "pro";
+        fprintf(stderr,
+                "[CONTRA-SETTINGS] runtime overlay unavailable; using bundled profile\n");
     }
 
     static char modFlag[] = "-mod";
     static char forceFullViewportFlag[] = "-forcefullviewport";
     static char *profileArgv[64];
     int count = 0;
-    const int maxBaseArgs = isContra ? 60 : 61;
+    const int maxBaseArgs = forceFullViewport ? 60 : 61;
     for (int i = 0; i < __argc && count < maxBaseArgs; ++i)
         profileArgv[count++] = __argv[i];
 
     profileArgv[count++] = modFlag;
-    profileArgv[count++] = modPath;
+    profileArgv[count++] = const_cast<char *>(selectedModPath);
 
-    // Contra X ships Control Bar Pro. Its widescreen layout expects the same
-    // full-viewport switch GenTool applies on Windows.
-    if (isContra)
+    // Control Bar Pro expects GenTool-style full viewport behavior. Contra's
+    // native and standard control bars intentionally do not enable this flag.
+    if (forceFullViewport)
         profileArgv[count++] = forceFullViewportFlag;
 
     profileArgv[count] = nullptr;
@@ -383,11 +699,11 @@ static void InjectIOSProfileModArgument(const char *profileId)
 
     fprintf(stderr, "INFO: iOS launcher: profile '%s' -> -mod %s%s\n",
             profileId,
-            modPath,
-            isContra ? " -forcefullviewport" : "");
+            selectedModPath,
+            forceFullViewport ? " -forcefullviewport" : "");
 
     if (isContra)
-        LogIOSProfileContents(modPath);
+        LogIOSProfileContents(selectedModPath);
 }
 #endif
 
