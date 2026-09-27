@@ -142,6 +142,129 @@ NSString *IPadOverridesPath()
     return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/iPadOverrides.ini"];
 }
 
+NSString *ContraSettingsPath()
+{
+    return DocumentsFilePath(@"ContraSettings.ini");
+}
+
+NSString *EngineOptionsPath()
+{
+    NSString *dir = [NSHomeDirectory()
+        stringByAppendingPathComponent:@"Library/Application Support/GeneralsX/GeneralsZH"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    return [dir stringByAppendingPathComponent:@"Options.ini"];
+}
+
+NSMutableDictionary<NSString *, NSString *> *ReadKeyValueFile(NSString *path)
+{
+    NSMutableDictionary<NSString *, NSString *> *values = [NSMutableDictionary dictionary];
+    NSString *contents = [NSString stringWithContentsOfFile:path
+                                                   encoding:NSUTF8StringEncoding
+                                                      error:nil];
+    if (contents == nil)
+        return values;
+
+    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    for (NSString *rawLine in [contents componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]])
+    {
+        NSString *line = [rawLine stringByTrimmingCharactersInSet:space];
+        if (line.length == 0 || [line hasPrefix:@"#"] || [line hasPrefix:@";"])
+            continue;
+
+        NSRange equals = [line rangeOfString:@"="];
+        if (equals.location == NSNotFound)
+            continue;
+
+        NSString *key = [[line substringToIndex:equals.location] stringByTrimmingCharactersInSet:space];
+        NSString *value = [[line substringFromIndex:equals.location + 1] stringByTrimmingCharactersInSet:space];
+        if (key.length > 0)
+            values[key] = value;
+    }
+    return values;
+}
+
+NSString *SettingValue(NSDictionary<NSString *, NSString *> *values,
+                       NSString *key,
+                       NSString *fallback)
+{
+    NSString *value = values[key];
+    return value.length > 0 ? value : fallback;
+}
+
+BOOL SettingBoolValue(NSDictionary<NSString *, NSString *> *values,
+                      NSString *key,
+                      BOOL fallback)
+{
+    NSString *value = [[SettingValue(values, key, fallback ? @"Yes" : @"No") lowercaseString]
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return [value isEqualToString:@"yes"] || [value isEqualToString:@"true"] ||
+           [value isEqualToString:@"1"] || [value isEqualToString:@"on"];
+}
+
+BOOL WriteKeyValueFile(NSString *path, NSDictionary<NSString *, NSString *> *values, NSError **error)
+{
+    NSArray<NSString *> *keys =
+        [[values allKeys] sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+    NSMutableString *output = [NSMutableString string];
+    for (NSString *key in keys)
+        [output appendFormat:@"%@ = %@\n", key, values[key]];
+    return [output writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:error];
+}
+
+NSDictionary<NSString *, NSString *> *DefaultContraSettings()
+{
+    return @{
+        @"QuickStart": @"No",
+        @"ControlBar": @"Contra",
+        @"Cameos": @"Standard",
+        @"Music": @"Standard",
+        @"UnitVoices": @"English",
+        @"Hotkeys": @"Original",
+        @"HotkeyLanguage": @"English",
+        @"Portraits": @"Standard",
+        @"FogEffects": @"No",
+        @"WaterEffects": @"Yes",
+        @"ExtraBuildingProps": @"Yes",
+        @"UseShadowVolumes": @"No",
+        @"UseShadowDecals": @"Yes",
+        @"UseCloudMap": @"No",
+        @"UseLightMap": @"Yes",
+        @"ShowSoftWaterEdge": @"Yes",
+        @"BuildingOcclusion": @"Yes",
+        @"ShowTrees": @"Yes",
+        @"ExtraAnimations": @"Yes",
+        @"DynamicLOD": @"No",
+        @"HeatEffects": @"No",
+        @"TextureReduction": @"0",
+        @"MaxParticleCount": @"2500",
+        @"TextureFilter": @"Anisotropic",
+        @"AnisotropyLevel": @"8",
+    };
+}
+
+void EnsureDefaultContraSettings()
+{
+    NSString *path = ContraSettingsPath();
+    if ([[NSFileManager defaultManager] fileExistsAtPath:path])
+        return;
+
+    NSError *error = nil;
+    if (!WriteKeyValueFile(path, DefaultContraSettings(), &error))
+    {
+        fprintf(stderr, "ERROR: failed to seed ContraSettings.ini: %s\n",
+                error != nil ? [[error description] UTF8String] : "unknown");
+    }
+}
+
+BOOL ContraQuickStartEnabled()
+{
+    EnsureDefaultContraSettings();
+    return SettingBoolValue(ReadKeyValueFile(ContraSettingsPath()), @"QuickStart", NO);
+}
+
 bool ProfileDirectoryExists(NSString *profileDirectory)
 {
     NSString *resourcePath = [[NSBundle mainBundle] resourcePath];
@@ -254,6 +377,33 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UILabel *fpsValue;
 @property(nonatomic, strong) UISwitch *enforceMaxSwitch;
 @property(nonatomic, strong) UISwitch *fpsLimitSwitch;
+
+@property(nonatomic, strong) UISwitch *contraQuickStartSwitch;
+@property(nonatomic, strong) UISegmentedControl *contraControlBarSegment;
+@property(nonatomic, strong) UISegmentedControl *contraCameosSegment;
+@property(nonatomic, strong) UISegmentedControl *contraMusicSegment;
+@property(nonatomic, strong) UISegmentedControl *contraVoicesSegment;
+@property(nonatomic, strong) UISegmentedControl *contraHotkeysSegment;
+@property(nonatomic, strong) UISegmentedControl *contraHotkeyLanguageSegment;
+@property(nonatomic, strong) UISegmentedControl *contraPortraitsSegment;
+@property(nonatomic, strong) UISwitch *contraFogSwitch;
+@property(nonatomic, strong) UISwitch *contraWaterSwitch;
+@property(nonatomic, strong) UISwitch *contraExtraBuildingPropsSwitch;
+
+@property(nonatomic, strong) UISwitch *shadow3DSwitch;
+@property(nonatomic, strong) UISwitch *shadow2DSwitch;
+@property(nonatomic, strong) UISwitch *cloudShadowsSwitch;
+@property(nonatomic, strong) UISwitch *groundLightingSwitch;
+@property(nonatomic, strong) UISwitch *softWaterSwitch;
+@property(nonatomic, strong) UISwitch *buildingOcclusionSwitch;
+@property(nonatomic, strong) UISwitch *showPropsSwitch;
+@property(nonatomic, strong) UISwitch *extraAnimationsSwitch;
+@property(nonatomic, strong) UISwitch *dynamicLODSwitch;
+@property(nonatomic, strong) UISwitch *heatEffectsSwitch;
+@property(nonatomic, strong) UISegmentedControl *textureQualitySegment;
+@property(nonatomic, strong) UISegmentedControl *particleQualitySegment;
+@property(nonatomic, strong) UISegmentedControl *textureFilterSegment;
+
 @property(nonatomic, strong) UIView *diagnosticsView;
 @property(nonatomic, strong) UILabel *diagnosticsText;
 @property(nonatomic, strong) UIButton *shareDiagnosticsButton;
@@ -268,6 +418,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     self.view.backgroundColor = UIColor.blackColor;
     EnsureDefaultIPadOverrides();
+    EnsureDefaultContraSettings();
 
     [self buildMenu];
     [self buildSettings];
@@ -276,33 +427,55 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
 - (void)buildMenu
 {
-    UILabel *title = MakeLabel(@"ZERO HOUR", 34.0, UIFontWeightBold);
-    UILabel *subtitle = MakeLabel(@"iPad launcher", 14.0, UIFontWeightRegular);
+    NSString *bundledProfile = BundledAutoLaunchProfile();
+    BOOL dedicatedContra = [bundledProfile isEqualToString:@"contra-x"];
+
+    UILabel *title = MakeLabel(dedicatedContra ? @"CONTRA X" : @"ZERO HOUR",
+                               34.0,
+                               UIFontWeightBold);
+    UILabel *subtitle = MakeLabel(dedicatedContra
+                                      ? @"Beta 2 + Patch 1 · iPad"
+                                      : @"iPad launcher",
+                                  14.0,
+                                  UIFontWeightRegular);
     subtitle.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
-    UIButton *vanilla = MakeButton(@"Zero Hour 1.04", self, @selector(launchVanilla));
     UIButton *settings = MakeButton(@"Settings", self, @selector(showSettings));
     UIButton *diagnostics = MakeButton(@"Diagnostics", self, @selector(showDiagnostics));
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
     diagnostics.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
 
-    NSMutableArray<UIView *> *views = [NSMutableArray arrayWithObjects:title, subtitle, vanilla, nil];
-    NSMutableArray<UIButton *> *buttons = [NSMutableArray arrayWithObject:vanilla];
+    NSMutableArray<UIView *> *views = [NSMutableArray arrayWithObjects:title, subtitle, nil];
+    NSMutableArray<UIButton *> *buttons = [NSMutableArray array];
 
-    if (ProfileDirectoryExists(@"enhanced"))
+    if (dedicatedContra)
     {
-        UIButton *enhanced = MakeButton(@"Zero Hour Enhanced", self, @selector(launchEnhanced));
-        [views addObject:enhanced];
-        [buttons addObject:enhanced];
-        fprintf(stderr, "INFO: iOS launcher found Enhanced profile\n");
-    }
-
-    if (ProfileDirectoryExists(@"contra-x"))
-    {
-        UIButton *contra = MakeButton(@"Contra X Beta 2 + Patch 1", self, @selector(launchContra));
+        UIButton *contra = MakeButton(@"Play Contra X", self, @selector(launchContra));
         [views addObject:contra];
         [buttons addObject:contra];
-        fprintf(stderr, "INFO: iOS launcher found Contra X profile\n");
+        fprintf(stderr, "INFO: iOS launcher running in dedicated Contra X mode\n");
+    }
+    else
+    {
+        UIButton *vanilla = MakeButton(@"Zero Hour 1.04", self, @selector(launchVanilla));
+        [views addObject:vanilla];
+        [buttons addObject:vanilla];
+
+        if (ProfileDirectoryExists(@"enhanced"))
+        {
+            UIButton *enhanced = MakeButton(@"Zero Hour Enhanced", self, @selector(launchEnhanced));
+            [views addObject:enhanced];
+            [buttons addObject:enhanced];
+            fprintf(stderr, "INFO: iOS launcher found Enhanced profile\n");
+        }
+
+        if (ProfileDirectoryExists(@"contra-x"))
+        {
+            UIButton *contra = MakeButton(@"Contra X Beta 2 + Patch 1", self, @selector(launchContra));
+            [views addObject:contra];
+            [buttons addObject:contra];
+            fprintf(stderr, "INFO: iOS launcher found Contra X profile\n");
+        }
     }
 
     [views addObject:settings];
@@ -387,6 +560,38 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     return row;
 }
 
+- (UILabel *)sectionLabel:(NSString *)title
+{
+    UILabel *label = MakeLabel(title, 13.0, UIFontWeightBold);
+    label.textAlignment = NSTextAlignmentLeft;
+    label.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+    return label;
+}
+
+- (UISegmentedControl *)makeSegmented:(NSArray<NSString *> *)items
+{
+    UISegmentedControl *control = [[UISegmentedControl alloc] initWithItems:items];
+    control.translatesAutoresizingMaskIntoConstraints = NO;
+    control.selectedSegmentIndex = 0;
+    return control;
+}
+
+- (UIStackView *)segmentedRow:(NSString *)title control:(UISegmentedControl *)control
+{
+    UILabel *name = MakeLabel(title, 15.0, UIFontWeightMedium);
+    name.textAlignment = NSTextAlignmentLeft;
+
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[name, control]];
+    row.axis = UILayoutConstraintAxisVertical;
+    row.alignment = UIStackViewAlignmentFill;
+    row.spacing = 8.0;
+    row.layoutMargins = UIEdgeInsetsMake(10.0, 14.0, 10.0, 14.0);
+    row.layoutMarginsRelativeArrangement = YES;
+    row.backgroundColor = [UIColor colorWithWhite:0.055 alpha:1.0];
+    row.layer.cornerRadius = 9.0;
+    return row;
+}
+
 - (void)buildSettings
 {
     self.settingsView = [[UIView alloc] init];
@@ -402,12 +607,38 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
         [self.settingsView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-18.0],
     ]];
 
-    UILabel *title = MakeLabel(@"Game settings", 26.0, UIFontWeightBold);
+    UILabel *title = MakeLabel(@"Contra X settings", 26.0, UIFontWeightBold);
     title.textAlignment = NSTextAlignmentLeft;
 
-    UILabel *note = MakeLabel(@"Shared settings for every installed profile. Changes apply on the next game launch.", 13.0, UIFontWeightRegular);
+    UILabel *note = MakeLabel(@"iPad equivalents of the official Contra X launcher options. Changes apply on the next game launch.", 13.0, UIFontWeightRegular);
     note.textAlignment = NSTextAlignmentLeft;
     note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+
+    self.contraQuickStartSwitch = [[UISwitch alloc] init];
+    self.contraControlBarSegment = [self makeSegmented:@[@"Contra", @"Pro", @"Standard"]];
+    self.contraCameosSegment = [self makeSegmented:@[@"Standard", @"HD"]];
+    self.contraMusicSegment = [self makeSegmented:@[@"Standard", @"Enhanced", @"The Score"]];
+    self.contraVoicesSegment = [self makeSegmented:@[@"English", @"Native"]];
+    self.contraHotkeysSegment = [self makeSegmented:@[@"Original", @"Leikeze"]];
+    self.contraHotkeyLanguageSegment = [self makeSegmented:@[@"English", @"Russian"]];
+    self.contraPortraitsSegment = [self makeSegmented:@[@"Standard", @"Funny"]];
+    self.contraFogSwitch = [[UISwitch alloc] init];
+    self.contraWaterSwitch = [[UISwitch alloc] init];
+    self.contraExtraBuildingPropsSwitch = [[UISwitch alloc] init];
+
+    self.shadow3DSwitch = [[UISwitch alloc] init];
+    self.shadow2DSwitch = [[UISwitch alloc] init];
+    self.cloudShadowsSwitch = [[UISwitch alloc] init];
+    self.groundLightingSwitch = [[UISwitch alloc] init];
+    self.softWaterSwitch = [[UISwitch alloc] init];
+    self.buildingOcclusionSwitch = [[UISwitch alloc] init];
+    self.showPropsSwitch = [[UISwitch alloc] init];
+    self.extraAnimationsSwitch = [[UISwitch alloc] init];
+    self.dynamicLODSwitch = [[UISwitch alloc] init];
+    self.heatEffectsSwitch = [[UISwitch alloc] init];
+    self.textureQualitySegment = [self makeSegmented:@[@"High", @"Medium", @"Low"]];
+    self.particleQualitySegment = [self makeSegmented:@[@"Low", @"Medium", @"High"]];
+    self.textureFilterSegment = [self makeSegmented:@[@"Bilinear", @"Trilinear", @"Anisotropic 8x"]];
 
     self.maxCameraSlider = [self makeSliderWithMin:300.0f max:800.0f];
     self.minCameraSlider = [self makeSliderWithMin:40.0f max:150.0f];
@@ -428,6 +659,35 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     [self.fpsLimitSwitch addTarget:self action:@selector(fpsLimitChanged:) forControlEvents:UIControlEventValueChanged];
 
     UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:@[
+        [self sectionLabel:@"CONTRA X"],
+        [self switchRow:@"Quick Start (skip this launcher next time)" control:self.contraQuickStartSwitch],
+        [self segmentedRow:@"Control Bar" control:self.contraControlBarSegment],
+        [self segmentedRow:@"Icon / cameo quality" control:self.contraCameosSegment],
+        [self segmentedRow:@"Music" control:self.contraMusicSegment],
+        [self segmentedRow:@"Unit voices" control:self.contraVoicesSegment],
+        [self segmentedRow:@"Hotkeys" control:self.contraHotkeysSegment],
+        [self segmentedRow:@"Hotkey language" control:self.contraHotkeyLanguageSegment],
+        [self segmentedRow:@"General portraits" control:self.contraPortraitsSegment],
+        [self switchRow:@"Fog effects" control:self.contraFogSwitch],
+        [self switchRow:@"Water effects" control:self.contraWaterSwitch],
+        [self switchRow:@"Extra building props" control:self.contraExtraBuildingPropsSwitch],
+
+        [self sectionLabel:@"GRAPHICS"],
+        [self switchRow:@"3D shadows" control:self.shadow3DSwitch],
+        [self switchRow:@"2D shadows" control:self.shadow2DSwitch],
+        [self switchRow:@"Cloud shadows" control:self.cloudShadowsSwitch],
+        [self switchRow:@"Ground lighting" control:self.groundLightingSwitch],
+        [self switchRow:@"Smooth water borders" control:self.softWaterSwitch],
+        [self switchRow:@"Units behind buildings" control:self.buildingOcclusionSwitch],
+        [self switchRow:@"Small props / trees" control:self.showPropsSwitch],
+        [self switchRow:@"Extra animations" control:self.extraAnimationsSwitch],
+        [self switchRow:@"Dynamic LOD" control:self.dynamicLODSwitch],
+        [self switchRow:@"Heat effects" control:self.heatEffectsSwitch],
+        [self segmentedRow:@"Texture quality" control:self.textureQualitySegment],
+        [self segmentedRow:@"Particles" control:self.particleQualitySegment],
+        [self segmentedRow:@"Texture filtering" control:self.textureFilterSegment],
+
+        [self sectionLabel:@"CAMERA / PERFORMANCE"],
         [self sliderRow:@"Maximum camera height" slider:self.maxCameraSlider value:self.maxCameraValue],
         [self sliderRow:@"Minimum camera height" slider:self.minCameraSlider value:self.minCameraValue],
         [self sliderRow:@"Camera pitch" slider:self.cameraPitchSlider value:self.cameraPitchValue],
@@ -504,7 +764,6 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     [self resetSettingsControls];
 }
 
-
 - (NSString *)diagnosticsTextWithGameDataSize:(NSString *)gameDataSize
 {
     NSBundle *bundle = [NSBundle mainBundle];
@@ -520,10 +779,12 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     NSString *currentLog = DocumentsFilePath(@"generals-stderr.log");
     NSString *previousLog = DocumentsFilePath(@"generals-stderr-prev.log");
     NSString *settingsPath = IPadOverridesPath();
+    NSString *contraSettingsPath = ContraSettingsPath();
 
     BOOL currentLogExists = [[NSFileManager defaultManager] fileExistsAtPath:currentLog];
     BOOL previousLogExists = [[NSFileManager defaultManager] fileExistsAtPath:previousLog];
     BOOL settingsExists = [[NSFileManager defaultManager] fileExistsAtPath:settingsPath];
+    BOOL contraSettingsExists = [[NSFileManager defaultManager] fileExistsAtPath:contraSettingsPath];
 
     NSString *currentLogText = currentLogExists
         ? [NSString stringWithFormat:@"Yes (%@)", HumanReadableBytes(FileSizeAtPath(currentLog))]
@@ -549,7 +810,8 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
          "Enhanced: %@\n"
          "Contra X: %@\n\n"
          "FILES\n"
-         "Settings: %@\n"
+         "iPad settings: %@\n"
+         "Contra settings: %@\n"
          "Current log: %@\n"
          "Previous log: %@\n",
         GX_PROJECT_VERSION,
@@ -568,6 +830,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
         enhancedInstalled ? @"Installed" : @"Not installed",
         contraInstalled ? @"Installed" : @"Not installed",
         settingsExists ? @"Present" : @"Missing",
+        contraSettingsExists ? @"Present" : @"Missing",
         currentLogText,
         previousLogText];
 }
@@ -800,8 +1063,112 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     return fallback;
 }
 
+- (NSInteger)segmentIndexForValue:(NSString *)value choices:(NSArray<NSString *> *)choices fallback:(NSInteger)fallback
+{
+    for (NSInteger i = 0; i < (NSInteger)choices.count; ++i)
+    {
+        if ([value caseInsensitiveCompare:choices[i]] == NSOrderedSame)
+            return i;
+    }
+    return fallback;
+}
+
+- (void)resetContraSettingsControls
+{
+    NSDictionary<NSString *, NSString *> *defaults = DefaultContraSettings();
+    self.contraQuickStartSwitch.on = SettingBoolValue(defaults, @"QuickStart", NO);
+    self.contraControlBarSegment.selectedSegmentIndex = 0;
+    self.contraCameosSegment.selectedSegmentIndex = 0;
+    self.contraMusicSegment.selectedSegmentIndex = 0;
+    self.contraVoicesSegment.selectedSegmentIndex = 0;
+    self.contraHotkeysSegment.selectedSegmentIndex = 0;
+    self.contraHotkeyLanguageSegment.selectedSegmentIndex = 0;
+    self.contraPortraitsSegment.selectedSegmentIndex = 0;
+    self.contraFogSwitch.on = SettingBoolValue(defaults, @"FogEffects", NO);
+    self.contraWaterSwitch.on = SettingBoolValue(defaults, @"WaterEffects", YES);
+    self.contraExtraBuildingPropsSwitch.on = SettingBoolValue(defaults, @"ExtraBuildingProps", YES);
+
+    self.shadow3DSwitch.on = SettingBoolValue(defaults, @"UseShadowVolumes", NO);
+    self.shadow2DSwitch.on = SettingBoolValue(defaults, @"UseShadowDecals", YES);
+    self.cloudShadowsSwitch.on = SettingBoolValue(defaults, @"UseCloudMap", NO);
+    self.groundLightingSwitch.on = SettingBoolValue(defaults, @"UseLightMap", YES);
+    self.softWaterSwitch.on = SettingBoolValue(defaults, @"ShowSoftWaterEdge", YES);
+    self.buildingOcclusionSwitch.on = SettingBoolValue(defaults, @"BuildingOcclusion", YES);
+    self.showPropsSwitch.on = SettingBoolValue(defaults, @"ShowTrees", YES);
+    self.extraAnimationsSwitch.on = SettingBoolValue(defaults, @"ExtraAnimations", YES);
+    self.dynamicLODSwitch.on = SettingBoolValue(defaults, @"DynamicLOD", NO);
+    self.heatEffectsSwitch.on = SettingBoolValue(defaults, @"HeatEffects", NO);
+    self.textureQualitySegment.selectedSegmentIndex = 0;
+    self.particleQualitySegment.selectedSegmentIndex = 1;
+    self.textureFilterSegment.selectedSegmentIndex = 2;
+}
+
+- (void)loadContraSettingsControls
+{
+    EnsureDefaultContraSettings();
+    NSDictionary<NSString *, NSString *> *values = ReadKeyValueFile(ContraSettingsPath());
+
+    self.contraQuickStartSwitch.on = SettingBoolValue(values, @"QuickStart", NO);
+    self.contraControlBarSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"ControlBar", @"Contra")
+                           choices:@[@"Contra", @"Pro", @"Standard"]
+                          fallback:0];
+    self.contraCameosSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"Cameos", @"Standard")
+                           choices:@[@"Standard", @"HD"]
+                          fallback:0];
+    self.contraMusicSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"Music", @"Standard")
+                           choices:@[@"Standard", @"Enhanced", @"The Score"]
+                          fallback:0];
+    self.contraVoicesSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"UnitVoices", @"English")
+                           choices:@[@"English", @"Native"]
+                          fallback:0];
+    self.contraHotkeysSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"Hotkeys", @"Original")
+                           choices:@[@"Original", @"Leikeze"]
+                          fallback:0];
+    self.contraHotkeyLanguageSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"HotkeyLanguage", @"English")
+                           choices:@[@"English", @"Russian"]
+                          fallback:0];
+    self.contraPortraitsSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"Portraits", @"Standard")
+                           choices:@[@"Standard", @"Funny"]
+                          fallback:0];
+
+    self.contraFogSwitch.on = SettingBoolValue(values, @"FogEffects", NO);
+    self.contraWaterSwitch.on = SettingBoolValue(values, @"WaterEffects", YES);
+    self.contraExtraBuildingPropsSwitch.on = SettingBoolValue(values, @"ExtraBuildingProps", YES);
+
+    self.shadow3DSwitch.on = SettingBoolValue(values, @"UseShadowVolumes", NO);
+    self.shadow2DSwitch.on = SettingBoolValue(values, @"UseShadowDecals", YES);
+    self.cloudShadowsSwitch.on = SettingBoolValue(values, @"UseCloudMap", NO);
+    self.groundLightingSwitch.on = SettingBoolValue(values, @"UseLightMap", YES);
+    self.softWaterSwitch.on = SettingBoolValue(values, @"ShowSoftWaterEdge", YES);
+    self.buildingOcclusionSwitch.on = SettingBoolValue(values, @"BuildingOcclusion", YES);
+    self.showPropsSwitch.on = SettingBoolValue(values, @"ShowTrees", YES);
+    self.extraAnimationsSwitch.on = SettingBoolValue(values, @"ExtraAnimations", YES);
+    self.dynamicLODSwitch.on = SettingBoolValue(values, @"DynamicLOD", NO);
+    self.heatEffectsSwitch.on = SettingBoolValue(values, @"HeatEffects", NO);
+
+    NSInteger textureReduction = [SettingValue(values, @"TextureReduction", @"0") integerValue];
+    self.textureQualitySegment.selectedSegmentIndex = MAX(0, MIN(2, textureReduction));
+
+    NSInteger particleCount = [SettingValue(values, @"MaxParticleCount", @"2500") integerValue];
+    self.particleQualitySegment.selectedSegmentIndex = particleCount <= 1200 ? 0 : (particleCount >= 4000 ? 2 : 1);
+
+    NSString *filter = SettingValue(values, @"TextureFilter", @"Anisotropic");
+    self.textureFilterSegment.selectedSegmentIndex =
+        [filter caseInsensitiveCompare:@"Bilinear"] == NSOrderedSame ? 0 :
+        ([filter caseInsensitiveCompare:@"Trilinear"] == NSOrderedSame ? 1 : 2);
+}
+
 - (void)resetSettingsControls
 {
+    [self resetContraSettingsControls];
+
     self.maxCameraSlider.value = 550.0f;
     self.minCameraSlider.value = 70.0f;
     self.cameraPitchSlider.value = 37.0f;
@@ -816,33 +1183,44 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
 - (void)loadSettingsControls
 {
+    [self loadContraSettingsControls];
+
     NSError *error = nil;
     NSString *contents = [NSString stringWithContentsOfFile:IPadOverridesPath()
                                                    encoding:NSUTF8StringEncoding
                                                       error:&error];
     if (contents == nil)
     {
-        [self resetSettingsControls];
-        self.settingsStatus.text = @"Using defaults.";
+        self.maxCameraSlider.value = 550.0f;
+        self.minCameraSlider.value = 70.0f;
+        self.cameraPitchSlider.value = 37.0f;
+        self.enforceMaxSwitch.on = NO;
+        self.scrollSpeedSlider.value = 1.0f;
+        self.drawDistanceSlider.value = 1.20f;
+        self.fpsLimitSwitch.on = YES;
+        self.fpsSlider.value = 60.0f;
+        self.settingsStatus.text = @"Using camera defaults.";
         if (error != nil)
         {
             fprintf(stderr, "WARNING: iOS launcher could not read iPadOverrides.ini: %s\n",
                     [[error description] UTF8String]);
         }
-        return;
+    }
+    else
+    {
+        self.maxCameraSlider.value = [self floatSetting:@"MaxCameraHeight" contents:contents fallback:550.0f];
+        self.minCameraSlider.value = [self floatSetting:@"MinCameraHeight" contents:contents fallback:70.0f];
+        self.cameraPitchSlider.value = [self floatSetting:@"CameraPitch" contents:contents fallback:37.0f];
+        self.enforceMaxSwitch.on = [self boolSetting:@"EnforceMaxCameraHeight" contents:contents fallback:NO];
+        self.scrollSpeedSlider.value = [self floatSetting:@"KeyboardScrollSpeedFactor" contents:contents fallback:1.0f];
+        self.drawDistanceSlider.value = [self floatSetting:@"TerrainDrawDistanceScale" contents:contents fallback:1.20f];
+        self.fpsLimitSwitch.on = [self boolSetting:@"UseFPSLimit" contents:contents fallback:YES];
+        self.fpsSlider.value = [self floatSetting:@"FramesPerSecondLimit" contents:contents fallback:60.0f];
+        self.settingsStatus.text = @"";
     }
 
-    self.maxCameraSlider.value = [self floatSetting:@"MaxCameraHeight" contents:contents fallback:550.0f];
-    self.minCameraSlider.value = [self floatSetting:@"MinCameraHeight" contents:contents fallback:70.0f];
-    self.cameraPitchSlider.value = [self floatSetting:@"CameraPitch" contents:contents fallback:37.0f];
-    self.enforceMaxSwitch.on = [self boolSetting:@"EnforceMaxCameraHeight" contents:contents fallback:NO];
-    self.scrollSpeedSlider.value = [self floatSetting:@"KeyboardScrollSpeedFactor" contents:contents fallback:1.0f];
-    self.drawDistanceSlider.value = [self floatSetting:@"TerrainDrawDistanceScale" contents:contents fallback:1.20f];
-    self.fpsLimitSwitch.on = [self boolSetting:@"UseFPSLimit" contents:contents fallback:YES];
-    self.fpsSlider.value = [self floatSetting:@"FramesPerSecondLimit" contents:contents fallback:60.0f];
     [self settingsSliderChanged:nil];
     [self fpsLimitChanged:self.fpsLimitSwitch];
-    self.settingsStatus.text = @"";
 }
 
 - (void)showSettings
@@ -887,6 +1265,69 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     self.fpsValue.alpha = enabled ? 1.0 : 0.35;
 }
 
+- (BOOL)saveContraSettingsAndOptions:(NSError **)error
+{
+    NSArray<NSString *> *controlBars = @[@"Contra", @"Pro", @"Standard"];
+    NSArray<NSString *> *cameos = @[@"Standard", @"HD"];
+    NSArray<NSString *> *music = @[@"Standard", @"Enhanced", @"The Score"];
+    NSArray<NSString *> *voices = @[@"English", @"Native"];
+    NSArray<NSString *> *hotkeys = @[@"Original", @"Leikeze"];
+    NSArray<NSString *> *languages = @[@"English", @"Russian"];
+    NSArray<NSString *> *portraits = @[@"Standard", @"Funny"];
+
+    NSInteger particleIndex = self.particleQualitySegment.selectedSegmentIndex;
+    NSInteger particleCount = particleIndex == 0 ? 1000 : (particleIndex == 2 ? 5000 : 2500);
+
+    NSArray<NSString *> *filters = @[@"Bilinear", @"Trilinear", @"Anisotropic"];
+    NSString *filter = filters[MAX(0, MIN(2, self.textureFilterSegment.selectedSegmentIndex))];
+
+    NSMutableDictionary<NSString *, NSString *> *contra = [DefaultContraSettings() mutableCopy];
+    contra[@"QuickStart"] = self.contraQuickStartSwitch.on ? @"Yes" : @"No";
+    contra[@"ControlBar"] = controlBars[self.contraControlBarSegment.selectedSegmentIndex];
+    contra[@"Cameos"] = cameos[self.contraCameosSegment.selectedSegmentIndex];
+    contra[@"Music"] = music[self.contraMusicSegment.selectedSegmentIndex];
+    contra[@"UnitVoices"] = voices[self.contraVoicesSegment.selectedSegmentIndex];
+    contra[@"Hotkeys"] = hotkeys[self.contraHotkeysSegment.selectedSegmentIndex];
+    contra[@"HotkeyLanguage"] = languages[self.contraHotkeyLanguageSegment.selectedSegmentIndex];
+    contra[@"Portraits"] = portraits[self.contraPortraitsSegment.selectedSegmentIndex];
+    contra[@"FogEffects"] = self.contraFogSwitch.on ? @"Yes" : @"No";
+    contra[@"WaterEffects"] = self.contraWaterSwitch.on ? @"Yes" : @"No";
+    contra[@"ExtraBuildingProps"] = self.contraExtraBuildingPropsSwitch.on ? @"Yes" : @"No";
+
+    contra[@"UseShadowVolumes"] = self.shadow3DSwitch.on ? @"Yes" : @"No";
+    contra[@"UseShadowDecals"] = self.shadow2DSwitch.on ? @"Yes" : @"No";
+    contra[@"UseCloudMap"] = self.cloudShadowsSwitch.on ? @"Yes" : @"No";
+    contra[@"UseLightMap"] = self.groundLightingSwitch.on ? @"Yes" : @"No";
+    contra[@"ShowSoftWaterEdge"] = self.softWaterSwitch.on ? @"Yes" : @"No";
+    contra[@"BuildingOcclusion"] = self.buildingOcclusionSwitch.on ? @"Yes" : @"No";
+    contra[@"ShowTrees"] = self.showPropsSwitch.on ? @"Yes" : @"No";
+    contra[@"ExtraAnimations"] = self.extraAnimationsSwitch.on ? @"Yes" : @"No";
+    contra[@"DynamicLOD"] = self.dynamicLODSwitch.on ? @"Yes" : @"No";
+    contra[@"HeatEffects"] = self.heatEffectsSwitch.on ? @"Yes" : @"No";
+    contra[@"TextureReduction"] = [NSString stringWithFormat:@"%ld", (long)self.textureQualitySegment.selectedSegmentIndex];
+    contra[@"MaxParticleCount"] = [NSString stringWithFormat:@"%ld", (long)particleCount];
+    contra[@"TextureFilter"] = filter;
+    contra[@"AnisotropyLevel"] = self.textureFilterSegment.selectedSegmentIndex == 2 ? @"8" : @"2";
+
+    if (!WriteKeyValueFile(ContraSettingsPath(), contra, error))
+        return NO;
+
+    NSMutableDictionary<NSString *, NSString *> *options = ReadKeyValueFile(EngineOptionsPath());
+    options[@"IdealStaticGameLOD"] = @"High";
+    options[@"StaticGameLOD"] = @"Custom";
+    for (NSString *key in @[
+        @"UseShadowVolumes", @"UseShadowDecals", @"UseCloudMap", @"UseLightMap",
+        @"ShowSoftWaterEdge", @"BuildingOcclusion", @"ShowTrees", @"ExtraAnimations",
+        @"DynamicLOD", @"HeatEffects", @"TextureReduction", @"MaxParticleCount",
+        @"TextureFilter", @"AnisotropyLevel"
+    ])
+    {
+        options[key] = contra[key];
+    }
+
+    return WriteKeyValueFile(EngineOptionsPath(), options, error);
+}
+
 - (void)saveSettings
 {
     NSString *contents = [NSString stringWithFormat:
@@ -910,23 +1351,28 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
         self.fpsSlider.value];
 
     NSError *error = nil;
-    BOOL ok = [contents writeToFile:IPadOverridesPath()
-                         atomically:YES
-                           encoding:NSUTF8StringEncoding
-                              error:&error];
-    if (ok)
+    BOOL cameraOK = [contents writeToFile:IPadOverridesPath()
+                               atomically:YES
+                                 encoding:NSUTF8StringEncoding
+                                    error:&error];
+    BOOL contraOK = cameraOK ? [self saveContraSettingsAndOptions:&error] : NO;
+
+    if (cameraOK && contraOK)
     {
         self.settingsStatus.text = @"Saved. Changes apply on the next game launch.";
         self.settingsStatus.textColor = [UIColor systemGreenColor];
-        fprintf(stderr, "INFO: iOS launcher saved %s\n",
+        fprintf(stderr,
+                "[CONTRA-SETTINGS] saved settings=%s options=%s camera=%s\n",
+                ContraSettingsPath().fileSystemRepresentation,
+                EngineOptionsPath().fileSystemRepresentation,
                 IPadOverridesPath().fileSystemRepresentation);
     }
     else
     {
         self.settingsStatus.text = @"Save failed. See generals-stderr.log.";
         self.settingsStatus.textColor = [UIColor systemRedColor];
-        fprintf(stderr, "ERROR: iOS launcher failed to save iPadOverrides.ini: %s\n",
-                [[error description] UTF8String]);
+        fprintf(stderr, "ERROR: iOS launcher failed to save settings: %s\n",
+                error != nil ? [[error description] UTF8String] : "unknown");
     }
 }
 
@@ -950,21 +1396,28 @@ const char *GeneralsXRunIOSProfileLauncher()
         return gSelectedProfile;
     }
 
-    // Dedicated variants can opt into a standalone boot without changing the
-    // shared launcher binary. The Contra-only packager drops this marker in the
-    // app bundle; All-in-one and other variants do not.
+    // Dedicated variants keep a single-game launcher so settings remain
+    // accessible. Quick Start restores direct boot when the user enables it.
     NSString *autoProfile = BundledAutoLaunchProfile();
     if (autoProfile != nil)
     {
         const char *utf8 = [autoProfile UTF8String];
         strlcpy(gSelectedProfile, utf8, sizeof(gSelectedProfile));
-        fprintf(stderr, "INFO: iOS launcher auto-selected bundled profile: %s\n",
-                gSelectedProfile);
-        return gSelectedProfile;
+
+        if (![autoProfile isEqualToString:@"contra-x"] || ContraQuickStartEnabled())
+        {
+            fprintf(stderr, "INFO: iOS launcher auto-selected bundled profile: %s\n",
+                    gSelectedProfile);
+            return gSelectedProfile;
+        }
+
+        fprintf(stderr,
+                "[CONTRA-SETTINGS] dedicated Contra launcher shown because QuickStart=No\n");
     }
 
     gLauncherFinished.store(false, std::memory_order_release);
-    strlcpy(gSelectedProfile, "vanilla", sizeof(gSelectedProfile));
+    if (autoProfile == nil)
+        strlcpy(gSelectedProfile, "vanilla", sizeof(gSelectedProfile));
 
     __block UIWindow *launcherWindow = nil;
 
