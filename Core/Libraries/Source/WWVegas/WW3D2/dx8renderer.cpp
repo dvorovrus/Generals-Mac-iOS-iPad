@@ -60,6 +60,10 @@
 #include "camera.h"
 #include "stripoptimizer.h"
 #include "meshgeometry.h"
+#include <cstdio>
+#include <set>
+#include <string>
+#include <cctype>
 
 /*
 ** Global Instance of the DX8MeshRender
@@ -74,6 +78,131 @@ static DynamicVectorClass<Vector3>				_TempNormalBuffer;
 static MultiListClass<MeshModelClass>			_RegisteredMeshList;
 static TextureCategoryList							texture_category_delete_list;
 static FVFCategoryList								fvf_category_container_delete_list;
+
+// GeneralsX @diagnostic dvorovrus 27/09/2026
+// Texture loading is now healthy on iOS, but some Contra submeshes still render
+// black. Log the fixed-function material/shader state once per suspicious mesh
+// so we can distinguish bad pixel data from TEXTURE*DIFFUSE/material-stage issues.
+static std::set<std::string> s_materialDiagSeen;
+
+static std::string Material_Diag_Lower(const char *value)
+{
+	std::string out = value != nullptr ? value : "";
+	for (char &c : out)
+		c = (char)std::tolower((unsigned char)c);
+	return out;
+}
+
+static bool Material_Diag_Texture_Is_Target(const TextureClass *texture)
+{
+	if (texture == nullptr)
+		return false;
+
+	const std::string name = Material_Diag_Lower(texture->Get_Texture_Name().str());
+	return name.find("supply") != std::string::npos ||
+	       name.find("tread") != std::string::npos ||
+	       name.find("crate") != std::string::npos ||
+	       name.find("fueltrk") != std::string::npos;
+}
+
+static void Log_Material_Diag_Once(
+	const MeshClass *mesh,
+	TextureClass *texture0,
+	TextureClass *texture1,
+	VertexMaterialClass *material,
+	const ShaderClass &shader)
+{
+	if (mesh == nullptr)
+		return;
+
+	Vector3 diffuse(0.0f, 0.0f, 0.0f);
+	Vector3 ambient(0.0f, 0.0f, 0.0f);
+	Vector3 emissive(0.0f, 0.0f, 0.0f);
+	float opacity = 1.0f;
+	int lighting = -1;
+	int diffuseSource = -1;
+	int ambientSource = -1;
+	int emissiveSource = -1;
+	const char *materialName = "<null>";
+
+	if (material != nullptr)
+	{
+		material->Get_Diffuse(&diffuse);
+		material->Get_Ambient(&ambient);
+		material->Get_Emissive(&emissive);
+		opacity = material->Get_Opacity();
+		lighting = material->Get_Lighting() ? 1 : 0;
+		diffuseSource = (int)material->Get_Diffuse_Color_Source();
+		ambientSource = (int)material->Get_Ambient_Color_Source();
+		emissiveSource = (int)material->Get_Emissive_Color_Source();
+		materialName = material->Get_Name();
+	}
+
+	const bool targetTexture =
+		Material_Diag_Texture_Is_Target(texture0) ||
+		Material_Diag_Texture_Is_Target(texture1);
+
+	// Also catch likely-black fixed-function categories even when the user has
+	// not named the affected texture yet. Keep this deliberately conservative.
+	const float materialLight =
+		diffuse.X + diffuse.Y + diffuse.Z +
+		ambient.X + ambient.Y + ambient.Z +
+		emissive.X + emissive.Y + emissive.Z;
+	const bool suspiciousDarkMaterial =
+		material != nullptr &&
+		materialLight < 0.02f &&
+		shader.Get_Texturing() != ShaderClass::TEXTURING_DISABLE;
+
+	const bool vertexColorModulation =
+		material != nullptr &&
+		(diffuseSource != (int)VertexMaterialClass::MATERIAL ||
+		 ambientSource != (int)VertexMaterialClass::MATERIAL ||
+		 emissiveSource != (int)VertexMaterialClass::MATERIAL);
+
+	if (!targetTexture && !suspiciousDarkMaterial && !vertexColorModulation)
+		return;
+
+	const char *tex0 = texture0 != nullptr ? texture0->Get_Texture_Name().str() : "<null>";
+	const char *tex1 = texture1 != nullptr ? texture1->Get_Texture_Name().str() : "<null>";
+	const char *meshName = mesh->Get_Name() != nullptr ? mesh->Get_Name() : "<unnamed>";
+
+	char keyBuffer[1024];
+	snprintf(keyBuffer, sizeof(keyBuffer), "%s|%s|%s|%s|%08x",
+	         meshName, tex0, tex1, materialName != nullptr ? materialName : "<null>",
+	         shader.Get_Bits());
+	if (!s_materialDiagSeen.insert(keyBuffer).second)
+		return;
+
+	fprintf(stderr,
+	        "[MATERIAL-DIAG] mesh='%s' tex0='%s' tex1='%s' material='%s' "
+	        "shader=0x%08x texturing=%d primaryGradient=%d secondaryGradient=%d "
+	        "alphaTest=%d srcBlend=%d dstBlend=%d detailColor=%d detailAlpha=%d "
+	        "lighting=%d diffuse=%.3f,%.3f,%.3f ambient=%.3f,%.3f,%.3f "
+	        "emissive=%.3f,%.3f,%.3f opacity=%.3f sources(diffuse/ambient/emissive)=%d/%d/%d "
+	        "targetTexture=%d suspiciousDark=%d vertexColorSource=%d\n",
+	        meshName,
+	        tex0,
+	        tex1,
+	        materialName != nullptr ? materialName : "<null>",
+	        shader.Get_Bits(),
+	        (int)shader.Get_Texturing(),
+	        (int)shader.Get_Primary_Gradient(),
+	        (int)shader.Get_Secondary_Gradient(),
+	        (int)shader.Get_Alpha_Test(),
+	        (int)shader.Get_Src_Blend_Func(),
+	        (int)shader.Get_Dst_Blend_Func(),
+	        (int)shader.Get_Post_Detail_Color_Func(),
+	        (int)shader.Get_Post_Detail_Alpha_Func(),
+	        lighting,
+	        (double)diffuse.X, (double)diffuse.Y, (double)diffuse.Z,
+	        (double)ambient.X, (double)ambient.Y, (double)ambient.Z,
+	        (double)emissive.X, (double)emissive.Y, (double)emissive.Z,
+	        (double)opacity,
+	        diffuseSource, ambientSource, emissiveSource,
+	        targetTexture ? 1 : 0,
+	        suspiciousDarkMaterial ? 1 : 0,
+	        vertexColorModulation ? 1 : 0);
+}
 
 // helper data structure
 class PolyRemover : public MultiListObjectClass
@@ -1733,6 +1862,13 @@ void DX8TextureCategoryClass::Render()
 		*/
 		DX8PolygonRendererClass * renderer = prt->Peek_Polygon_Renderer();
 		MeshClass * mesh = prt->Peek_Mesh();
+
+		Log_Material_Diag_Once(
+			mesh,
+			Peek_Texture(0),
+			Peek_Texture(1),
+			vmaterial,
+			theShader);
 
 		if (mesh->Get_Base_Vertex_Offset() == VERTEX_BUFFER_OVERFLOW)	//check if this mesh is valid
 		{	//skip this mesh so it gets rendered later after vertices are filled in.
