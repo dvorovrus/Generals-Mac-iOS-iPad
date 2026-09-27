@@ -59,6 +59,7 @@
 #include "ddsfile.h"
 #include "bitmaphandler.h"
 #include "wwprofile.h"
+#include <cstdio>
 
 bool TextureLoader::TextureLoadSuspended;
 int TextureLoader::TextureInactiveOverrideTime = 0;
@@ -1227,6 +1228,13 @@ bool TextureLoadTaskClass::Begin_Load()
 
 	// if not loaded, abort.
 	if (!loaded) {
+		fprintf(stderr,
+		        "[TEXTURE-DIAG] begin-load-failed path='%s' requestedFormat=%d compression=%d mipRequest=%u reduction=%u\n",
+		        Texture != nullptr ? Texture->Get_Full_Path().str() : "<null>",
+		        (int)Format,
+		        (Texture != nullptr && Texture->Is_Compression_Allowed()) ? 1 : 0,
+		        (unsigned)MipLevelCount,
+		        (unsigned)Reduction);
 		return false;
 	}
 
@@ -1261,6 +1269,19 @@ bool TextureLoadTaskClass::Load()
 	// otherwise, load uncompressed mipmaps
 	if (!loaded) {
 		loaded = Load_Uncompressed_Mipmap();
+	}
+
+	if (!loaded)
+	{
+		fprintf(stderr,
+		        "[TEXTURE-DIAG] mip-load-failed path='%s' allocated=%s size=%ux%u format=%d mipCount=%u reduction=%u\n",
+		        Texture != nullptr ? Texture->Get_Full_Path().str() : "<null>",
+		        D3DTexture != nullptr ? "yes" : "no",
+		        (unsigned)Width,
+		        (unsigned)Height,
+		        (int)Format,
+		        (unsigned)MipLevelCount,
+		        (unsigned)Reduction);
 	}
 
 	State = STATE_LOAD_MIPMAP;
@@ -1317,9 +1338,18 @@ void TextureLoadTaskClass::Apply_Missing_Texture()
 		return;
 	}
 
+	fprintf(stderr,
+	        "[TEXTURE-DIAG] applying-missing-texture path='%s' requestedFormat=%d compression=%d\n",
+	        Texture->Get_Full_Path().str(),
+	        (int)Format,
+	        Texture->Is_Compression_Allowed() ? 1 : 0);
+
 	D3DTexture = MissingTexture::_Get_Missing_Texture();
 	if (D3DTexture == nullptr)
 	{
+		fprintf(stderr,
+		        "[TEXTURE-DIAG] missing-texture-fallback-null path='%s'\n",
+		        Texture->Get_Full_Path().str());
 		return;
 	}
 	Apply(true);
