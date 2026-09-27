@@ -1064,6 +1064,18 @@ void W3DDisplay::init()
 					        caps->Support_Texture_Format(WW3D_FORMAT_DXT1) ? 1 : 0,
 					        caps->Support_Texture_Format(WW3D_FORMAT_DXT3) ? 1 : 0,
 					        caps->Support_Texture_Format(WW3D_FORMAT_DXT5) ? 1 : 0);
+
+					const D3DCAPS8 &d3dCaps = caps->Get_DX8_Caps();
+					fprintf(stderr,
+					        "[GRAPHICS-DIAG] caps raster=0x%08x dither=%d textureCaps=0x%08x textureOpCaps=0x%08x maxStages=%u maxTextures=%u pixelShader=0x%08x vertexShader=0x%08x\n",
+					        (unsigned)d3dCaps.RasterCaps,
+					        (d3dCaps.RasterCaps & D3DPRASTERCAPS_DITHER) ? 1 : 0,
+					        (unsigned)d3dCaps.TextureCaps,
+					        (unsigned)d3dCaps.TextureOpCaps,
+					        (unsigned)d3dCaps.MaxTextureBlendStages,
+					        (unsigned)d3dCaps.MaxSimultaneousTextures,
+					        (unsigned)d3dCaps.PixelShaderVersion,
+					        (unsigned)d3dCaps.VertexShaderVersion);
 				}
 			}
 
