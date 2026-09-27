@@ -485,6 +485,28 @@ static bool IOSPrepareContraRuntimeProfile(
         {
             const bool active = IOSContraArchiveShouldBeActive(sourceEntry, settings);
             targetName.replace_extension(active ? ".big" : ".ctr");
+
+            // Contra's optional control-bar packs are named with a leading "!!".
+            // Our portable BIG loader sorts filenames ascending and, for -mod
+            // directories, later archives overwrite earlier ones. That means
+            // !ContraXBeta2_Window.big can otherwise overwrite the selected
+            // !!...ControlBarPro/Standard archive, making every launcher choice
+            // look identical. Give the selected control-bar overlay an explicit
+            // last-sorting runtime name so it wins only when that option is active.
+            std::string normalizedArchiveName = IOSContraLower(sourceEntry.filename().string());
+            if (active &&
+                (IOSContraEndsWith(normalizedArchiveName, "_controlbarpro.ctr") ||
+                 IOSContraEndsWith(normalizedArchiveName, "_controlbarstandard.ctr") ||
+                 IOSContraEndsWith(normalizedArchiveName, "_controlbarpro.big") ||
+                 IOSContraEndsWith(normalizedArchiveName, "_controlbarstandard.big")))
+            {
+                targetName = "zzzz__IOS_Selected_ControlBar.big";
+                fprintf(stderr,
+                        "[CONTRA-SETTINGS] controlbar-priority source='%s' runtime='%s'\n",
+                        sourceEntry.filename().string().c_str(),
+                        targetName.string().c_str());
+            }
+
             if (active)
                 ++activeArchives;
             else
