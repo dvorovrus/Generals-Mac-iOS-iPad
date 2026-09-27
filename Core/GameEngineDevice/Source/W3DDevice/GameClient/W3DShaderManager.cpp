@@ -69,6 +69,7 @@
 #include "GameClient/Water.h"
 #include "GameLogic/GameLogic.h"
 #include "Common/GlobalData.h"
+#include "Common/FramePacer.h"
 #include "Common/GameLOD.h"
 #include "d3dx8tex.h"
 #include "dx8caps.h"
@@ -1603,11 +1604,18 @@ void TerrainShader2Stage::reset()
 
 void TerrainShader2Stage::updateCloud()
 {
-	const float frame_time = WW3D::Get_Logic_Frame_Time_Seconds();
+	// Cloud shadows are a render effect and must keep moving even on render
+	// frames where the 30 Hz game logic does not advance. HeightMap::Render()
+	// deliberately calls updateCloud() every render frame, but using WW3D's
+	// logic-frame delta here can be zero on the uncoupled SDL3/iOS frame path,
+	// leaving the cloud texture visually frozen.
+	const float frame_time =
+		TheFramePacer != nullptr ? TheFramePacer->getUpdateTime() : WW3D::Get_Logic_Frame_Time_Seconds();
+
 	m_xOffset += m_xSlidePerSecond * frame_time;
 	m_yOffset += m_ySlidePerSecond * frame_time;
 
-	// This moves offsets towards zero when smaller -1.0 or larger 1.0
+	// Keep offsets bounded while preserving negative scrolling.
 	m_xOffset -= (Int)m_xOffset;
 	m_yOffset -= (Int)m_yOffset;
 }
