@@ -1103,11 +1103,10 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 	Real s = sin(angle);
 	Real c = cos(angle);
 
-	cur = list;
+	BuildListInfo *cur = list;
 	while (cur) {
-		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(list->getTemplateName());
+		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(cur->getTemplateName());
 		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER)) {
-			foundInBuildList = true;
 			Coord3D curPos = *cur->getLocation();
 			// Transform to new coords.
 			curPos.x -= buildPos.x;
