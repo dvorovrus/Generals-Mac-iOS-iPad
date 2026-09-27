@@ -55,6 +55,7 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Display.h"
+#include <cstdio>
 //-----------------------------------------------------------------------------
 // DEFINES ////////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
@@ -102,8 +103,10 @@ ControlBarResizer::~ControlBarResizer()
 void ControlBarResizer::init()
 {
 	INI ini;
+	fprintf(stderr, "[CONTROLBAR-DIAG] loading Data\\INI\\ControlBarResizer\n");
 	// Read from INI all the ControlBarSchemes
 	ini.loadFileDirectory( "Data\\INI\\ControlBarResizer", INI_LOAD_OVERWRITE, nullptr );
+	fprintf(stderr, "[CONTROLBAR-DIAG] resizer definitions loaded\n");
 
 }
 
@@ -148,11 +151,22 @@ ResizerWindow *ControlBarResizer::newResizerWindow( AsciiString name )
 	}
 	win->winGetPosition(&newRwin->m_defaultPos.x,&newRwin->m_defaultPos.y);
 	win->winGetSize(&newRwin->m_defaultSize.x,&newRwin->m_defaultSize.y);
+	fprintf(stderr,
+	        "[CONTROLBAR-DIAG] registered window='%s' defaultPos=%d,%d defaultSize=%d,%d\n",
+	        newRwin->m_name.str(),
+	        newRwin->m_defaultPos.x,
+	        newRwin->m_defaultPos.y,
+	        newRwin->m_defaultSize.x,
+	        newRwin->m_defaultSize.y);
 	m_resizerWindowsList.push_back(newRwin);
 	return newRwin;
 }
 void ControlBarResizer::sizeWindowsDefault()
 {
+	fprintf(stderr,
+	        "[CONTROLBAR-DIAG] size-default display=%dx%d\n",
+	        TheDisplay != nullptr ? TheDisplay->getWidth() : -1,
+	        TheDisplay != nullptr ? TheDisplay->getHeight() : -1);
 	ResizerWindowList::iterator it = m_resizerWindowsList.begin();
 	GameWindow *win = nullptr;
 	while (it != m_resizerWindowsList.end())
@@ -182,6 +196,14 @@ void ControlBarResizer::sizeWindowsAlt()
 	GameWindow *win = nullptr;
 	Real x = (Real)TheDisplay->getWidth() / DEFAULT_DISPLAY_WIDTH;
 	Real y = (Real)TheDisplay->getHeight() / DEFAULT_DISPLAY_HEIGHT;
+	fprintf(stderr,
+	        "[CONTROLBAR-DIAG] size-alt display=%dx%d base=%dx%d scale=%.4f,%.4f\n",
+	        TheDisplay->getWidth(),
+	        TheDisplay->getHeight(),
+	        DEFAULT_DISPLAY_WIDTH,
+	        DEFAULT_DISPLAY_HEIGHT,
+	        (double)x,
+	        (double)y);
 	while (it != m_resizerWindowsList.end())
 	{
 		ResizerWindow *rWin = *it;
@@ -202,6 +224,17 @@ void ControlBarResizer::sizeWindowsAlt()
 		if(rWin->m_altSize.x >0 || rWin->m_altSize.y > 0)
 			win->winSetSize(rWin->m_altSize.x *x, rWin->m_altSize.y *y);
 		DEBUG_LOG(("sizeWindowsAlt:%s pos X:%d pos Y: %d size X:%d sizeY: %d",rWin->m_name.str(), rWin->m_altPos.x*x, rWin->m_altPos.y*y,rWin->m_altSize.x*x, rWin->m_altSize.y *y));
+		fprintf(stderr,
+		        "[CONTROLBAR-DIAG] alt window='%s' srcPos=%d,%d srcSize=%d,%d appliedPos=%d,%d appliedSize=%d,%d\n",
+		        rWin->m_name.str(),
+		        rWin->m_altPos.x,
+		        rWin->m_altPos.y,
+		        rWin->m_altSize.x,
+		        rWin->m_altSize.y,
+		        (int)(rWin->m_altPos.x * x),
+		        (int)(rWin->m_altPos.y * y),
+		        (int)(rWin->m_altSize.x * x),
+		        (int)(rWin->m_altSize.y * y));
 		it ++;
 	}
 }
