@@ -113,6 +113,30 @@ void SetSelectedProfile(NSString *profile)
     gLauncherFinished.store(true, std::memory_order_release);
 }
 
+NSString *BundledAutoLaunchProfile()
+{
+    NSString *resourcePath = [[NSBundle mainBundle] resourcePath];
+    NSString *markerPath = [resourcePath stringByAppendingPathComponent:@"AutoLaunchProfile.txt"];
+
+    NSError *error = nil;
+    NSString *value = [NSString stringWithContentsOfFile:markerPath
+                                                encoding:NSUTF8StringEncoding
+                                                   error:&error];
+    if (value == nil)
+        return nil;
+
+    value = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    const char *utf8 = [value UTF8String];
+    if (!IsSupportedProfile(utf8))
+    {
+        fprintf(stderr, "WARNING: iOS launcher ignored unsupported AutoLaunchProfile '%s'\n",
+                utf8 != nullptr ? utf8 : "<null>");
+        return nil;
+    }
+
+    return value;
+}
+
 NSString *IPadOverridesPath()
 {
     return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/iPadOverrides.ini"];
@@ -922,6 +946,20 @@ const char *GeneralsXRunIOSProfileLauncher()
     if (IsSupportedProfile(forcedProfile))
     {
         strlcpy(gSelectedProfile, forcedProfile, sizeof(gSelectedProfile));
+        fprintf(stderr, "INFO: iOS launcher forced profile: %s\n", gSelectedProfile);
+        return gSelectedProfile;
+    }
+
+    // Dedicated variants can opt into a standalone boot without changing the
+    // shared launcher binary. The Contra-only packager drops this marker in the
+    // app bundle; All-in-one and other variants do not.
+    NSString *autoProfile = BundledAutoLaunchProfile();
+    if (autoProfile != nil)
+    {
+        const char *utf8 = [autoProfile UTF8String];
+        strlcpy(gSelectedProfile, utf8, sizeof(gSelectedProfile));
+        fprintf(stderr, "INFO: iOS launcher auto-selected bundled profile: %s\n",
+                gSelectedProfile);
         return gSelectedProfile;
     }
 
