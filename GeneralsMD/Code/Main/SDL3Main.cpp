@@ -250,6 +250,60 @@ GameEngine *CreateGameEngine(void)
  * @return Exit code (0 = success)
  */
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+static void LogIOSProfileContents(const char *modPath)
+{
+    if (modPath == nullptr || modPath[0] == '\0')
+        return;
+
+    fprintf(stderr, "[CONTRA-DIAG] profile-path=%s\n", modPath);
+
+    std::error_code ec;
+    std::filesystem::path root(modPath);
+    std::filesystem::recursive_directory_iterator it(root, ec);
+    std::filesystem::recursive_directory_iterator end;
+
+    int activeBigCount = 0;
+    int inactiveCtrCount = 0;
+    for (; !ec && it != end; it.increment(ec))
+    {
+        std::error_code typeError;
+        if (!it->is_regular_file(typeError) || typeError)
+            continue;
+
+        std::string ext = it->path().extension().string();
+        for (char &c : ext)
+            c = (char)std::tolower((unsigned char)c);
+
+        if (ext == ".big")
+        {
+            ++activeBigCount;
+            std::error_code relError;
+            std::filesystem::path rel = std::filesystem::relative(it->path(), root, relError);
+            fprintf(stderr, "[CONTRA-DIAG] active-big=%s\n",
+                    (relError ? it->path() : rel).string().c_str());
+        }
+        else if (ext == ".ctr")
+        {
+            ++inactiveCtrCount;
+        }
+    }
+
+    if (ec)
+        fprintf(stderr, "[CONTRA-DIAG] profile-scan-error=%s\n", ec.message().c_str());
+
+    std::error_code scriptsError;
+    bool scripts = std::filesystem::exists(root / "Data" / "Scripts", scriptsError);
+    scriptsError.clear();
+    bool scripts1 = std::filesystem::exists(root / "Data" / "Scripts1", scriptsError);
+
+    fprintf(stderr,
+            "[CONTRA-DIAG] active-big-count=%d inactive-ctr-count=%d Data/Scripts=%s Data/Scripts1=%s\n",
+            activeBigCount,
+            inactiveCtrCount,
+            scripts ? "yes" : "no",
+            scripts1 ? "yes" : "no");
+}
+
 // GeneralsX @feature dvorovrus 25/09/2026 Convert the launcher's profile choice
 // into the engine's existing -mod directory mechanism. Base assets remain in
 // GameData; mod-only overlays live outside it in <bundle>/Profiles so vanilla
@@ -276,6 +330,8 @@ static void InjectIOSProfileModArgument(const char *profileId)
         profileDir = "contra-x";
     else
         return;
+
+    const bool isContra = strcmp(profileId, "contra-x") == 0;
 
     if (__argc <= 0 || __argv[0] == nullptr)
         return;
@@ -305,19 +361,33 @@ static void InjectIOSProfileModArgument(const char *profileId)
     }
 
     static char modFlag[] = "-mod";
+    static char forceFullViewportFlag[] = "-forcefullviewport";
     static char *profileArgv[64];
     int count = 0;
-    for (int i = 0; i < __argc && count < 61; ++i)
+    const int maxBaseArgs = isContra ? 60 : 61;
+    for (int i = 0; i < __argc && count < maxBaseArgs; ++i)
         profileArgv[count++] = __argv[i];
 
     profileArgv[count++] = modFlag;
     profileArgv[count++] = modPath;
+
+    // Contra X ships Control Bar Pro. Its widescreen layout expects the same
+    // full-viewport switch GenTool applies on Windows.
+    if (isContra)
+        profileArgv[count++] = forceFullViewportFlag;
+
     profileArgv[count] = nullptr;
 
     __argv = profileArgv;
     __argc = count;
 
-    fprintf(stderr, "INFO: iOS launcher: profile '%s' -> -mod %s\n", profileId, modPath);
+    fprintf(stderr, "INFO: iOS launcher: profile '%s' -> -mod %s%s\n",
+            profileId,
+            modPath,
+            isContra ? " -forcefullviewport" : "");
+
+    if (isContra)
+        LogIOSProfileContents(modPath);
 }
 #endif
 
