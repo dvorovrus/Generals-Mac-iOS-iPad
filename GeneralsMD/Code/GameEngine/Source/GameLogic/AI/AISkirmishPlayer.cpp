@@ -28,6 +28,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include <cstdio>
+
 
 #include "Common/GameMemory.h"
 #include "Common/GlobalData.h"
@@ -953,6 +955,32 @@ void AISkirmishPlayer::doTeamBuilding()
 void AISkirmishPlayer::update()
 {
 	AIPlayer::update();
+
+	const UnsignedInt frame = TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0;
+	if (frame != 0 && (frame % (5 * LOGICFRAMES_PER_SECOND)) == 0)
+	{
+		Int buildListCount = 0;
+		for (BuildListInfo *info = m_player->getBuildList(); info; info = info->getNext())
+			++buildListCount;
+
+		KindOfMaskType victoryBuildingMask;
+		victoryBuildingMask.set(KINDOF_MP_COUNT_FOR_VICTORY);
+
+		fprintf(stderr,
+		        "[AI-DIAG] frame=%u playerIndex=%d side='%s' money=%d buildList=%d anyObjects=%d anyUnits=%d victoryBuildings=%d canBuildBase=%d canBuildUnits=%d readyStructure=%d readyTeam=%d\n",
+		        (unsigned)frame,
+		        (int)m_player->getPlayerIndex(),
+		        m_player->getSide().str(),
+		        (int)m_player->getMoney()->countMoney(),
+		        (int)buildListCount,
+		        m_player->hasAnyObjects() ? 1 : 0,
+		        m_player->hasAnyUnits() ? 1 : 0,
+		        m_player->hasAnyBuildings(victoryBuildingMask) ? 1 : 0,
+		        m_player->getCanBuildBase() ? 1 : 0,
+		        m_player->getCanBuildUnits() ? 1 : 0,
+		        m_readyToBuildStructure ? 1 : 0,
+		        m_readyToBuildTeam ? 1 : 0);
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -961,44 +989,78 @@ void AISkirmishPlayer::update()
  */
 void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 {
+	// Validate the Contra/vanilla build list before touching the live starting
+	// command center. The old code destroyed the AI's initial command center
+	// first and only afterwards discovered whether the build list contained a
+	// valid replacement. A bad/mismatched build list therefore left the AI with
+	// a dozer but zero victory-counting buildings and caused an early defeat.
+	BuildListInfo *commandCenterInfo = nullptr;
+	Coord3D buildPos;
+	for (BuildListInfo *cur = list; cur; cur = cur->getNext())
+	{
+		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(cur->getTemplateName());
+		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER))
+		{
+			commandCenterInfo = cur;
+			buildPos = *cur->getLocation();
+			break;
+		}
+	}
+
+	if (commandCenterInfo == nullptr)
+	{
+		fprintf(stderr,
+		        "[AI-DIAG] build-list-invalid playerIndex=%d side='%s' reason=no-command-center; preserving starting command center\n",
+		        (int)m_player->getPlayerIndex(),
+		        m_player->getSide().str());
+		return;
+	}
+
 	Bool foundStart = false;
 	Coord3D startPos;
 
-	// Find our command center location.
+	// Find our live command center only after the replacement plan is known-good.
 	Object *obj;
-	for( obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	for (obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
 	{
-
 		Player *owner = obj->getControllingPlayer();
-		if (owner==m_player) {
-			// See if it's a command center.
-			if (obj->isKindOf(KINDOF_COMMANDCENTER)) {
-				foundStart = true;
-				startPos = *obj->getPosition();
-				m_player->onStructureUndone(obj);
-				TheAI->pathfinder()->removeObjectFromPathfindMap(obj);
-				TheGameLogic->destroyObject(obj);
-				break;
-			}
+		if (owner == m_player && obj->isKindOf(KINDOF_COMMANDCENTER))
+		{
+			foundStart = true;
+			startPos = *obj->getPosition();
+			fprintf(stderr,
+			        "[AI-DIAG] start-command-center playerIndex=%d side='%s' objectID=%u template='%s' pos=%.1f,%.1f\n",
+			        (int)m_player->getPlayerIndex(),
+			        m_player->getSide().str(),
+			        (unsigned)obj->getID(),
+			        obj->getTemplate() != nullptr ? obj->getTemplate()->getName().str() : "<none>",
+			        (double)startPos.x,
+			        (double)startPos.y);
+			m_player->onStructureUndone(obj);
+			TheAI->pathfinder()->removeObjectFromPathfindMap(obj);
+			TheGameLogic->destroyObject(obj);
+			break;
 		}
 	}
-	if (!foundStart) {
-		DEBUG_LOG(("Couldn't find starting command center for ai player."));
+
+	if (!foundStart)
+	{
+		fprintf(stderr,
+		        "[AI-DIAG] missing-start-command-center playerIndex=%d side='%s'\n",
+		        (int)m_player->getPlayerIndex(),
+		        m_player->getSide().str());
 		return;
 	}
-	// Find the location of the command center in the build list.
-	Bool foundInBuildList = false;
-	Coord3D buildPos;
-	BuildListInfo *cur = list;
-	while (cur) {
-		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(cur->getTemplateName());
-		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER)) {
-			foundInBuildList = true;
-			buildPos = *cur->getLocation();
-			cur->setInitiallyBuilt(true);
-		}
-		cur = cur->getNext();
-	}
+
+	commandCenterInfo->setInitiallyBuilt(true);
+	fprintf(stderr,
+	        "[AI-DIAG] build-list-command-center playerIndex=%d side='%s' template='%s' anchor=%.1f,%.1f\n",
+	        (int)m_player->getPlayerIndex(),
+	        m_player->getSide().str(),
+	        commandCenterInfo->getTemplateName().str(),
+	        (double)buildPos.x,
+	        (double)buildPos.y);
+
 	Region3D bounds;
 	TheTerrainLogic->getMaximumPathfindExtent(&bounds);
 	/* calculate section of 3x3 grid:
@@ -1071,39 +1133,92 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
  */
 void AISkirmishPlayer::newMap()
 {
-
-	/* Get our proper build list. */
 	AsciiString mySide = m_player->getSide();
-	DEBUG_LOG(("AI Player side is %s", mySide.str()));
+	fprintf(stderr,
+	        "[AI-DIAG] new-map playerIndex=%d side='%s' difficulty=%d\n",
+	        (int)m_player->getPlayerIndex(),
+	        mySide.str(),
+	        (int)getAIDifficulty());
+
 	const AISideBuildList *build = TheAI->getAiData()->m_sideBuildLists;
-	while (build) {
-		if (build->m_side == mySide) {
+	while (build)
+	{
+		if (build->m_side == mySide)
+		{
 			BuildListInfo *buildList = build->m_buildList->duplicate();
-			adjustBuildList(buildList); // adjust to  our start position.
+
+			Int sourceEntries = 0;
+			for (BuildListInfo *info = buildList; info; info = info->getNext())
+				++sourceEntries;
+
+			fprintf(stderr,
+			        "[AI-DIAG] matched-build-list playerIndex=%d side='%s' entries=%d\n",
+			        (int)m_player->getPlayerIndex(),
+			        mySide.str(),
+			        (int)sourceEntries);
+
+			adjustBuildList(buildList);
 			m_player->setBuildList(buildList);
 			computeCenterAndRadiusOfBase(&m_baseCenter, &m_baseRadius);
 			break;
 		}
 		build = build->m_next;
 	}
-	DEBUG_ASSERTLOG(build!=nullptr, ("Couldn't find build list for skirmish player."));
 
-	// Build any with the initially built flag.
-	for( BuildListInfo *info = m_player->getBuildList(); info; info = info->getNext() )
+	if (build == nullptr)
 	{
+		fprintf(stderr,
+		        "[AI-DIAG] missing-build-list playerIndex=%d side='%s' -- AI base construction cannot start\n",
+		        (int)m_player->getPlayerIndex(),
+		        mySide.str());
+	}
+
+	Int buildListCount = 0;
+	for (BuildListInfo *info = m_player->getBuildList(); info; info = info->getNext())
+	{
+		++buildListCount;
 		AsciiString name = info->getTemplateName();
-		if (name.isEmpty()) continue;
-		const ThingTemplate *bldgPlan = TheThingFactory->findTemplate( name );
-		if (!bldgPlan) {
-			DEBUG_LOG(("*** ERROR - Build list building '%s' doesn't exist.", name.str()));
+		if (name.isEmpty())
+			continue;
+
+		const ThingTemplate *bldgPlan = TheThingFactory->findTemplate(name);
+		if (!bldgPlan)
+		{
+			fprintf(stderr,
+			        "[AI-DIAG] missing-building-template playerIndex=%d side='%s' template='%s'\n",
+			        (int)m_player->getPlayerIndex(),
+			        mySide.str(),
+			        name.str());
 			continue;
 		}
-		if (info->isInitiallyBuilt()) {
-			buildStructureNow(bldgPlan, info);
-		} else {
-			info->incrementNumRebuilds(); // the initial build in the normal build list consumes a rebuild, so add one.
+
+		if (info->isInitiallyBuilt())
+		{
+			Object *built = buildStructureNow(bldgPlan, info);
+			fprintf(stderr,
+			        "[AI-DIAG] initial-building playerIndex=%d side='%s' template='%s' result=%s objectID=%u\n",
+			        (int)m_player->getPlayerIndex(),
+			        mySide.str(),
+			        name.str(),
+			        built != nullptr ? "ok" : "FAILED",
+			        built != nullptr ? (unsigned)built->getID() : 0u);
+		}
+		else
+		{
+			info->incrementNumRebuilds();
 		}
 	}
+
+	KindOfMaskType victoryBuildingMask;
+	victoryBuildingMask.set(KINDOF_MP_COUNT_FOR_VICTORY);
+	fprintf(stderr,
+	        "[AI-DIAG] new-map-complete playerIndex=%d side='%s' buildList=%d objects=%d units=%d victoryBuildings=%d\n",
+	        (int)m_player->getPlayerIndex(),
+	        mySide.str(),
+	        (int)buildListCount,
+	        m_player->hasAnyObjects() ? 1 : 0,
+	        m_player->hasAnyUnits() ? 1 : 0,
+	        m_player->hasAnyBuildings(victoryBuildingMask) ? 1 : 0);
 }
 
 //----------------------------------------------------------------------------------------------------------
