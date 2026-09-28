@@ -59,6 +59,14 @@ NSString *DocumentsFilePath(NSString *name)
             stringByAppendingPathComponent:name];
 }
 
+NSArray<NSString *> *DiagnosticSessionLogNames()
+{
+    NSMutableArray<NSString *> *names = [NSMutableArray arrayWithObject:@"generals-stderr.log"];
+    for (NSInteger index = 1; index <= 9; ++index)
+        [names addObject:[NSString stringWithFormat:@"generals-stderr-%02ld.log", (long)index]];
+    return names;
+}
+
 unsigned long long FileSizeAtPath(NSString *path)
 {
     NSDictionary<NSFileAttributeKey, id> *attributes =
@@ -766,22 +774,33 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     BOOL enhancedInstalled = ProfileDirectoryExists(@"enhanced");
     BOOL contraInstalled = ProfileDirectoryExists(@"contra-x");
 
-    NSString *currentLog = DocumentsFilePath(@"generals-stderr.log");
-    NSString *previousLog = DocumentsFilePath(@"generals-stderr-prev.log");
     NSString *settingsPath = IPadOverridesPath();
     NSString *contraSettingsPath = ContraSettingsPath();
-
-    BOOL currentLogExists = [[NSFileManager defaultManager] fileExistsAtPath:currentLog];
-    BOOL previousLogExists = [[NSFileManager defaultManager] fileExistsAtPath:previousLog];
     BOOL settingsExists = [[NSFileManager defaultManager] fileExistsAtPath:settingsPath];
     BOOL contraSettingsExists = [[NSFileManager defaultManager] fileExistsAtPath:contraSettingsPath];
 
+    NSString *currentLog = DocumentsFilePath(@"generals-stderr.log");
+    BOOL currentLogExists = [[NSFileManager defaultManager] fileExistsAtPath:currentLog];
     NSString *currentLogText = currentLogExists
         ? [NSString stringWithFormat:@"Yes (%@)", HumanReadableBytes(FileSizeAtPath(currentLog))]
         : @"No";
-    NSString *previousLogText = previousLogExists
-        ? [NSString stringWithFormat:@"Yes (%@)", HumanReadableBytes(FileSizeAtPath(previousLog))]
-        : @"No";
+
+    NSUInteger sessionLogCount = 0;
+    unsigned long long sessionLogBytes = 0;
+    for (NSString *name in DiagnosticSessionLogNames())
+    {
+        NSString *path = DocumentsFilePath(name);
+        if ([[NSFileManager defaultManager] fileExistsAtPath:path])
+        {
+            ++sessionLogCount;
+            sessionLogBytes += FileSizeAtPath(path);
+        }
+    }
+
+    NSString *sessionLogsText =
+        [NSString stringWithFormat:@"%lu/10 (%@)",
+                                   (unsigned long)sessionLogCount,
+                                   HumanReadableBytes(sessionLogBytes)];
 
     return [NSString stringWithFormat:
         @"APP\n"
@@ -802,8 +821,8 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
          "FILES\n"
          "iPad settings: %@\n"
          "Contra settings: %@\n"
-         "Current log: %@\n"
-         "Previous log: %@\n",
+         "Current session: %@\n"
+         "Session logs: %@\n",
         GX_PROJECT_VERSION,
         shortVersion,
         buildVersion,
@@ -822,7 +841,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
         settingsExists ? @"Present" : @"Missing",
         contraSettingsExists ? @"Present" : @"Missing",
         currentLogText,
-        previousLogText];
+        sessionLogsText];
 }
 
 - (void)buildDiagnostics
@@ -843,7 +862,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     UILabel *title = MakeLabel(@"Diagnostics", 26.0, UIFontWeightBold);
     title.textAlignment = NSTextAlignmentLeft;
 
-    UILabel *note = MakeLabel(@"Build, installed content and crash logs. GameData size is calculated in the background.", 13.0, UIFontWeightRegular);
+    UILabel *note = MakeLabel(@"Build, installed content and crash logs. The last 10 app sessions are kept automatically.", 13.0, UIFontWeightRegular);
     note.textAlignment = NSTextAlignmentLeft;
     note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
@@ -859,14 +878,18 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
     UIButton *refresh = MakeButton(@"Refresh", self, @selector(refreshDiagnostics));
     self.shareDiagnosticsButton = MakeButton(@"Share report + logs", self, @selector(shareDiagnostics));
+    UIButton *clearLogs = MakeButton(@"Clear logs", self, @selector(clearDiagnosticsLogs));
     UIButton *back = MakeButton(@"Back", self, @selector(hideDiagnostics));
 
-    [refresh.widthAnchor constraintEqualToConstant:180.0].active = YES;
+    clearLogs.backgroundColor = [UIColor colorWithRed:0.24 green:0.06 blue:0.06 alpha:1.0];
+
+    [refresh.widthAnchor constraintEqualToConstant:160.0].active = YES;
     [self.shareDiagnosticsButton.widthAnchor constraintEqualToConstant:220.0].active = YES;
-    [back.widthAnchor constraintEqualToConstant:180.0].active = YES;
+    [clearLogs.widthAnchor constraintEqualToConstant:160.0].active = YES;
+    [back.widthAnchor constraintEqualToConstant:160.0].active = YES;
 
     UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[
-        refresh, self.shareDiagnosticsButton, back
+        refresh, self.shareDiagnosticsButton, clearLogs, back
     ]];
     buttons.translatesAutoresizingMaskIntoConstraints = NO;
     buttons.axis = UILayoutConstraintAxisHorizontal;
@@ -946,6 +969,35 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     });
 }
 
+- (void)clearDiagnosticsLogs
+{
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"Clear diagnostic logs?"
+                                            message:@"This clears the current session log and all saved session logs."
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                             style:UIAlertActionStyleCancel
+                                           handler:nil]];
+
+    __weak GXProfileLauncherViewController *weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"Clear logs"
+                                             style:UIAlertActionStyleDestructive
+                                           handler:^(__unused UIAlertAction *action) {
+        GeneralsXClearIOSDiagnosticLogs();
+
+        GXProfileLauncherViewController *strongSelf = weakSelf;
+        if (strongSelf != nil)
+        {
+            strongSelf.diagnosticsScanRunning = NO;
+            [strongSelf refreshDiagnostics];
+        }
+    }]];
+
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+
 - (void)shareDiagnostics
 {
     NSMutableArray *items = [NSMutableArray array];
@@ -961,7 +1013,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     else
         [items addObject:self.diagnosticsText.text ?: @"Generals ZH diagnostics unavailable"];
 
-    for (NSString *name in @[@"generals-stderr.log", @"generals-stderr-prev.log"])
+    for (NSString *name in DiagnosticSessionLogNames())
     {
         NSString *path = DocumentsFilePath(name);
         if ([[NSFileManager defaultManager] fileExistsAtPath:path])

@@ -10,4 +10,7 @@
 // Returns one of: "vanilla", "enhanced", "contra-x".
 const char *GeneralsXRunIOSProfileLauncher();
 
+// Clears the current diagnostic log and all retained iOS session logs.
+void GeneralsXClearIOSDiagnosticLogs();
+
 #endif

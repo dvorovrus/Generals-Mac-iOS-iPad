@@ -729,6 +729,52 @@ static void InjectIOSProfileModArgument(const char *profileId)
     if (isContra)
         LogIOSProfileContents(selectedModPath);
 }
+
+static int g_iosDiagnosticLogFd = -1;
+static size_t g_iosDiagnosticLogWritten = 0;
+static bool g_iosDiagnosticLogCapMarked = false;
+
+static void IOSDiagnosticArchivePath(const char *home, int index, char *outPath, size_t outSize)
+{
+	snprintf(outPath, outSize, "%s/Documents/generals-stderr-%02d.log", home, index);
+}
+
+void GeneralsXClearIOSDiagnosticLogs()
+{
+	const char *home = getenv("HOME");
+	if (home == nullptr || home[0] == '\0')
+		return;
+
+	fflush(stderr);
+
+	for (int index = 1; index <= 9; ++index)
+	{
+		char archivePath[1024];
+		IOSDiagnosticArchivePath(home, index, archivePath, sizeof(archivePath));
+		remove(archivePath);
+	}
+
+	char legacyPrevPath[1024];
+	snprintf(legacyPrevPath, sizeof(legacyPrevPath), "%s/Documents/generals-stderr-prev.log", home);
+	remove(legacyPrevPath);
+
+	if (g_iosDiagnosticLogFd >= 0)
+	{
+		ftruncate(g_iosDiagnosticLogFd, 0);
+		lseek(g_iosDiagnosticLogFd, 0, SEEK_SET);
+		g_iosDiagnosticLogWritten = 0;
+		g_iosDiagnosticLogCapMarked = false;
+	}
+	else
+	{
+		char currentPath[1024];
+		snprintf(currentPath, sizeof(currentPath), "%s/Documents/generals-stderr.log", home);
+		remove(currentPath);
+	}
+
+	fprintf(stderr, "INFO: diagnostic log history cleared by user\n");
+}
+
 #endif
 
 int main(int argc, char* argv[])
@@ -741,85 +787,121 @@ int main(int argc, char* argv[])
 	__argv = argv;
 
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
-	// Diagnostic capture: an icon-launched app's stderr goes nowhere we can read,
-	// so mirror it to a file in Library/Caches (purgeable, not user-visible). This
-	// lets us pull a full engine log after an on-device session — essential for
-	// debugging mode-specific issues (e.g. Generals Challenge radar/scripts) that
-	// only the user can reproduce. Pull with: devicectl ... copy from
-	// Library/Caches/generals-stderr.log. Remove once the relevant bugs are fixed.
+	// Diagnostic capture: keep the current launch plus the nine previous app
+	// sessions in Documents. Each process launch is one session, so reproducing
+	// an intermittent crash no longer loses the useful log after reopening the app.
 	{
-		// Quiet DXVK at the source: the d3d8 layer's per-call warns (e.g. an
-		// unimplemented render state set every frame) wrote hundreds of MB per
-		// long session. The shipped dxvk.conf also sets logLevel=none; the env
-		// covers modules that read it before the config.
 		setenv("DXVK_LOG_LEVEL", "none", 0);
 		const char *diagHome = getenv("HOME");
-		if (diagHome != nullptr) {
+		if (diagHome != nullptr)
+		{
 			char diagPath[1024];
-			char prevPath[1024];
-			char prev2Path[1024];
-			char prev3Path[1024];
-			// Documents, not Library/Caches: Caches is purgeable (a device restart or
-			// storage pressure can empty it), and Documents is user-reachable via the
-			// Files app since the bundle enables UIFileSharingEnabled.
+			char legacyPrevPath[1024];
 			snprintf(diagPath, sizeof(diagPath), "%s/Documents/generals-stderr.log", diagHome);
-			// Keep the previous session's log: a session that ends in a memory kill
-			// leaves no OS crash report, so the prior log is often the only evidence.
-			snprintf(prevPath, sizeof(prevPath), "%s/Documents/generals-stderr-prev.log", diagHome);
-			snprintf(prev2Path, sizeof(prev2Path), "%s/Documents/generals-stderr-prev2.log", diagHome);
-			snprintf(prev3Path, sizeof(prev3Path), "%s/Documents/generals-stderr-prev3.log", diagHome);
-			// Keep four sessions total. A crash log used to be lost after two app
-			// launches because current -> prev overwrote the only retained session.
-			// Multiple retained generations make long-session crashes reproducible
-			// without requiring the user to copy the log before reopening the app.
-			unlink(prev3Path);
-			rename(prev2Path, prev3Path);
-			rename(prevPath, prev2Path);
-			rename(diagPath, prevPath);
-			// Filtered + capped sink instead of a raw freopen: per-frame debug spam
-			// (upstream [GX-ISSUE144] font traces, [INI] loader traces, residual DXVK
-			// warns) is dropped, and the file stops growing at 8 MB so a marathon
-			// session cannot eat device storage. funopen() is fine here: this is
-			// Darwin-only code.
-			static int s_logFd = -1;
-			s_logFd = open(diagPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (s_logFd >= 0) {
-				static size_t s_logWritten = 0;
+			snprintf(legacyPrevPath, sizeof(legacyPrevPath), "%s/Documents/generals-stderr-prev.log", diagHome);
+
+			bool hadArchiveHistory = false;
+			for (int index = 1; index <= 9; ++index)
+			{
+				char archivePath[1024];
+				IOSDiagnosticArchivePath(diagHome, index, archivePath, sizeof(archivePath));
+				if (access(archivePath, F_OK) == 0)
+				{
+					hadArchiveHistory = true;
+					break;
+				}
+			}
+
+			char oldestPath[1024];
+			IOSDiagnosticArchivePath(diagHome, 9, oldestPath, sizeof(oldestPath));
+			remove(oldestPath);
+			for (int index = 8; index >= 1; --index)
+			{
+				char sourcePath[1024];
+				char destinationPath[1024];
+				IOSDiagnosticArchivePath(diagHome, index, sourcePath, sizeof(sourcePath));
+				IOSDiagnosticArchivePath(diagHome, index + 1, destinationPath, sizeof(destinationPath));
+				if (access(sourcePath, F_OK) == 0)
+					rename(sourcePath, destinationPath);
+			}
+
+			const bool hadCurrentLog = access(diagPath, F_OK) == 0;
+			if (hadCurrentLog)
+			{
+				char newestArchivePath[1024];
+				IOSDiagnosticArchivePath(diagHome, 1, newestArchivePath, sizeof(newestArchivePath));
+				rename(diagPath, newestArchivePath);
+			}
+
+			// Migrate the old current/previous pair once when upgrading from the
+			// two-file scheme, preserving both sessions where possible.
+			if (access(legacyPrevPath, F_OK) == 0)
+			{
+				if (!hadArchiveHistory)
+				{
+					char migrationPath[1024];
+					IOSDiagnosticArchivePath(diagHome, hadCurrentLog ? 2 : 1, migrationPath, sizeof(migrationPath));
+					if (access(migrationPath, F_OK) != 0)
+						rename(legacyPrevPath, migrationPath);
+					else
+						remove(legacyPrevPath);
+				}
+				else
+				{
+					remove(legacyPrevPath);
+				}
+			}
+
+			g_iosDiagnosticLogFd = open(diagPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (g_iosDiagnosticLogFd >= 0)
+			{
+				g_iosDiagnosticLogWritten = 0;
+				g_iosDiagnosticLogCapMarked = false;
+
 				FILE *sink = funopen(nullptr,
 					nullptr,
 					[](void *, const char *buf, int len) -> int {
 						static const size_t kLogCap = 8u * 1024u * 1024u;
-						if (s_logFd < 0) return len;
+						if (g_iosDiagnosticLogFd < 0)
+							return len;
+
 						if (len > 13 &&
 						    (memcmp(buf, "[GX-ISSUE144]", 13) == 0 ||
 						     memcmp(buf, "[INI] ", 6) == 0 ||
-						     memcmp(buf, "warn:  D3D8De", 13) == 0)) {
-							return len;  // drop known per-frame spam, report consumed
+						     memcmp(buf, "warn:  D3D8De", 13) == 0))
+						{
+							return len;
 						}
-						if (s_logWritten >= kLogCap) {
-							// past the cap, still record errors — the tail of a dying
-							// session is this log's whole reason to exist
-							static bool s_capMarked = false;
-							if (!s_capMarked) {
-								s_capMarked = true;
+
+						if (g_iosDiagnosticLogWritten >= kLogCap)
+						{
+							if (!g_iosDiagnosticLogCapMarked)
+							{
+								g_iosDiagnosticLogCapMarked = true;
 								const char *mark = "[log capped: non-error lines dropped from here]\n";
-								write(s_logFd, mark, strlen(mark));
+								write(g_iosDiagnosticLogFd, mark, strlen(mark));
 							}
-							if (len > 4 && (memcmp(buf, "err:", 4) == 0 ||
-							                memcmp(buf, "ERROR", 5) == 0 ||
-							                memcmp(buf, "FATAL", 5) == 0)) {
-								write(s_logFd, buf, (size_t)len);
+							if (len > 4 &&
+							    (memcmp(buf, "err:", 4) == 0 ||
+							     memcmp(buf, "ERROR", 5) == 0 ||
+							     memcmp(buf, "FATAL", 5) == 0))
+							{
+								write(g_iosDiagnosticLogFd, buf, (size_t)len);
 							}
 							return len;
 						}
-						ssize_t w = write(s_logFd, buf, (size_t)len);
-						if (w > 0) s_logWritten += (size_t)w;
+
+						ssize_t written = write(g_iosDiagnosticLogFd, buf, (size_t)len);
+						if (written > 0)
+							g_iosDiagnosticLogWritten += (size_t)written;
 						return len;
 					},
 					nullptr, nullptr);
-				if (sink != nullptr) {
-					*stderr = *sink;  // classic Darwin stderr swap; stderr is a FILE, not a macro here
-					setvbuf(stderr, nullptr, _IOLBF, 0);  // line-buffered so a crash still flushes recent lines
+
+				if (sink != nullptr)
+				{
+					*stderr = *sink;
+					setvbuf(stderr, nullptr, _IOLBF, 0);
 				}
 			}
 		}
