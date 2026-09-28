@@ -1074,6 +1074,7 @@ int main(int argc, char* argv[])
 		// GeneralsX @feature dvorovrus 25/09/2026 Show the bundled Vite launcher
 		// before command-line parsing, then inject the selected profile through
 		// the engine's native -mod directory support.
+		GeneralsXSetIOSDiagnosticClearCallback(GeneralsXClearIOSDiagnosticLogs);
 		const char *selectedProfile = GeneralsXRunIOSProfileLauncher();
 		fprintf(stderr, "INFO: iOS launcher selected profile: %s\n",
 		        selectedProfile != nullptr ? selectedProfile : "vanilla");
