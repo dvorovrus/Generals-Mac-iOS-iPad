@@ -37,6 +37,7 @@ namespace
 {
 std::atomic<bool> gLauncherFinished(false);
 char gSelectedProfile[32] = "vanilla";
+GeneralsXIOSDiagnosticClearCallback gDiagnosticClearCallback = nullptr;
 
 NSString *ShortBuildIdentifier(const char *raw)
 {
@@ -409,6 +410,11 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UIButton *shareDiagnosticsButton;
 @property(nonatomic, assign) BOOL diagnosticsScanRunning;
 @end
+
+void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback callback)
+{
+    gDiagnosticClearCallback = callback;
+}
 
 @implementation GXProfileLauncherViewController
 
@@ -984,16 +990,15 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     [alert addAction:[UIAlertAction actionWithTitle:@"Clear logs"
                                              style:UIAlertActionStyleDestructive
                                            handler:^(__unused UIAlertAction *action) {
-        if (GeneralsXClearIOSDiagnosticLogs != nullptr)
+        if (gDiagnosticClearCallback != nullptr)
         {
-            // Full shell: reset the live logger FD and its size/cap bookkeeping.
-            GeneralsXClearIOSDiagnosticLogs();
+            // Full shell: ask the engine to reset its live logger FD and size/cap bookkeeping.
+            gDiagnosticClearCallback();
         }
         else
         {
-            // Launcher-only fast builds can be overlaid on the previous successful
-            // engine, which does not know this symbol yet. Clear visible files so
-            // the diagnostics action still works without making the fast linker fail.
+            // Launcher-only fast builds can be overlaid on an older successful shell.
+            // In that case no callback is installed, so clear only the visible files.
             NSFileManager *fileManager = [NSFileManager defaultManager];
             for (NSString *name in DiagnosticSessionLogNames())
                 [fileManager removeItemAtPath:DocumentsFilePath(name) error:nil];
