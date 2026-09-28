@@ -519,7 +519,9 @@ struct MacLauncherView: View {
             if !model.status.isEmpty {
                 Text(model.status)
                     .font(.caption)
-                    .foregroundStyle(model.status.hasPrefix("Save failed") ? .red : .secondary)
+                    .foregroundColor(model.status.hasPrefix("Save failed")
+                        ? Color.red
+                        : Color(nsColor: .secondaryLabelColor))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
