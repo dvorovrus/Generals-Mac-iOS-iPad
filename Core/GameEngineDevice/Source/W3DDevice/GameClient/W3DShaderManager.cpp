@@ -73,7 +73,10 @@
 #include "Common/GameLOD.h"
 #include "d3dx8tex.h"
 #include "dx8caps.h"
-#if defined(__APPLE__)\n#include <TargetConditionals.h>\n#endif\n
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 
 // Turn this on to turn off pixel shaders. jba[4/3/2003]
 #define do_not_DISABLE_PIXEL_SHADERS 1
