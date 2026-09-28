@@ -73,7 +73,7 @@
 #include "Common/GameLOD.h"
 #include "d3dx8tex.h"
 #include "dx8caps.h"
-
+#if defined(__APPLE__)\n#include <TargetConditionals.h>\n#endif\n
 
 // Turn this on to turn off pixel shaders. jba[4/3/2003]
 #define do_not_DISABLE_PIXEL_SHADERS 1
@@ -1982,6 +1982,17 @@ Int TerrainShaderPixelShader::init()
 #ifdef DISABLE_PIXEL_SHADERS
 	return false;
 #endif
+
+#if defined(__APPLE__) && !(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
+	// DXVK/MoltenVK on macOS accepts the legacy terrain pixel shaders, but the
+	// projected texture transform used by the moving cloud/noise layer is not
+	// reflected visually. The fixed-function multi-pass terrain path uses the
+	// same textures and offsets without that pixel-shader compatibility gap.
+	// Keep iOS unchanged; this workaround is macOS-only.
+	fprintf(stderr, "[CLOUD-DIAG] macOS: forcing 2-stage terrain shader path for moving cloud projection\n");
+	return terrainShader2Stage.init();
+#endif
+
 	//this shader will also use the 2Stage shader for some of the passes so initialize it too.
 	if (terrainShader2Stage.init() && (res=W3DShaderManager::getChipset()) >= DC_GENERIC_PIXEL_SHADER_1_1)
 	{
