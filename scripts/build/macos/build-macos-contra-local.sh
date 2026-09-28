@@ -119,17 +119,15 @@ test -f "${GAME_BIN}" || {
 
 if [[ ! -d "${APP}" ]]; then
   echo "==> First local package"
-  detect_vulkan_sdk || {
-    echo "ERROR: VULKAN_SDK is required for the first local package."
-    exit 6
-  }
-  bash "${ROOT}/scripts/build/macos/package-macos-contra-dev.sh"
 else
-  echo "==> Refreshing existing app bundle"
-  cp "${GAME_BIN}" "${APP}/Contents/Resources/bin/GeneralsXZH"
-  chmod +x "${APP}/Contents/Resources/bin/GeneralsXZH"
-  codesign --force --deep --sign - "${APP}"
+  echo "==> Refreshing app bundle and native macOS launcher"
 fi
+
+detect_vulkan_sdk || {
+  echo "ERROR: VULKAN_SDK is required to package the macOS app."
+  exit 6
+}
+bash "${ROOT}/scripts/build/macos/package-macos-contra-dev.sh"
 
 echo
 echo "READY"
