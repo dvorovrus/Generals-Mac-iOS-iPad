@@ -285,7 +285,7 @@ final class MacLauncherModel: ObservableObject {
             let ext = source.pathExtension.lowercased()
             var targetName = source.lastPathComponent
             if ext == "big" || ext == "ctr" {
-                var logical = source.deletingPathExtension().lastPathComponent.lowercased() + ".ctr"
+                let logical = source.deletingPathExtension().lastPathComponent.lowercased() + ".ctr"
                 let active = archiveShouldBeActive(logical, distributedActive: ext == "big", settings: settings)
                 targetName = source.deletingPathExtension().lastPathComponent + (active ? ".big" : ".ctr")
 
