@@ -1123,13 +1123,10 @@ int main(int argc, char* argv[])
 		// Create SDL3 window with Vulkan support
 		fprintf(stderr, "INFO: Creating SDL3 Vulkan window...\n");
 		Uint32 windowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;  // Start hidden, show after D3D init
-#if defined(__APPLE__)
-		// Request a native-resolution drawable on every Apple Retina display.
-		// macOS mouse/window coordinates are expressed in logical points, while the
-		// Vulkan swapchain should use backing pixels. Without HIGH_PIXEL_DENSITY the
-		// game can render its high internal resolution into a low-density 1440x900
-		// drawable and macOS then scales it to the 2560x1600 panel, which makes the
-		// shell background and fonts visibly soft.
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+		// Request a native-resolution Metal drawable (e.g. 2868x1320 instead of the
+		// 956x440 point size). Without this the swapchain renders at point size and
+		// the display upscales 3x, visibly blurring textures and terrain.
 		windowFlags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #endif
 		TheSDL3Window = SDL_CreateWindow(
