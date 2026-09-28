@@ -1,0 +1,1 @@
+Trigger iOS 26/27 patched build. The workflow applies ios27-adapter-guard-and-dxvk-debug.patch before compiling.
