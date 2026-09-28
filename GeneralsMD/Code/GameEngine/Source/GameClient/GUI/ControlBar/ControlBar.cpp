@@ -3882,15 +3882,9 @@ GameFont *ControlBar::overrideTooltipGadgetFont( GameWindow *win )
 	if( TheGlobalLanguageData && TheGlobalLanguageData->m_unicodeFontName.isNotEmpty() )
 		fontName = TheGlobalLanguageData->m_unicodeFontName;
 
-	// The tooltip used to request a raw 12pt font, bypassing the normal
-	// resolution-aware font scaling. At high internal resolutions (especially
-	// macOS 2560x1600 rendered into a 1440x900 swapchain) that produced a tiny
-	// glyph atlas which was then downsampled again and looked visibly blurry.
-	Int pointSize = 12;
-	if( TheGlobalLanguageData )
-		pointSize = TheGlobalLanguageData->adjustFontSize( pointSize );
-
-	GameFont *newFont = TheFontLibrary->getFont( fontName, pointSize, FALSE );
+	// Keep the original tooltip geometry. Font sharpness on macOS must be solved
+	// in the presentation/backbuffer path rather than by inflating point size.
+	GameFont *newFont = TheFontLibrary->getFont( fontName, 12, FALSE );
 	if( !newFont )
 		return nullptr;
 
