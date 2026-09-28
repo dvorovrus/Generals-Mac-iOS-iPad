@@ -26,7 +26,7 @@ MAC_LAUNCHER_BIN="${BIN}/GeneralsXMacLauncher"
 if [[ -f "${MAC_LAUNCHER_SRC}" ]]; then
   command -v xcrun >/dev/null 2>&1 || { echo "ERROR: xcrun is required to build the macOS launcher"; exit 1; }
   echo "==> Building native macOS launcher"
-  xcrun swiftc -O -framework SwiftUI -framework AppKit "${MAC_LAUNCHER_SRC}" -o "${MAC_LAUNCHER_BIN}"
+  xcrun swiftc -parse-as-library -O -framework SwiftUI -framework AppKit "${MAC_LAUNCHER_SRC}" -o "${MAC_LAUNCHER_BIN}"
   chmod +x "${MAC_LAUNCHER_BIN}"
 fi
 
