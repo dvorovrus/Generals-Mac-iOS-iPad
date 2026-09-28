@@ -1618,6 +1618,23 @@ void TerrainShader2Stage::updateCloud()
 	// Keep offsets bounded while preserving negative scrolling.
 	m_xOffset -= (Int)m_xOffset;
 	m_yOffset -= (Int)m_yOffset;
+
+	// Keep this deliberately tiny: enough to prove whether the option reaches
+	// the terrain renderer and whether the UV offsets actually advance, without
+	// flooding the already large runtime log.
+	static UnsignedInt cloudDiagUpdates = 0;
+	++cloudDiagUpdates;
+	if (cloudDiagUpdates == 1 || cloudDiagUpdates == 120 || cloudDiagUpdates == 300)
+	{
+		fprintf(stderr,
+		        "[CLOUD-DIAG] update=%u dt=%.6f offset=%.6f,%.6f slide=%.6f,%.6f\n",
+		        (unsigned)cloudDiagUpdates,
+		        (double)frame_time,
+		        (double)m_xOffset,
+		        (double)m_yOffset,
+		        (double)m_xSlidePerSecond,
+		        (double)m_ySlidePerSecond);
+	}
 }
 
 void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curViewInverse, Bool doUpdate)
