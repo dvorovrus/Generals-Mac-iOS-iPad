@@ -29,6 +29,8 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+
+#include <cstdio>
 #include "Common/GameMemory.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -66,6 +68,22 @@
 #define SUPPLY_CENTER_CLOSE_DIST (20*PATHFIND_CELL_SIZE_F)
 
 #define USE_DOZER 1
+
+static const char *aiLegalBuildCodeName(LegalBuildCode code)
+{
+	switch (code)
+	{
+		case LBC_OK: return "OK";
+		case LBC_RESTRICTED_TERRAIN: return "RESTRICTED_TERRAIN";
+		case LBC_NOT_FLAT_ENOUGH: return "NOT_FLAT_ENOUGH";
+		case LBC_OBJECTS_IN_THE_WAY: return "OBJECTS_IN_THE_WAY";
+		case LBC_NO_CLEAR_PATH: return "NO_CLEAR_PATH";
+		case LBC_SHROUD: return "SHROUD";
+		case LBC_TOO_CLOSE_TO_SUPPLIES: return "TOO_CLOSE_TO_SUPPLIES";
+		case LBC_GENERIC_FAILURE: return "GENERIC_FAILURE";
+		default: return "UNKNOWN";
+	}
+}
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -515,124 +533,214 @@ Object *AIPlayer::buildStructureNow(const ThingTemplate *bldgPlan, BuildListInfo
 // ------------------------------------------------------------------------------------------------
 Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildListInfo *info)
 {
+	// Keep the detailed placement trace bounded. One failed Contra build attempt
+	// used to provide only "FAILED", which did not reveal whether terrain,
+	// overlap, pathing, prerequisites, or the final build call was responsible.
+	static Int s_skirmishBuildDiagBudget = 32;
+	const Bool traceBuild = isSkirmishAI() && s_skirmishBuildDiagBudget > 0;
+	if (traceBuild)
+		--s_skirmishBuildDiagBudget;
+
 	// Find a dozer.
 	Object *dozer = findDozer(info->getLocation());
-	if (dozer==nullptr) {
+	if (dozer == nullptr)
+	{
+		if (traceBuild)
+		{
+			const Coord3D *target = info->getLocation();
+			fprintf(stderr,
+			        "[AI-PLACE] template='%s' stage=find-dozer result=FAILED target=%.1f,%.1f,%.1f\n",
+			        bldgPlan->getName().str(),
+			        (double)target->x, (double)target->y, (double)target->z);
+		}
 		return nullptr;
 	}
+
 	// Check available funds.
 	Money *money = m_player->getMoney();
-	if (money->countMoney()<bldgPlan->calcCostToBuild(m_player)) {
+	const Int buildCost = bldgPlan->calcCostToBuild(m_player);
+	if (money->countMoney() < buildCost)
+	{
+		if (traceBuild)
+			fprintf(stderr,
+			        "[AI-PLACE] template='%s' stage=money result=FAILED money=%d cost=%d\n",
+			        bldgPlan->getName().str(), (int)money->countMoney(), (int)buildCost);
 		return nullptr;
 	}
-	// construct the building
+
+	// Construct the building.
 	Coord3D pos = *info->getLocation();
 	pos.z += TheTerrainLogic->getGroundHeight(pos.x, pos.y);
-	if( !dozer->getAIUpdateInterface() )
+	if (!dozer->getAIUpdateInterface())
 	{
+		if (traceBuild)
+			fprintf(stderr,
+			        "[AI-PLACE] template='%s' stage=dozer-ai result=FAILED dozer=%u\n",
+			        bldgPlan->getName().str(), (unsigned)dozer->getID());
 		return nullptr;
 	}
+
 	Real angle = info->getAngle();
- 	if( TheBuildAssistant->isLocationLegalToBuild( &pos, bldgPlan, angle,
-																								 BuildAssistant::NO_ENEMY_OBJECT_OVERLAP,
-																								 dozer, m_player ) != LBC_OK ) {
-		// If there's enemy units or structures, don't build/rebuild.
-		TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
+	if (traceBuild)
+	{
+		const Coord3D *dozerPos = dozer->getPosition();
+		fprintf(stderr,
+		        "[AI-PLACE] template='%s' begin target=%.1f,%.1f,%.1f angle=%.3f dozer=%u dozerPos=%.1f,%.1f,%.1f money=%d cost=%d\n",
+		        bldgPlan->getName().str(),
+		        (double)pos.x, (double)pos.y, (double)pos.z, (double)angle,
+		        (unsigned)dozer->getID(),
+		        (double)dozerPos->x, (double)dozerPos->y, (double)dozerPos->z,
+		        (int)money->countMoney(), (int)buildCost);
+	}
+
+	LegalBuildCode enemyOverlapCode = TheBuildAssistant->isLocationLegalToBuild(
+		&pos, bldgPlan, angle, BuildAssistant::NO_ENEMY_OBJECT_OVERLAP, dozer, m_player );
+	if (enemyOverlapCode != LBC_OK)
+	{
+		if (traceBuild)
+			fprintf(stderr,
+			        "[AI-PLACE] template='%s' stage=enemy-overlap result=FAILED code=%d(%s) target=%.1f,%.1f,%.1f\n",
+			        bldgPlan->getName().str(), (int)enemyOverlapCode, aiLegalBuildCodeName(enemyOverlapCode),
+			        (double)pos.x, (double)pos.y, (double)pos.z);
+		TheTerrainVisual->removeAllBibs();
 		return nullptr;
 	}
 
-	// validate the the position to build at is valid
-	if( TheBuildAssistant->isLocationLegalToBuild( &pos, bldgPlan, angle,
-																								 BuildAssistant::CLEAR_PATH |
-																								 BuildAssistant::TERRAIN_RESTRICTIONS |
-																								 BuildAssistant::NO_OBJECT_OVERLAP,
-																								 dozer, m_player ) != LBC_OK ) {
-			// Warn.
-			AsciiString bldgName = bldgPlan->getName();
-			bldgName.concat(" - Dozer unable to place.  Attempting to adjust position.");
-			TheScriptEngine->AppendDebugMessage(bldgName, false);
-			// try to fix.
-			Real posOffset;
-			Bool valid = false;
-			// Wiggle it a little :)
-			Real limit = 10*PATHFIND_CELL_SIZE_F;
-			if (isSkirmishAI()) {
-				limit = 120*PATHFIND_CELL_SIZE_F;
-			}
-			Coord3D newPos = pos;
-			for (posOffset = 0; posOffset<limit; posOffset += 2*PATHFIND_CELL_SIZE_F) {
-				if (isSkirmishAI()) {
-					posOffset += 2*PATHFIND_CELL_SIZE_F;
-				}
-				Real offset = posOffset/2;
-				Real xPos, yPos;
-				yPos = pos.y-offset;
-				for (xPos = pos.x-offset; xPos <= pos.x+offset; xPos+=PATHFIND_CELL_SIZE_F) {
-					if (isSkirmishAI()) xPos += PATHFIND_CELL_SIZE_F;
-					newPos.x = xPos;
-					newPos.y = yPos;
-					valid = TheBuildAssistant->isLocationLegalToBuild( &newPos, bldgPlan, angle,
-																							 BuildAssistant::CLEAR_PATH |
-																							 BuildAssistant::TERRAIN_RESTRICTIONS |
-																							 BuildAssistant::NO_OBJECT_OVERLAP,
-																							 dozer, m_player ) == LBC_OK;
-					if (valid) break;
-					newPos.y = yPos+posOffset;
-					valid = TheBuildAssistant->isLocationLegalToBuild( &newPos, bldgPlan, angle,
-																							 BuildAssistant::CLEAR_PATH |
-																							 BuildAssistant::TERRAIN_RESTRICTIONS |
-																							 BuildAssistant::NO_OBJECT_OVERLAP,
-																							 dozer, m_player ) == LBC_OK;
-				}
-				if (valid) break;
-				xPos = pos.x-offset;
-				for (yPos = pos.y-offset; yPos <= pos.y+offset; yPos+=PATHFIND_CELL_SIZE_F) {
-					if (isSkirmishAI()) yPos += PATHFIND_CELL_SIZE_F;
-					newPos.x = xPos;
-					newPos.y = yPos;
-					valid = TheBuildAssistant->isLocationLegalToBuild( &newPos, bldgPlan, angle,
-																							 BuildAssistant::CLEAR_PATH |
-																							 BuildAssistant::TERRAIN_RESTRICTIONS |
-																							 BuildAssistant::NO_OBJECT_OVERLAP,
-																							 dozer, m_player ) == LBC_OK;
-					if (valid) break;
-					newPos.x = xPos+posOffset;
-					valid = TheBuildAssistant->isLocationLegalToBuild( &newPos, bldgPlan, angle,
-																							 BuildAssistant::CLEAR_PATH |
-																							 BuildAssistant::TERRAIN_RESTRICTIONS |
-																							 BuildAssistant::NO_OBJECT_OVERLAP,
-																							 dozer, m_player ) == LBC_OK;
-				}
-				if (valid) break;
-			}
-			if (valid) pos = newPos;
-			if (!valid) {
-				valid = TheBuildAssistant->isLocationLegalToBuild( &pos, bldgPlan, angle,
-																						 BuildAssistant::NO_ENEMY_OBJECT_OVERLAP,
-																						 dozer, m_player ) == LBC_OK;
-				if (!valid) {
-					return nullptr;
-				}
-			}
+	// Validate the requested build-list position.
+	LegalBuildCode fullPlacementCode = TheBuildAssistant->isLocationLegalToBuild(
+		&pos, bldgPlan, angle,
+		BuildAssistant::CLEAR_PATH |
+		BuildAssistant::TERRAIN_RESTRICTIONS |
+		BuildAssistant::NO_OBJECT_OVERLAP,
+		dozer, m_player );
 
+	if (fullPlacementCode != LBC_OK)
+	{
+		if (traceBuild)
+			fprintf(stderr,
+			        "[AI-PLACE] template='%s' stage=full-placement result=FAILED code=%d(%s) target=%.1f,%.1f,%.1f\n",
+			        bldgPlan->getName().str(), (int)fullPlacementCode, aiLegalBuildCodeName(fullPlacementCode),
+			        (double)pos.x, (double)pos.y, (double)pos.z);
+
+		AsciiString bldgName = bldgPlan->getName();
+		bldgName.concat(" - Dozer unable to place.  Attempting to adjust position.");
+		TheScriptEngine->AppendDebugMessage(bldgName, false);
+
+		Real posOffset;
+		Bool valid = false;
+		Real limit = 10 * PATHFIND_CELL_SIZE_F;
+		if (isSkirmishAI())
+			limit = 120 * PATHFIND_CELL_SIZE_F;
+
+		Coord3D newPos = pos;
+		for (posOffset = 0; posOffset < limit; posOffset += 2 * PATHFIND_CELL_SIZE_F)
+		{
+			if (isSkirmishAI())
+				posOffset += 2 * PATHFIND_CELL_SIZE_F;
+
+			Real offset = posOffset / 2;
+			Real xPos, yPos;
+			yPos = pos.y - offset;
+
+			for (xPos = pos.x - offset; xPos <= pos.x + offset; xPos += PATHFIND_CELL_SIZE_F)
+			{
+				if (isSkirmishAI())
+					xPos += PATHFIND_CELL_SIZE_F;
+				newPos.x = xPos;
+				newPos.y = yPos;
+				valid = TheBuildAssistant->isLocationLegalToBuild(
+					&newPos, bldgPlan, angle,
+					BuildAssistant::CLEAR_PATH | BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP,
+					dozer, m_player ) == LBC_OK;
+				if (valid)
+					break;
+				newPos.y = yPos + posOffset;
+				valid = TheBuildAssistant->isLocationLegalToBuild(
+					&newPos, bldgPlan, angle,
+					BuildAssistant::CLEAR_PATH | BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP,
+					dozer, m_player ) == LBC_OK;
+			}
+			if (valid)
+				break;
+
+			xPos = pos.x - offset;
+			for (yPos = pos.y - offset; yPos <= pos.y + offset; yPos += PATHFIND_CELL_SIZE_F)
+			{
+				if (isSkirmishAI())
+					yPos += PATHFIND_CELL_SIZE_F;
+				newPos.x = xPos;
+				newPos.y = yPos;
+				valid = TheBuildAssistant->isLocationLegalToBuild(
+					&newPos, bldgPlan, angle,
+					BuildAssistant::CLEAR_PATH | BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP,
+					dozer, m_player ) == LBC_OK;
+				if (valid)
+					break;
+				newPos.x = xPos + posOffset;
+				valid = TheBuildAssistant->isLocationLegalToBuild(
+					&newPos, bldgPlan, angle,
+					BuildAssistant::CLEAR_PATH | BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP,
+					dozer, m_player ) == LBC_OK;
+			}
+			if (valid)
+				break;
+		}
+
+		if (valid)
+		{
+			pos = newPos;
+			if (traceBuild)
+				fprintf(stderr,
+				        "[AI-PLACE] template='%s' stage=wiggle result=OK relocated=%.1f,%.1f,%.1f\n",
+				        bldgPlan->getName().str(), (double)pos.x, (double)pos.y, (double)pos.z);
+		}
+		else
+		{
+			LegalBuildCode fallbackCode = TheBuildAssistant->isLocationLegalToBuild(
+				&pos, bldgPlan, angle, BuildAssistant::NO_ENEMY_OBJECT_OVERLAP, dozer, m_player );
+			if (fallbackCode != LBC_OK)
+			{
+				if (traceBuild)
+					fprintf(stderr,
+					        "[AI-PLACE] template='%s' stage=wiggle-fallback result=FAILED code=%d(%s) target=%.1f,%.1f,%.1f\n",
+					        bldgPlan->getName().str(), (int)fallbackCode, aiLegalBuildCodeName(fallbackCode),
+					        (double)pos.x, (double)pos.y, (double)pos.z);
+				return nullptr;
+			}
+			if (traceBuild)
+				fprintf(stderr,
+				        "[AI-PLACE] template='%s' stage=wiggle-fallback result=ACCEPTED target=%.1f,%.1f,%.1f\n",
+				        bldgPlan->getName().str(), (double)pos.x, (double)pos.y, (double)pos.z);
+		}
 	}
 
-	TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
-	if (!TheAI->pathfinder()->clientSafeQuickDoesPathExist(dozer->getAI()->getLocomotorSet(),
-		dozer->getPosition(), &pos)) {
+	TheTerrainVisual->removeAllBibs();
+
+	const Bool pathExists = TheAI->pathfinder()->clientSafeQuickDoesPathExist(
+		dozer->getAI()->getLocomotorSet(), dozer->getPosition(), &pos );
+	if (traceBuild)
+		fprintf(stderr,
+		        "[AI-PLACE] template='%s' stage=path result=%s target=%.1f,%.1f,%.1f\n",
+		        bldgPlan->getName().str(), pathExists ? "OK" : "FAILED",
+		        (double)pos.x, (double)pos.y, (double)pos.z);
+
+	if (!pathExists)
+	{
 		AsciiString bldgName = bldgPlan->getName();
 		bldgName.concat(" - Dozer unable to reach building.  Teleporting.");
 		TheScriptEngine->AppendDebugMessage(bldgName, false);
 		dozer->setPosition(&pos);
 	}
 
-	Object *bldg = TheBuildAssistant->buildObjectNow( dozer,
-																						bldgPlan,
-																						&pos,
-																						angle,
-																						m_player );
+	Object *bldg = TheBuildAssistant->buildObjectNow(
+		dozer, bldgPlan, &pos, angle, m_player );
 
-
+	if (traceBuild)
+		fprintf(stderr,
+		        "[AI-PLACE] template='%s' stage=buildObjectNow result=%s objectID=%u final=%.1f,%.1f,%.1f\n",
+		        bldgPlan->getName().str(), bldg ? "OK" : "FAILED",
+		        bldg ? (unsigned)bldg->getID() : 0u,
+		        (double)pos.x, (double)pos.y, (double)pos.z);
 
 #if defined(RTS_DEBUG)
 	if (TheGlobalData->m_debugAI == AI_DEBUG_PATHS)
@@ -662,42 +770,42 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 			myPos.y = dozer->getPosition()->y + (pos.y-dozer->getPosition()->y)*i/count;
 			myPos.z = TheTerrainLogic->getGroundHeight( myPos.x, myPos.y ) + 0.5f;
 			addIcon(&myPos, PATHFIND_CELL_SIZE_F/2, 120, color);
-
 		}
 	}
 #endif
 
-	// store the object with the build order
+	// Store the object with the build order.
 	if (bldg)
 	{
 		ExitInterface *exitInterface = bldg->getObjectExitInterface();
-		if( exitInterface )
+		if (exitInterface)
 		{
 			Coord3D rallyPoint;
 			Bool gotOffset = false;
-			if (fabs(info->getRallyOffset()->x) > 1.0f || fabs(info->getRallyOffset()->y)>1.0f) {
-				gotOffset;
-			}
-			if (!exitInterface->getNaturalRallyPoint(rallyPoint)) {
+			if (fabs(info->getRallyOffset()->x) > 1.0f || fabs(info->getRallyOffset()->y) > 1.0f)
+				gotOffset = true;
+			if (!exitInterface->getNaturalRallyPoint(rallyPoint))
 				rallyPoint = *info->getLocation();
-			}
-			if (gotOffset) {
+			if (gotOffset)
+			{
 				rallyPoint.x += info->getRallyOffset()->x;
 				rallyPoint.y += info->getRallyOffset()->y;
 				exitInterface->setRallyPoint(&rallyPoint);
 			}
 		}
-		info->setObjectID( bldg->getID() );
-		info->setObjectTimestamp( TheGameLogic->getFrame()+1 );	// Has to be non-zero, so add 1.
+		info->setObjectID(bldg->getID());
+		info->setObjectTimestamp(TheGameLogic->getFrame() + 1);
 		info->setUnderConstruction(true);
 
-		if (TheGlobalData->m_debugAI) {
+		if (TheGlobalData->m_debugAI)
+		{
 			AsciiString bldgName = bldgPlan->getName();
 			bldgName.concat(" - Building started.");
 			TheScriptEngine->AppendDebugMessage(bldgName, false);
 		}
 	}
-	TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
+
+	TheTerrainVisual->removeAllBibs();
 	return bldg;
 }
 
