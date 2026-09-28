@@ -21,6 +21,15 @@ test -f "${GAME_BIN}" || { echo "ERROR: missing ${GAME_BIN}"; exit 1; }
 cp "${GAME_BIN}" "${BIN}/GeneralsXZH"
 chmod +x "${BIN}/GeneralsXZH"
 
+MAC_LAUNCHER_SRC="${ROOT}/scripts/build/macos/MacLauncher.swift"
+MAC_LAUNCHER_BIN="${BIN}/GeneralsXMacLauncher"
+if [[ -f "${MAC_LAUNCHER_SRC}" ]]; then
+  command -v xcrun >/dev/null 2>&1 || { echo "ERROR: xcrun is required to build the macOS launcher"; exit 1; }
+  echo "==> Building native macOS launcher"
+  xcrun swiftc -O -framework SwiftUI -framework AppKit "${MAC_LAUNCHER_SRC}" -o "${MAC_LAUNCHER_BIN}"
+  chmod +x "${MAC_LAUNCHER_BIN}"
+fi
+
 cat > "${CONTENTS}/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -141,7 +150,9 @@ RES="${CONTENTS}/Resources"
 BIN="${RES}/bin"
 LIB="${RES}/lib"
 GAME_ROOT="${GX_GAME_ROOT:-${HOME}/GeneralsX/GeneralsZH}"
-MOD_ROOT="${GX_CONTRA_ROOT:-${HOME}/GeneralsX/ContraX}"
+SOURCE_MOD_ROOT="${GX_CONTRA_ROOT:-${HOME}/GeneralsX/ContraX}"
+RUNTIME_MOD_ROOT="${HOME}/GeneralsX/ContraRuntime"
+OPTIONS_FILE="${HOME}/Library/Application Support/GeneralsX/GeneralsZH/Options.ini"
 LOG_DIR="${HOME}/Library/Logs/GeneralsXZH"
 mkdir -p "${LOG_DIR}"
 LOG="${LOG_DIR}/contra-dev.log"
@@ -162,9 +173,28 @@ if [[ ! -d "${GAME_ROOT}" || -z "$(find "${GAME_ROOT}" -name '*.big' -print -qui
   osascript -e 'display alert "Generals ZH data not installed" message "Run Install Contra Data.command once and select your GeneralsZH-ContraX-unsigned.ipa." as critical' >/dev/null 2>&1 || true
   exit 2
 fi
-if [[ ! -d "${MOD_ROOT}" ]]; then
+if [[ ! -d "${SOURCE_MOD_ROOT}" ]]; then
   osascript -e 'display alert "Contra X profile not installed" message "Run Install Contra Data.command once and select your Contra IPA." as critical' >/dev/null 2>&1 || true
   exit 3
+fi
+
+# Native settings launcher. It writes Options.ini/SagePatch.ini and builds the
+# selected Contra archive overlay without modifying the installed source profile.
+if [[ "${GX_SKIP_MAC_LAUNCHER:-0}" != "1" && -x "${BIN}/GeneralsXMacLauncher" ]]; then
+  ACTION_FILE="${TMPDIR:-/tmp}/generalsx-mac-action-$"
+  rm -f "${ACTION_FILE}"
+  export GX_MAC_LAUNCH_ACTION_FILE="${ACTION_FILE}"
+  "${BIN}/GeneralsXMacLauncher"
+  if [[ ! -f "${ACTION_FILE}" || "$(tr -d '[:space:]' < "${ACTION_FILE}")" != "play" ]]; then
+    rm -f "${ACTION_FILE}"
+    exit 0
+  fi
+  rm -f "${ACTION_FILE}"
+fi
+
+MOD_ROOT="${SOURCE_MOD_ROOT}"
+if [[ -d "${RUNTIME_MOD_ROOT}" && -n "$(find "${RUNTIME_MOD_ROOT}" -maxdepth 1 -name '*.big' -print -quit 2>/dev/null)" ]]; then
+  MOD_ROOT="${RUNTIME_MOD_ROOT}"
 fi
 
 cd "${GAME_ROOT}"
@@ -172,12 +202,21 @@ cd "${GAME_ROOT}"
   echo
   echo "===== $(date) ====="
   echo "GameRoot=${GAME_ROOT}"
+  echo "ContraSource=${SOURCE_MOD_ROOT}"
   echo "ContraRoot=${MOD_ROOT}"
   echo "Binary=${BIN}/GeneralsXZH"
 } >> "${LOG}"
 
 ARGS=(-mod "${MOD_ROOT}")
-if [[ "${GX_MAC_FULLSCREEN:-0}" != "1" ]]; then ARGS+=(-win); fi
+WINDOWED_SETTING=""
+if [[ -f "${OPTIONS_FILE}" ]]; then
+  WINDOWED_SETTING="$(awk -F= 'tolower($1) ~ /^[[:space:]]*windowed[[:space:]]*$/ { gsub(/[[:space:]]/, "", $2); print tolower($2); exit }' "${OPTIONS_FILE}" 2>/dev/null || true)"
+fi
+if [[ "${GX_MAC_FULLSCREEN:-0}" == "1" ]]; then
+  :
+elif [[ "${GX_MAC_WINDOWED:-0}" == "1" || "${WINDOWED_SETTING}" == "yes" || "${WINDOWED_SETTING}" == "true" || "${WINDOWED_SETTING}" == "1" ]]; then
+  ARGS+=(-win)
+fi
 exec "${BIN}/GeneralsXZH" "${ARGS[@]}" "$@" >> "${LOG}" 2>&1
 RUNNER
 chmod +x "${MACOS}/run.sh"
@@ -213,6 +252,7 @@ echo "Installing retail GameData -> ${GAME}"
 rsync -a --delete "${APP}/GameData/" "${GAME}/"
 echo "Installing Contra X -> ${MOD}"
 rsync -a --delete "${APP}/Profiles/contra-x/" "${MOD}/"
+rm -rf "${HOME}/GeneralsX/ContraRuntime"
 
 BIG_COUNT="$(find "${GAME}" -name '*.big' | wc -l | tr -d ' ')"
 MOD_BIG_COUNT="$(find "${MOD}" -maxdepth 1 -name '*.big' | wc -l | tr -d ' ')"
