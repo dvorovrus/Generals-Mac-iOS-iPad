@@ -784,49 +784,31 @@ void SDL3Mouse::scaleMouseCoordinates(int rawX, int rawY, Uint32 windowID, int& 
 		return;
 	}
 
-	// SDL mouse events use logical window coordinates. On a Retina Mac the
-	// drawable/backing surface is larger (for example 1440x900 logical versus
-	// 2560x1600 backing pixels). The viewport rectangle is expressed in the
-	// drawable/game coordinate space, so convert the event to backing pixels
-	// before applying viewport clipping and scaling.
 	int windowWidth = 0, windowHeight = 0;
-	int pixelWidth = 0, pixelHeight = 0;
 	SDL_GetWindowSize(window, &windowWidth, &windowHeight);
-	SDL_GetWindowSizeInPixels(window, &pixelWidth, &pixelHeight);
 
 	if (windowWidth <= 0 || windowHeight <= 0) {
 		scaledX = rawX;
 		scaledY = rawY;
 		return;
 	}
-	if (pixelWidth <= 0 || pixelHeight <= 0) {
-		pixelWidth = windowWidth;
-		pixelHeight = windowHeight;
-	}
-
-	const float backingScaleX = static_cast<float>(pixelWidth) / static_cast<float>(windowWidth);
-	const float backingScaleY = static_cast<float>(pixelHeight) / static_cast<float>(windowHeight);
-	const float pixelX = static_cast<float>(rawX) * backingScaleX;
-	const float pixelY = static_cast<float>(rawY) * backingScaleY;
 
 	int internalWidth  = TheDisplay->getWidth();
 	int internalHeight = TheDisplay->getHeight();
 
 	int pbX, pbY, pbW, pbH;
-	if (TheDisplay->getViewportRect(pbX, pbY, pbW, pbH) && pbW > 0 && pbH > 0) {
-		float clampedX = pixelX - static_cast<float>(pbX);
-		if (clampedX < 0.0f) clampedX = 0.0f;
-		if (clampedX > static_cast<float>(pbW)) clampedX = static_cast<float>(pbW);
-		float clampedY = pixelY - static_cast<float>(pbY);
-		if (clampedY < 0.0f) clampedY = 0.0f;
-		if (clampedY > static_cast<float>(pbH)) clampedY = static_cast<float>(pbH);
+	if (TheDisplay->getViewportRect(pbX, pbY, pbW, pbH)) {
+		int clampedX = rawX - pbX;
+		if (clampedX < 0) clampedX = 0;
+		if (clampedX > pbW) clampedX = pbW;
+		int clampedY = rawY - pbY;
+		if (clampedY < 0) clampedY = 0;
+		if (clampedY > pbH) clampedY = pbH;
 		scaledX = static_cast<int>(clampedX * static_cast<float>(internalWidth) / static_cast<float>(pbW));
 		scaledY = static_cast<int>(clampedY * static_cast<float>(internalHeight) / static_cast<float>(pbH));
 		return;
 	}
 
-	// Fallback: map the logical window coordinates directly to the game's
-	// internal resolution. This remains correct on non-Retina displays too.
 	float factorX = static_cast<float>(internalWidth)  / static_cast<float>(windowWidth);
 	float factorY = static_cast<float>(internalHeight) / static_cast<float>(windowHeight);
 
