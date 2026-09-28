@@ -1,0 +1,45 @@
+diff -ru a/Core/Libraries/Source/WWVegas/WW3D2/dx8wrapper.cpp b/Core/Libraries/Source/WWVegas/WW3D2/dx8wrapper.cpp
+--- a/Core/Libraries/Source/WWVegas/WW3D2/dx8wrapper.cpp	2026-09-28 10:49:42.681036659 +0000
++++ b/Core/Libraries/Source/WWVegas/WW3D2/dx8wrapper.cpp	2026-09-28 10:49:48.284666240 +0000
+@@ -1864,6 +1864,14 @@
+ 
+ 	bool found=false;
+ 
++	// iOS 26/27: if DXVK/MoltenVK produced no Vulkan adapter, the D3D8 interface
++	// has an empty adapter list and GetAdapterModeCount() traps (SIGTRAP) inside
++	// DXVK. Fail gracefully so the caller can log a real error instead.
++	if (D3DInterface == nullptr || D3DInterface->GetAdapterCount() == 0) {
++		fprintf(stderr, "ERROR: DX8Wrapper::Find_Color_Mode - no D3D adapters (Vulkan/MoltenVK device missing)\n");
++		return false;
++	}
++
+ 	modemax=D3DInterface->GetAdapterModeCount(D3DADAPTER_DEFAULT);
+ 
+ 	i=0;
+diff -ru a/GeneralsMD/Code/Main/SDL3Main.cpp b/GeneralsMD/Code/Main/SDL3Main.cpp
+--- a/GeneralsMD/Code/Main/SDL3Main.cpp	2026-09-28 10:49:43.021840599 +0000
++++ b/GeneralsMD/Code/Main/SDL3Main.cpp	2026-09-28 10:49:43.512479911 +0000
+@@ -266,7 +266,22 @@
+ 		// unimplemented render state set every frame) wrote hundreds of MB per
+ 		// long session. The shipped dxvk.conf also sets logLevel=none; the env
+ 		// covers modules that read it before the config.
+-		setenv("DXVK_LOG_LEVEL", "none", 0);
++		// Opt-in DXVK/MoltenVK diagnostics: create an (empty) file named
++		// Documents/dxvk-debug via the Files app to log Vulkan instance/device
++		// enumeration on the next launch. Off by default to avoid log spam.
++		{
++			const char *dbgHome = getenv("HOME");
++			char dbgPath[1024];
++			bool dbg = false;
++			if (dbgHome != nullptr) {
++				snprintf(dbgPath, sizeof(dbgPath), "%s/Documents/dxvk-debug", dbgHome);
++				dbg = (access(dbgPath, F_OK) == 0);
++			}
++			setenv("DXVK_LOG_LEVEL", dbg ? "info" : "none", 1);
++			if (dbg) {
++				setenv("MVK_CONFIG_LOG_LEVEL", "3", 0);
++			}
++		}
+ 		const char *diagHome = getenv("HOME");
+ 		if (diagHome != nullptr) {
+ 			char diagPath[1024];
