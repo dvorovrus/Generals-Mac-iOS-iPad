@@ -224,7 +224,21 @@ void AISkirmishPlayer::processBaseBuilding()
 				}
 				continue;
 			}
-			if (TheBuildAssistant->canMakeUnit(dozer, bldgPlan)!=CANMAKE_OK) {
+			// Validate the current build-list entry, not bldgPlan. bldgPlan is the
+			// candidate selected so far and is still null for the first ordinary
+			// automatic entry. Passing it here prevented skirmish AI from ever
+			// selecting its first post-command-center structure.
+			if (TheBuildAssistant->canMakeUnit(dozer, curPlan)!=CANMAKE_OK) {
+				fprintf(stderr,
+				        "[AI-DIAG] build-candidate-rejected frame=%u playerIndex=%d side='%s' template='%s' automatic=%d buildable=%d dozer=%u money=%d\n",
+				        (unsigned)TheGameLogic->getFrame(),
+				        (int)m_player->getPlayerIndex(),
+				        m_player->getSide().str(),
+				        curPlan->getName().str(),
+				        info->isAutomaticBuild() ? 1 : 0,
+				        info->isBuildable() ? 1 : 0,
+				        (unsigned)dozer->getID(),
+				        (int)m_player->getMoney()->countMoney());
 				if (info->isBuildable()) {
 					AsciiString bldgName = info->getTemplateName();
 					bldgName.concat(" - Dozer unable to build - money or technology missing.");
@@ -250,8 +264,22 @@ void AISkirmishPlayer::processBaseBuilding()
 		}
 		if (bldgPlan && bldgInfo) {
 #ifdef USE_DOZER
+			fprintf(stderr,
+			        "[AI-DIAG] build-attempt frame=%u playerIndex=%d side='%s' template='%s' money=%d\n",
+			        (unsigned)TheGameLogic->getFrame(),
+			        (int)m_player->getPlayerIndex(),
+			        m_player->getSide().str(),
+			        bldgPlan->getName().str(),
+			        (int)m_player->getMoney()->countMoney());
 			// dozer-construct the building
 			bldg = buildStructureWithDozer(bldgPlan, bldgInfo);
+			fprintf(stderr,
+			        "[AI-DIAG] build-attempt-result frame=%u playerIndex=%d template='%s' result=%s objectID=%u\n",
+			        (unsigned)TheGameLogic->getFrame(),
+			        (int)m_player->getPlayerIndex(),
+			        bldgPlan->getName().str(),
+			        bldg != nullptr ? "ok" : "FAILED",
+			        bldg != nullptr ? (unsigned)bldg->getID() : 0u);
 			// store the object with the build order
 			if (bldg)
 			{
