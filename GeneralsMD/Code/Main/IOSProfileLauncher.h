@@ -11,6 +11,6 @@
 const char *GeneralsXRunIOSProfileLauncher();
 
 // Clears the current diagnostic log and all retained iOS session logs.
-void GeneralsXClearIOSDiagnosticLogs();
+void GeneralsXClearIOSDiagnosticLogs() __attribute__((weak_import));
 
 #endif

@@ -984,7 +984,21 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
     [alert addAction:[UIAlertAction actionWithTitle:@"Clear logs"
                                              style:UIAlertActionStyleDestructive
                                            handler:^(__unused UIAlertAction *action) {
-        GeneralsXClearIOSDiagnosticLogs();
+        if (GeneralsXClearIOSDiagnosticLogs != nullptr)
+        {
+            // Full shell: reset the live logger FD and its size/cap bookkeeping.
+            GeneralsXClearIOSDiagnosticLogs();
+        }
+        else
+        {
+            // Launcher-only fast builds can be overlaid on the previous successful
+            // engine, which does not know this symbol yet. Clear visible files so
+            // the diagnostics action still works without making the fast linker fail.
+            NSFileManager *fileManager = [NSFileManager defaultManager];
+            for (NSString *name in DiagnosticSessionLogNames())
+                [fileManager removeItemAtPath:DocumentsFilePath(name) error:nil];
+            [fileManager removeItemAtPath:DocumentsFilePath(@"generals-stderr-prev.log") error:nil];
+        }
 
         GXProfileLauncherViewController *strongSelf = weakSelf;
         if (strongSelf != nil)
