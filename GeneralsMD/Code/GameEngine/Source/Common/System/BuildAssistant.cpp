@@ -31,6 +31,8 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include <cstdio>
+
 #include "Common/BuildAssistant.h"
 #include "Common/GlobalData.h"
 #include "Common/Player.h"
@@ -337,10 +339,36 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 
 	}
 
-	// Need to validate that we can make this in case someone fakes their CommandSet
+	// Need to validate that we can make this in case someone fakes their CommandSet.
 	// A nullptr constructor Object means a script built building so let it slide.
-	if( (constructorObject != nullptr) && !isPossibleToMakeUnit(constructorObject, what) )
-		return nullptr;
+	//
+	// Skirmish AI is intentionally less strict in DozerAIUpdate::construct(): the planner
+	// already selected a valid side-specific building and AI is allowed to "cheat" past
+	// command-set restrictions. Mods such as Contra replace/alias dozer command sets, so
+	// the legacy command-button equivalence check can reject a valid AI build before the
+	// dozer's AI construct path ever runs.
+	const Bool computerDozer =
+		constructorObject != nullptr &&
+		isDozer(constructorObject) &&
+		owningPlayer->getPlayerType() == PLAYER_COMPUTER;
+
+	if( constructorObject != nullptr && !isPossibleToMakeUnit(constructorObject, what) )
+	{
+		if( !computerDozer )
+			return nullptr;
+
+		static Int s_aiCommandSetBypassDiagBudget = 16;
+		if( s_aiCommandSetBypassDiagBudget > 0 )
+		{
+			--s_aiCommandSetBypassDiagBudget;
+			fprintf(stderr,
+			        "[AI-BUILD] bypass-commandset builder=%u builderTemplate='%s' commandSet='%s' target='%s'\n",
+			        (unsigned)constructorObject->getID(),
+			        constructorObject->getTemplate()->getName().str(),
+			        constructorObject->getCommandSetString().str(),
+			        what->getName().str());
+		}
+	}
 
 	// clear out any objects from the building area that are "auto-clearable" when building
 	clearRemovableForConstruction( what, pos, angle );
