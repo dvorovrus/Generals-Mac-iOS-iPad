@@ -6,11 +6,15 @@
 
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
 
-// GeneralsX @feature dvorovrus 25/09/2026 Show the embedded Vite launcher before game initialization.
+// GeneralsX @feature dvorovrus 25/09/2026 Show the embedded launcher before game initialization.
 // Returns one of: "vanilla", "enhanced", "contra-x".
 const char *GeneralsXRunIOSProfileLauncher();
 
-// Clears the current diagnostic log and all retained iOS session logs.
-void GeneralsXClearIOSDiagnosticLogs() __attribute__((weak_import));
+// The launcher lives in a standalone dylib, so it must not directly import
+// symbols implemented by the main executable. The engine provides this callback
+// before showing the launcher; launcher-only fast builds remain compatible with
+// older shells where the callback is never installed.
+typedef void (*GeneralsXIOSDiagnosticClearCallback)();
+void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback callback);
 
 #endif
