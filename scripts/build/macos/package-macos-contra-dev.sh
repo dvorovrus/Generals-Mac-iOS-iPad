@@ -153,6 +153,7 @@ GAME_ROOT="${GX_GAME_ROOT:-${HOME}/GeneralsX/GeneralsZH}"
 SOURCE_MOD_ROOT="${GX_CONTRA_ROOT:-${HOME}/GeneralsX/ContraX}"
 RUNTIME_MOD_ROOT="${HOME}/GeneralsX/ContraRuntime"
 OPTIONS_FILE="${HOME}/Library/Application Support/GeneralsX/GeneralsZH/Options.ini"
+CONTRA_SETTINGS_FILE="${HOME}/Library/Application Support/GeneralsX/GeneralsZH/ContraSettings.ini"
 LOG_DIR="${HOME}/Library/Logs/GeneralsXZH"
 mkdir -p "${LOG_DIR}"
 LOG="${LOG_DIR}/contra-dev.log"
@@ -209,9 +210,23 @@ cd "${GAME_ROOT}"
 
 ARGS=(-mod "${MOD_ROOT}")
 WINDOWED_SETTING=""
+CONTROL_BAR_SETTING=""
 if [[ -f "${OPTIONS_FILE}" ]]; then
   WINDOWED_SETTING="$(awk -F= 'tolower($1) ~ /^[[:space:]]*windowed[[:space:]]*$/ { gsub(/[[:space:]]/, "", $2); print tolower($2); exit }' "${OPTIONS_FILE}" 2>/dev/null || true)"
 fi
+if [[ -f "${CONTRA_SETTINGS_FILE}" ]]; then
+  CONTROL_BAR_SETTING="$(awk -F= 'tolower($1) ~ /^[[:space:]]*controlbar[[:space:]]*$/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print tolower($2); exit }' "${CONTRA_SETTINGS_FILE}" 2>/dev/null || true)"
+fi
+
+# Control Bar Pro was designed for GenTool-style full viewport rendering.
+# iOS already injects -forcefullviewport for this profile; do the same on macOS
+# so the world continues behind the side/bottom UI instead of exposing black
+# clear areas around the widescreen control bar.
+if [[ "${CONTROL_BAR_SETTING}" == "pro" ]]; then
+  ARGS+=(-forcefullviewport)
+  echo "[MAC-LAUNCH] ControlBar=Pro -> -forcefullviewport" >> "${LOG}"
+fi
+
 if [[ "${GX_MAC_FULLSCREEN:-0}" == "1" ]]; then
   :
 elif [[ "${GX_MAC_WINDOWED:-0}" == "1" || "${WINDOWED_SETTING}" == "yes" || "${WINDOWED_SETTING}" == "true" || "${WINDOWED_SETTING}" == "1" ]]; then
