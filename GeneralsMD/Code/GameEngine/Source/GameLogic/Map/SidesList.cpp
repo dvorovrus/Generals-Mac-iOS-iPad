@@ -45,8 +45,11 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/ArchiveFile.h"
+#include "Common/ArchiveFileSystem.h"
 #include "Common/DataChunk.h"
 #include "Common/GameState.h"
+#include "Common/GlobalData.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/WellKnownKeys.h"
 #include "Common/Xfer.h"
@@ -526,8 +529,43 @@ void SidesList::prepareForMP_or_Skirmish()
 #endif
 		DEBUG_LOG(("Skirmish map using standard scripts"));
 		m_skirmishTeamrec.clear();
+
+		// A mod may provide its own SkirmishScripts.scb inside a BIG while the base game
+		// also has a loose copy at the same path. FileSystem::openFile() intentionally
+		// prefers loose files, but that would silently bypass the mod's AI scripts.
+		// Prefer the archive only when the winning archive is actually inside the
+		// active -mod directory; vanilla and mods without an override keep stock lookup.
+		ArchiveFile *scriptArchive = nullptr;
+		Bool preferModArchive = false;
+		if (TheArchiveFileSystem != nullptr && TheGlobalData != nullptr && TheGlobalData->m_modDir.isNotEmpty())
+		{
+			scriptArchive = TheArchiveFileSystem->getArchiveFile(path, 0);
+			if (scriptArchive != nullptr)
+			{
+				const AsciiString archivePath = scriptArchive->getName();
+				const AsciiString &modDir = TheGlobalData->m_modDir;
+				if (archivePath.startsWithNoCase(modDir))
+				{
+					const Int modDirLength = modDir.getLength();
+					const Char boundary = archivePath.str()[modDirLength];
+					preferModArchive = boundary == 0 || boundary == '/' || boundary == '\\';
+				}
+			}
+		}
+
+		fprintf(stderr,
+		        "[AI-SCRIPT-SOURCE] path='%s' source=%s archive='%s' modDir='%s'\n",
+		        path.str(),
+		        preferModArchive ? "mod-archive" : "default-filesystem",
+		        scriptArchive != nullptr ? scriptArchive->getName().str() : "<none>",
+		        TheGlobalData != nullptr ? TheGlobalData->m_modDir.str() : "<none>");
+		fflush(stderr);
+
 		CachedFileInputStream theInputStream;
-		if (theInputStream.open(path)) {
+		const Bool openedScripts = preferModArchive
+			? theInputStream.openArchivePreferred(path)
+			: theInputStream.open(path);
+		if (openedScripts) {
 #ifdef ALLOW_DEBUG_UTILS
 				fprintf(stderr, "[SKIRMISH_DIAG] Opened SkirmishScripts.scb successfully\n");
 				fflush(stderr);

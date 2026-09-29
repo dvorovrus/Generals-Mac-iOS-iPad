@@ -30,6 +30,7 @@
 
 #include "stdlib.h"
 #include "Compression.h"
+#include "Common/ArchiveFileSystem.h"
 #include "Common/DataChunk.h"
 #include "Common/file.h"
 #include "Common/FileSystem.h"
@@ -49,7 +50,25 @@ CachedFileInputStream::~CachedFileInputStream()
 
 Bool CachedFileInputStream::open(AsciiString path)
 {
-	File *file=TheFileSystem->openFile(path.str(), File::READ | File::BINARY);
+	return openInternal(path, false);
+}
+
+Bool CachedFileInputStream::openArchivePreferred(AsciiString path)
+{
+	return openInternal(path, true);
+}
+
+Bool CachedFileInputStream::openInternal(AsciiString path, Bool archiveOnly)
+{
+	File *file = nullptr;
+	if (archiveOnly && TheArchiveFileSystem != nullptr)
+	{
+		file = TheArchiveFileSystem->openFile(path.str());
+	}
+	else
+	{
+		file = TheFileSystem->openFile(path.str(), File::READ | File::BINARY);
+	}
 	m_size = 0;
 
 	if (file) {
