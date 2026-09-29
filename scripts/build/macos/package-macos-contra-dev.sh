@@ -21,6 +21,12 @@ test -f "${GAME_BIN}" || { echo "ERROR: missing ${GAME_BIN}"; exit 1; }
 cp "${GAME_BIN}" "${BIN}/GeneralsXZH"
 chmod +x "${BIN}/GeneralsXZH"
 
+BUILD_COMMIT="${GITHUB_SHA:-}"
+if [[ -z "${BUILD_COMMIT}" ]]; then
+  BUILD_COMMIT="$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
+fi
+printf 'commit=%s\n' "${BUILD_COMMIT}" > "${RES}/build-info.txt"
+
 MAC_LAUNCHER_SRC="${ROOT}/scripts/build/macos/MacLauncher.swift"
 MAC_LAUNCHER_BIN="${BIN}/GeneralsXMacLauncher"
 if [[ -f "${MAC_LAUNCHER_SRC}" ]]; then
@@ -206,6 +212,12 @@ cd "${GAME_ROOT}"
   echo "ContraSource=${SOURCE_MOD_ROOT}"
   echo "ContraRoot=${MOD_ROOT}"
   echo "Binary=${BIN}/GeneralsXZH"
+  if [[ -f "${RES}/build-info.txt" ]]; then
+    echo "BuildInfo=$(tr '\n' ' ' < "${RES}/build-info.txt")"
+  fi
+  echo "[MAC-LAUNCH] Active ContraRuntime archives:"
+  find "${MOD_ROOT}" -maxdepth 1 -type f -name '*.big' -print 2>/dev/null | LC_ALL=C sort | sed 's#^#[MAC-LAUNCH]   #' || true
+  find "${MOD_ROOT}" -maxdepth 1 -type l -name '*.big' -print 2>/dev/null | LC_ALL=C sort | sed 's#^#[MAC-LAUNCH]   #' || true
 } >> "${LOG}"
 
 ARGS=(-mod "${MOD_ROOT}")
