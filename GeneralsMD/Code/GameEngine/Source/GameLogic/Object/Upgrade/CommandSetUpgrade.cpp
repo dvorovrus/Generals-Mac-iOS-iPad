@@ -32,6 +32,7 @@
 
 #include "Common/Xfer.h"
 #include "Common/Player.h"
+#include "Common/ThingTemplate.h"
 #include "GameClient/ControlBar.h"
 #include "GameLogic/Module/CommandSetUpgrade.h"
 #include "GameLogic/Object.h"
