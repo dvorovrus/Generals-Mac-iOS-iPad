@@ -85,12 +85,10 @@ protected:
 	int m_size;
 	char* m_buffer;
 	int m_pos;
-	Bool openInternal(AsciiString path, Bool archiveOnly);
 public:
 	CachedFileInputStream();
 	~CachedFileInputStream();
 	Bool open(AsciiString path);	///< Returns true if open succeeded.
-	Bool openArchivePreferred(AsciiString path); ///< Opens the top archive copy, bypassing a loose-file shadow.
 	void close();  ///< Explict close.  Destructor closes if file is left open.
 	virtual Int read(void *pData, Int numBytes) override;
 	virtual UnsignedInt tell() override;
