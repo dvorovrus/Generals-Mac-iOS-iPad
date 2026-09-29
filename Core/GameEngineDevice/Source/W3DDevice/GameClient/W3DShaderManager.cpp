@@ -69,7 +69,6 @@
 #include "GameClient/Water.h"
 #include "GameLogic/GameLogic.h"
 #include "Common/GlobalData.h"
-#include "Common/FramePacer.h"
 #include "Common/GameLOD.h"
 #include "d3dx8tex.h"
 #include "dx8caps.h"
@@ -1489,6 +1488,7 @@ class TerrainShader2Stage : public W3DShaderInterface
 public:
 	float m_xSlidePerSecond ;	 ///< How far the clouds move per second.
 	float m_ySlidePerSecond ;	 ///< How far the clouds move per second.
+	int   m_curTick;
 	float m_xOffset;
 	float m_yOffset;
 
@@ -1496,7 +1496,6 @@ public:
 	virtual Int init() override;			///<perform any one time initialization and validation
 	virtual void reset() override;		///<do any custom resetting necessary to bring W3D in sync.
 
-	void updateCloud();
 	void updateNoise1 (D3DXMATRIX *destMatrix,D3DXMATRIX *curViewInverse, Bool doUpdate=true);	///<generate the uv coordinates for Noise1 (i.e clouds)
 	void updateNoise2 (D3DXMATRIX *destMatrix,D3DXMATRIX *curViewInverse, Bool doUpdate=true);	///<generate the uv coordinates for Noise2 (i.e lightmap)
 } terrainShader2Stage;
@@ -1570,6 +1569,8 @@ Int TerrainShader2Stage::init()
 	//initialize settings for uv animated clouds
 	m_xSlidePerSecond = -0.02f;
 	m_ySlidePerSecond =  1.50f * m_xSlidePerSecond;
+	m_curTick = 0;
+	m_curTick = WW3D::Get_Sync_Time();
 	m_xOffset = 0;
 	m_yOffset = 0;
 
@@ -1602,40 +1603,6 @@ void TerrainShader2Stage::reset()
 	DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_PASSTHRU|1);
 }
 
-void TerrainShader2Stage::updateCloud()
-{
-	// Cloud shadows are a render effect and must keep moving even on render
-	// frames where the 30 Hz game logic does not advance. HeightMap::Render()
-	// deliberately calls updateCloud() every render frame, but using WW3D's
-	// logic-frame delta here can be zero on the uncoupled SDL3/iOS frame path,
-	// leaving the cloud texture visually frozen.
-	const float frame_time =
-		TheFramePacer != nullptr ? TheFramePacer->getUpdateTime() : WW3D::Get_Logic_Frame_Time_Seconds();
-
-	m_xOffset += m_xSlidePerSecond * frame_time;
-	m_yOffset += m_ySlidePerSecond * frame_time;
-
-	// Keep offsets bounded while preserving negative scrolling.
-	m_xOffset -= (Int)m_xOffset;
-	m_yOffset -= (Int)m_yOffset;
-
-	// Keep this deliberately tiny: enough to prove whether the option reaches
-	// the terrain renderer and whether the UV offsets actually advance, without
-	// flooding the already large runtime log.
-	static UnsignedInt cloudDiagUpdates = 0;
-	++cloudDiagUpdates;
-	if (cloudDiagUpdates == 1 || cloudDiagUpdates == 120 || cloudDiagUpdates == 300)
-	{
-		fprintf(stderr,
-		        "[CLOUD-DIAG] update=%u dt=%.6f offset=%.6f,%.6f slide=%.6f,%.6f\n",
-		        (unsigned)cloudDiagUpdates,
-		        (double)frame_time,
-		        (double)m_xOffset,
-		        (double)m_yOffset,
-		        (double)m_xSlidePerSecond,
-		        (double)m_ySlidePerSecond);
-	}
-}
 
 void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curViewInverse, Bool doUpdate)
 {
@@ -1647,6 +1614,32 @@ void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curVie
 	*destMatrix = *curViewInverse * scale;
 
 	D3DXMATRIX offset;
+
+	// Preserve the original Zero Hour cloud animation semantics. Contra was authored
+	// against this wall-clock-driven texture scroll, so keep the mod data untouched
+	// and make the port execute the same engine path.
+	Int delta = m_curTick;
+	m_curTick = WW3D::Get_Sync_Time();
+	delta = m_curTick - delta;
+	m_xOffset += m_xSlidePerSecond * delta / 1000;
+	m_yOffset += m_ySlidePerSecond * delta / 1000;
+
+	while (m_xOffset > 1) m_xOffset -= 1;
+	while (m_yOffset > 1) m_yOffset -= 1;
+	while (m_xOffset < -1) m_xOffset += 1;
+	while (m_yOffset < -1) m_yOffset += 1;
+
+	static UnsignedInt cloudSyncDiag = 0;
+	++cloudSyncDiag;
+	if (cloudSyncDiag == 1 || cloudSyncDiag == 120 || cloudSyncDiag == 300)
+	{
+		fprintf(stderr,
+		        "[CLOUD-DIAG] source=sync sample=%u tick=%d deltaMs=%d offset=%.6f,%.6f slide=%.6f,%.6f\n",
+		        (unsigned)cloudSyncDiag, (int)m_curTick, (int)delta,
+		        (double)m_xOffset, (double)m_yOffset,
+		        (double)m_xSlidePerSecond, (double)m_ySlidePerSecond);
+	}
+
 	D3DXMatrixTranslation(&offset, m_xOffset, m_yOffset,0);
 	*destMatrix *= offset;
 }
@@ -2839,10 +2832,6 @@ void W3DShaderManager::shutdown()
 }
 
 //=============================================================================
-void W3DShaderManager::updateCloud()
-{
-	terrainShader2Stage.updateCloud();
-}
 
 // W3DShaderManager::getShaderPasses =======================================================
 /** Return number of renderig passes required in perform the desired shader on current
