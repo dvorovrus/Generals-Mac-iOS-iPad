@@ -3408,23 +3408,6 @@ Object * AIPlayer::findDozer( const Coord3D *pos )
 	if (needDozer) {
 		queueDozer();
 	}
-	else if (closestDozer == nullptr && dozer == nullptr)
-	{
-		// We do own at least one usable dozer, but every one of them is currently
-		// committed to construction. The old code retried the same structure every
-		// few seconds until a builder became free, making Normal skirmish AI look
-		// artificially idle. Queue one additional builder; queueDozer() already
-		// suppresses duplicate pending dozer orders.
-		queueDozer();
-		static Int s_busyDozerDiagBudget = 12;
-		if (s_busyDozerDiagBudget > 0)
-		{
-			--s_busyDozerDiagBudget;
-			fprintf(stderr,
-			        "[AI-BUILD] all-builders-busy playerIndex=%d -> queue-extra-dozer\n",
-			        (int)m_player->getPlayerIndex());
-		}
-	}
 	if (closestDozer) return closestDozer;
 	return dozer;
 }
