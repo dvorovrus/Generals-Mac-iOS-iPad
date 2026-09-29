@@ -2133,6 +2133,23 @@ Int TerrainShaderPixelShader::set(Int pass)
 			terrainShader2Stage.updateNoise1(&curView,&inv);	//update curView with texture matrix
 			DX8Wrapper::_Get_D3D_Device8()->SetTransform(D3DTS_TEXTURE2, &curView);
 
+			static UnsignedInt terrainDualCloudDiag = 0;
+			++terrainDualCloudDiag;
+			if (terrainDualCloudDiag == 1 || terrainDualCloudDiag == 120 || terrainDualCloudDiag == 300)
+			{
+				D3DXMATRIX applied;
+				DX8Wrapper::_Get_D3D_Device8()->GetTransform(D3DTS_TEXTURE2, &applied);
+				DWORD tcIndex = 0, transformFlags = 0;
+				DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(2, D3DTSS_TEXCOORDINDEX, &tcIndex);
+				DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(2, D3DTSS_TEXTURETRANSFORMFLAGS, &transformFlags);
+				fprintf(stderr,
+				        "[CLOUD-XFORM] sample=%u path=terrain-dual stage=2 requested41=%.6f requested42=%.6f applied41=%.6f applied42=%.6f tcIndex=0x%08x flags=0x%08x\n",
+				        (unsigned)terrainDualCloudDiag,
+				        (double)curView._41, (double)curView._42,
+				        (double)applied._41, (double)applied._42,
+				        (unsigned)tcIndex, (unsigned)transformFlags);
+			}
+
 			terrainShader2Stage.updateNoise2(&curView,&inv);	//update curView with texture matrix
 			DX8Wrapper::_Get_D3D_Device8()->SetTransform(D3DTS_TEXTURE3, &curView);
 
@@ -2253,7 +2270,25 @@ Int CloudTextureShader::set(Int stage)
 
 	DX8Wrapper::Set_DX8_Texture_Stage_State(stage,  D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(stage,  D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT2);
-	DX8Wrapper::_Get_D3D_Device8()->SetTransform((D3DTRANSFORMSTATETYPE )(D3DTS_TEXTURE0+stage), &curView);
+	const D3DTRANSFORMSTATETYPE cloudTransform = (D3DTRANSFORMSTATETYPE)(D3DTS_TEXTURE0 + stage);
+	DX8Wrapper::_Get_D3D_Device8()->SetTransform(cloudTransform, &curView);
+
+	static UnsignedInt objectCloudDiag = 0;
+	++objectCloudDiag;
+	if (objectCloudDiag == 1 || objectCloudDiag == 120 || objectCloudDiag == 300)
+	{
+		D3DXMATRIX applied;
+		DX8Wrapper::_Get_D3D_Device8()->GetTransform(cloudTransform, &applied);
+		DWORD tcIndex = 0, transformFlags = 0;
+		DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(stage, D3DTSS_TEXCOORDINDEX, &tcIndex);
+		DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(stage, D3DTSS_TEXTURETRANSFORMFLAGS, &transformFlags);
+		fprintf(stderr,
+		        "[CLOUD-XFORM] sample=%u path=cloud-object stage=%d requested41=%.6f requested42=%.6f applied41=%.6f applied42=%.6f tcIndex=0x%08x flags=0x%08x\n",
+		        (unsigned)objectCloudDiag, (int)stage,
+		        (double)curView._41, (double)curView._42,
+		        (double)applied._41, (double)applied._42,
+		        (unsigned)tcIndex, (unsigned)transformFlags);
+	}
 	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(stage, D3DTSS_ADDRESSU, D3DTADDRESS_WRAP);
@@ -2381,12 +2416,12 @@ Int RoadShaderPixelShader::set(Int pass)
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_SRCBLEND,D3DBLEND_SRCALPHA);
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_DESTBLEND,D3DBLEND_INVSRCALPHA);
 
-	Matrix4x4 curView;
-	DX8Wrapper::_Get_DX8_Transform(D3DTS_VIEW, curView);
+	D3DXMATRIX curView;
+	DX8Wrapper::_Get_D3D_Device8()->GetTransform(D3DTS_VIEW, &curView);
 
 	D3DXMATRIX inv;
 	float det;
-	D3DXMatrixInverse(&inv, &det, (D3DXMATRIX*)&curView);
+	D3DXMatrixInverse(&inv, &det, &curView);
 
 	if (TheGlobalData && TheGlobalData->m_trilinearTerrainTex)
 	{	DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
@@ -2418,11 +2453,28 @@ Int RoadShaderPixelShader::set(Int pass)
 	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DTSS_MINFILTER, D3DTEXF_POINT);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(2, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
 
-	terrainShader2Stage.updateNoise1((D3DXMATRIX*)&curView,&inv, false);	//get texture projection matrix
-	DX8Wrapper::_Set_DX8_Transform(D3DTS_TEXTURE1, curView);
+	terrainShader2Stage.updateNoise1(&curView,&inv, false);	//get texture projection matrix
+	DX8Wrapper::_Get_D3D_Device8()->SetTransform(D3DTS_TEXTURE1, &curView);
 
-	terrainShader2Stage.updateNoise2((D3DXMATRIX*)&curView,&inv, false);	//get texture projection matrix
-	DX8Wrapper::_Set_DX8_Transform(D3DTS_TEXTURE2, curView);
+	static UnsignedInt roadCloudDiag = 0;
+	++roadCloudDiag;
+	if (roadCloudDiag == 1 || roadCloudDiag == 120 || roadCloudDiag == 300)
+	{
+		D3DXMATRIX applied;
+		DX8Wrapper::_Get_D3D_Device8()->GetTransform(D3DTS_TEXTURE1, &applied);
+		DWORD tcIndex = 0, transformFlags = 0;
+		DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(1, D3DTSS_TEXCOORDINDEX, &tcIndex);
+		DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(1, D3DTSS_TEXTURETRANSFORMFLAGS, &transformFlags);
+		fprintf(stderr,
+		        "[CLOUD-XFORM] sample=%u path=road-dual stage=1 requested41=%.6f requested42=%.6f applied41=%.6f applied42=%.6f tcIndex=0x%08x flags=0x%08x\n",
+		        (unsigned)roadCloudDiag,
+		        (double)curView._41, (double)curView._42,
+		        (double)applied._41, (double)applied._42,
+		        (unsigned)tcIndex, (unsigned)transformFlags);
+	}
+
+	terrainShader2Stage.updateNoise2(&curView,&inv, false);	//get texture projection matrix
+	DX8Wrapper::_Get_D3D_Device8()->SetTransform(D3DTS_TEXTURE2, &curView);
 
 	DX8Wrapper::Set_DX8_Texture_Stage_State(2,  D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION);
 	// Two output coordinates are used.
