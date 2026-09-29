@@ -28,6 +28,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include <cstdio>
+
 #include "Common/Xfer.h"
 #include "Common/Player.h"
 #include "GameClient/ControlBar.h"
@@ -67,6 +69,7 @@ CommandSetUpgrade::~CommandSetUpgrade()
 void CommandSetUpgrade::upgradeImplementation()
 {
 	Object *obj = getObject();
+	const AsciiString oldCommandSet = obj->getCommandSetString();
 
 	const AsciiString& upgradeAlt = getCommandSetUpgradeModuleData()->m_triggerAlt;
 	const UpgradeTemplate *upgradeTemplate = TheUpgradeCenter->findUpgrade( upgradeAlt );
@@ -84,6 +87,11 @@ void CommandSetUpgrade::upgradeImplementation()
 			{
 				obj->setCommandSetStringOverride( getCommandSetUpgradeModuleData()->m_newCommandSetAlt );
 				TheControlBar->markUIDirty();// Refresh the UI in case we are selected
+				if (obj->getControllingPlayer() && obj->getControllingPlayer()->isSkirmishAIPlayer())
+					fprintf(stderr,
+					        "[AI-COMMANDSET-UPGRADE] object=%u template='%s' triggerAlt='%s' source=player old='%s' new='%s'\n",
+					        (unsigned)obj->getID(), obj->getTemplate()->getName().str(), upgradeAlt.str(),
+					        oldCommandSet.str(), obj->getCommandSetString().str());
 				return;
 			}
 		}
@@ -94,12 +102,22 @@ void CommandSetUpgrade::upgradeImplementation()
 		{
 			obj->setCommandSetStringOverride( getCommandSetUpgradeModuleData()->m_newCommandSetAlt );
 			TheControlBar->markUIDirty();// Refresh the UI in case we are selected
+			if (obj->getControllingPlayer() && obj->getControllingPlayer()->isSkirmishAIPlayer())
+				fprintf(stderr,
+				        "[AI-COMMANDSET-UPGRADE] object=%u template='%s' triggerAlt='%s' source=object old='%s' new='%s'\n",
+				        (unsigned)obj->getID(), obj->getTemplate()->getName().str(), upgradeAlt.str(),
+				        oldCommandSet.str(), obj->getCommandSetString().str());
 			return;
 		}
 	}
 
 	obj->setCommandSetStringOverride( getCommandSetUpgradeModuleData()->m_newCommandSet );
 	TheControlBar->markUIDirty();// Refresh the UI in case we are selected
+	if (obj->getControllingPlayer() && obj->getControllingPlayer()->isSkirmishAIPlayer())
+		fprintf(stderr,
+		        "[AI-COMMANDSET-UPGRADE] object=%u template='%s' triggerAlt='%s' source=default old='%s' new='%s'\n",
+		        (unsigned)obj->getID(), obj->getTemplate()->getName().str(), upgradeAlt.str(),
+		        oldCommandSet.str(), obj->getCommandSetString().str());
 }
 
 // ------------------------------------------------------------------------------------------------
