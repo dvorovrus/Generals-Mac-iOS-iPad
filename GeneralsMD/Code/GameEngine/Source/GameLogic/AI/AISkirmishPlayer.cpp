@@ -224,21 +224,7 @@ void AISkirmishPlayer::processBaseBuilding()
 				}
 				continue;
 			}
-			// Validate the current build-list entry, not bldgPlan. bldgPlan is the
-			// candidate selected so far and is still null for the first ordinary
-			// automatic entry. Passing it here prevented skirmish AI from ever
-			// selecting its first post-command-center structure.
-			if (TheBuildAssistant->canMakeUnit(dozer, curPlan)!=CANMAKE_OK) {
-				fprintf(stderr,
-				        "[AI-DIAG] build-candidate-rejected frame=%u playerIndex=%d side='%s' template='%s' automatic=%d buildable=%d dozer=%u money=%d\n",
-				        (unsigned)TheGameLogic->getFrame(),
-				        (int)m_player->getPlayerIndex(),
-				        m_player->getSide().str(),
-				        curPlan->getName().str(),
-				        info->isAutomaticBuild() ? 1 : 0,
-				        info->isBuildable() ? 1 : 0,
-				        (unsigned)dozer->getID(),
-				        (int)m_player->getMoney()->countMoney());
+			if (TheBuildAssistant->canMakeUnit(dozer, bldgPlan)!=CANMAKE_OK) {
 				if (info->isBuildable()) {
 					AsciiString bldgName = info->getTemplateName();
 					bldgName.concat(" - Dozer unable to build - money or technology missing.");
@@ -246,6 +232,7 @@ void AISkirmishPlayer::processBaseBuilding()
 				}
 				continue;
 			}
+
 			// check if this building has any "rebuilds" left
 			if (info->isBuildable())
 			{
@@ -264,22 +251,8 @@ void AISkirmishPlayer::processBaseBuilding()
 		}
 		if (bldgPlan && bldgInfo) {
 #ifdef USE_DOZER
-			fprintf(stderr,
-			        "[AI-DIAG] build-attempt frame=%u playerIndex=%d side='%s' template='%s' money=%d\n",
-			        (unsigned)TheGameLogic->getFrame(),
-			        (int)m_player->getPlayerIndex(),
-			        m_player->getSide().str(),
-			        bldgPlan->getName().str(),
-			        (int)m_player->getMoney()->countMoney());
 			// dozer-construct the building
 			bldg = buildStructureWithDozer(bldgPlan, bldgInfo);
-			fprintf(stderr,
-			        "[AI-DIAG] build-attempt-result frame=%u playerIndex=%d template='%s' result=%s objectID=%u\n",
-			        (unsigned)TheGameLogic->getFrame(),
-			        (int)m_player->getPlayerIndex(),
-			        bldgPlan->getName().str(),
-			        bldg != nullptr ? "ok" : "FAILED",
-			        bldg != nullptr ? (unsigned)bldg->getID() : 0u);
 			// store the object with the build order
 			if (bldg)
 			{
@@ -1017,78 +990,44 @@ void AISkirmishPlayer::update()
  */
 void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 {
-	// Validate the Contra/vanilla build list before touching the live starting
-	// command center. The old code destroyed the AI's initial command center
-	// first and only afterwards discovered whether the build list contained a
-	// valid replacement. A bad/mismatched build list therefore left the AI with
-	// a dozer but zero victory-counting buildings and caused an early defeat.
-	BuildListInfo *commandCenterInfo = nullptr;
-	Coord3D buildPos;
-	for (BuildListInfo *cur = list; cur; cur = cur->getNext())
-	{
-		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(cur->getTemplateName());
-		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER))
-		{
-			commandCenterInfo = cur;
-			buildPos = *cur->getLocation();
-			break;
-		}
-	}
-
-	if (commandCenterInfo == nullptr)
-	{
-		fprintf(stderr,
-		        "[AI-DIAG] build-list-invalid playerIndex=%d side='%s' reason=no-command-center; preserving starting command center\n",
-		        (int)m_player->getPlayerIndex(),
-		        m_player->getSide().str());
-		return;
-	}
-
 	Bool foundStart = false;
 	Coord3D startPos;
-
-	// Find our live command center only after the replacement plan is known-good.
+	
+	// Find our command center location.
 	Object *obj;
-	for (obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
-	{
+	for( obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{	
+
 		Player *owner = obj->getControllingPlayer();
-		if (owner == m_player && obj->isKindOf(KINDOF_COMMANDCENTER))
-		{
-			foundStart = true;
-			startPos = *obj->getPosition();
-			fprintf(stderr,
-			        "[AI-DIAG] start-command-center playerIndex=%d side='%s' objectID=%u template='%s' pos=%.1f,%.1f\n",
-			        (int)m_player->getPlayerIndex(),
-			        m_player->getSide().str(),
-			        (unsigned)obj->getID(),
-			        obj->getTemplate() != nullptr ? obj->getTemplate()->getName().str() : "<none>",
-			        (double)startPos.x,
-			        (double)startPos.y);
-			m_player->onStructureUndone(obj);
-			TheAI->pathfinder()->removeObjectFromPathfindMap(obj);
-			TheGameLogic->destroyObject(obj);
-			break;
+		if (owner==m_player) {
+			// See if it's a command center.
+			if (obj->isKindOf(KINDOF_COMMANDCENTER)) {
+				foundStart = true;
+				startPos = *obj->getPosition();
+				m_player->onStructureUndone(obj);
+				TheAI->pathfinder()->removeObjectFromPathfindMap(obj);
+				TheGameLogic->destroyObject(obj);
+				break;
+			}
 		}
 	}
-
-	if (!foundStart)
-	{
-		fprintf(stderr,
-		        "[AI-DIAG] missing-start-command-center playerIndex=%d side='%s'\n",
-		        (int)m_player->getPlayerIndex(),
-		        m_player->getSide().str());
+	if (!foundStart) {
+		DEBUG_LOG(("Couldn't find starting command center for ai player.\n"));
 		return;
 	}
-
-	commandCenterInfo->setInitiallyBuilt(true);
-	fprintf(stderr,
-	        "[AI-DIAG] build-list-command-center playerIndex=%d side='%s' template='%s' anchor=%.1f,%.1f\n",
-	        (int)m_player->getPlayerIndex(),
-	        m_player->getSide().str(),
-	        commandCenterInfo->getTemplateName().str(),
-	        (double)buildPos.x,
-	        (double)buildPos.y);
-
+	// Find the location of the command center in the build list.
+	Bool foundInBuildList = false;
+	Coord3D buildPos;
+	BuildListInfo *cur = list;
+	while (cur) {
+		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(cur->getTemplateName());
+		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER)) {
+			foundInBuildList = true;
+			buildPos = *cur->getLocation();
+			cur->setInitiallyBuilt(true);
+		}
+		cur = cur->getNext();
+	}
 	Region3D bounds;
 	TheTerrainLogic->getMaximumPathfindExtent(&bounds);
 	/* calculate section of 3x3 grid:
@@ -1125,43 +1064,30 @@ void AISkirmishPlayer::adjustBuildList(BuildListInfo *list)
 			case 8 : angle = PI; break; // 180 degrees.
 		}
 	}
-
+	
 	angle += 3*PI/4;
 
 	Real s = sin(angle);
 	Real c = cos(angle);
 
-	// Every entry in the side build plan is positioned relative to the template
-	// command center. Transform the whole plan to the selected skirmish start.
-	// The previous iOS fix accidentally changed the legacy constant CC check to a
-	// per-entry check, which moved only the command center and left every later
-	// building at the template's original map coordinates. That made AI behavior
-	// depend on the chosen start slot: dozers/workers spawned, but most structures
-	// could never be placed.
-	Int transformedEntries = 0;
-	for (BuildListInfo *cur = list; cur; cur = cur->getNext())
-	{
-		Coord3D curPos = *cur->getLocation();
-		curPos.x -= buildPos.x;
-		curPos.y -= buildPos.y;
-		Real newX = curPos.x*c - curPos.y*s;
-		Real newY = curPos.y*c + curPos.x*s;
-		curPos.x = newX + startPos.x;
-		curPos.y = newY + startPos.y;
-		cur->setLocation(curPos);
-		++transformedEntries;
+	cur = list;
+	while (cur) {
+		const ThingTemplate *tTemplate = TheThingFactory->findTemplate(list->getTemplateName());
+		if (tTemplate && tTemplate->isKindOf(KINDOF_COMMANDCENTER)) {
+			foundInBuildList = true;
+			Coord3D curPos = *cur->getLocation();
+			// Transform to new coords.
+			curPos.x -= buildPos.x;
+			curPos.y -= buildPos.y;	 
+			Real newX = curPos.x*c - curPos.y*s;
+			Real newY = curPos.y*c + curPos.x*s;
+			curPos.x = newX + startPos.x;
+			curPos.y = newY + startPos.y;
+			cur->setLocation(curPos);	 
+			cur->setAngle(cur->getAngle());
+		}
+		cur = cur->getNext();
 	}
-
-	fprintf(stderr,
-	        "[AI-DIAG] build-list-transform playerIndex=%d side='%s' entries=%d start=%.1f,%.1f templateAnchor=%.1f,%.1f angle=%.3f\n",
-	        (int)m_player->getPlayerIndex(),
-	        m_player->getSide().str(),
-	        (int)transformedEntries,
-	        (double)startPos.x,
-	        (double)startPos.y,
-	        (double)buildPos.x,
-	        (double)buildPos.y,
-	        (double)angle);
 
 }
 
