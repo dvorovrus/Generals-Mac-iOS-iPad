@@ -1290,12 +1290,39 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 
 	}
 	if( foundCommand == nullptr )
+	{
+		static Int s_commandSetMissDiagBudget = 24;
+		Player *diagPlayer = builder->getControllingPlayer();
+		if( s_commandSetMissDiagBudget > 0 && diagPlayer && diagPlayer->isSkirmishAIPlayer() )
+		{
+			--s_commandSetMissDiagBudget;
+			fprintf(stderr,
+			        "[AI-COMMANDSET] result=missing builder=%u builderTemplate='%s' commandSet='%s' target='%s'\n",
+			        (unsigned)builder->getID(),
+			        builder->getTemplate()->getName().str(),
+			        builder->getCommandSetString().str(),
+			        whatToBuild->getName().str());
+		}
 		return FALSE;
+	}
 
 	// make sure that the player can actually make this unit by checking prereqs and such
 	Player *player = builder->getControllingPlayer();
 	if( player->canBuild( foundCommand->getThingTemplate() ) == FALSE )
+	{
+		static Int s_commandSetPrereqDiagBudget = 24;
+		if( s_commandSetPrereqDiagBudget > 0 && player && player->isSkirmishAIPlayer() )
+		{
+			--s_commandSetPrereqDiagBudget;
+			fprintf(stderr,
+			        "[AI-COMMANDSET] result=prereq builder=%u commandSet='%s' target='%s' matched='%s'\n",
+			        (unsigned)builder->getID(),
+			        builder->getCommandSetString().str(),
+			        whatToBuild->getName().str(),
+			        foundCommand->getThingTemplate()->getName().str());
+		}
 		return FALSE;
+	}
 
 	// all is well
 	return TRUE;
