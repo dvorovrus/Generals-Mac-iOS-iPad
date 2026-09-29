@@ -28,6 +28,9 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include <cstdio>
+#include <cstring>
+
 #include "Common/DataChunk.h"
 #include "Common/file.h"
 #include "Common/FileSystem.h"
@@ -6953,6 +6956,22 @@ void ScriptEngine::executeScript( Script *pScript )
 	if (m_currentPlayer) {
 		difficulty = m_currentPlayer->getPlayerDifficulty();
 	}
+	const Bool traceUnlockScript =
+		m_currentPlayer && m_currentPlayer->isSkirmishAIPlayer() &&
+		(strstr(pScript->getName().str(), "Unlock") || strstr(pScript->getName().str(), "Technology"));
+	static Int s_unlockScriptDiagBudget = 16;
+	if (traceUnlockScript && s_unlockScriptDiagBudget > 0)
+	{
+		--s_unlockScriptDiagBudget;
+		fprintf(stderr,
+		        "[AI-SCRIPT] frame=%u playerIndex=%d script='%s' stage=evaluate difficulty=%d flags=%d/%d/%d\n",
+		        (unsigned)TheGameLogic->getFrame(),
+		        (int)m_currentPlayer->getPlayerIndex(),
+		        pScript->getName().str(), (int)difficulty,
+		        pScript->isEasy() ? 1 : 0,
+		        pScript->isNormal() ? 1 : 0,
+		        pScript->isHard() ? 1 : 0);
+	}
 	// If script doesn't match difficulty level, return.
 	switch (difficulty) {
 		case DIFFICULTY_EASY : if (!pScript->isEasy()) return;  break;
@@ -7016,6 +7035,14 @@ void ScriptEngine::executeScript( Script *pScript )
 		// If conditions evaluate to true, execute actions.
 		if (evaluateConditions(pScript)) {
 			if (pScript->getAction()) {
+				if (traceUnlockScript)
+				{
+					fprintf(stderr,
+					        "[AI-SCRIPT] frame=%u playerIndex=%d script='%s' result=execute\n",
+					        (unsigned)TheGameLogic->getFrame(),
+					        (int)m_currentPlayer->getPlayerIndex(),
+					        pScript->getName().str());
+				}
 				// Script Debug window
 				_appendMessage(pScript->getName());
 				executeActions(pScript->getAction());

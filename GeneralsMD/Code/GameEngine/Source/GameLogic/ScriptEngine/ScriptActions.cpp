@@ -29,6 +29,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include <cstdio>
+
 #include "Common/AudioAffect.h"
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/FramePacer.h"
@@ -1127,6 +1129,12 @@ void ScriptActions::doBuildObjectNearestTeam( const AsciiString& playerName, con
 void ScriptActions::doBuildUpgrade(const AsciiString& player, const AsciiString& upgrade)
 {
 	Player* thePlayer = TheScriptEngine->getPlayerFromAsciiString(player);
+	fprintf(stderr,
+	        "[AI-UPGRADE-ACTION] frame=%u player='%s' upgrade='%s' resolved=%d playerIndex=%d skirmish=%d\n",
+	        (unsigned)TheGameLogic->getFrame(), player.str(), upgrade.str(),
+	        thePlayer ? 1 : 0,
+	        thePlayer ? (int)thePlayer->getPlayerIndex() : -1,
+	        thePlayer && thePlayer->isSkirmishAIPlayer() ? 1 : 0);
 	if (thePlayer) {
 		thePlayer->buildUpgrade(upgrade);
 	}

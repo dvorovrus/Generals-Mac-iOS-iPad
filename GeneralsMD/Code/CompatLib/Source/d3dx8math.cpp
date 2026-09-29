@@ -94,12 +94,7 @@ D3DXMATRIX *WINAPI D3DXMatrixMultiply(D3DXMATRIX *pOut, CONST D3DXMATRIX *pM1, C
 	ConvertD3DXToGLM(*pM1, m1);
 	ConvertD3DXToGLM(*pM2, m2);
 
-	// D3DX uses row-vector matrix semantics while GLM uses column vectors.
-	// ConvertD3DXToGLM() transposes the logical D3D matrix, so multiplication
-	// order must be reversed: (M1 * M2)^T = M2^T * M1^T.
-	// Keeping m1 * m2 here drops/reorders translations in projected texture
-	// transforms, which freezes effects such as Zero Hour cloud shadows.
-	glm::mat4x4 m = m2 * m1;
+	glm::mat4x4 m = m1 * m2;
 	ConvertGLMToD3DX(m, *pOut);
 	return pOut;
 }
