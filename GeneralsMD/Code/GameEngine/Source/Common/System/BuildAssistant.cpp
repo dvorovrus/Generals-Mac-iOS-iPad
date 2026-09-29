@@ -103,90 +103,6 @@ static Bool isDozer( Object *obj )
 
 }
 
-//-------------------------------------------------------------------------------------------------
-// When a mod gates normal construction behind a technology-choice command set, stock skirmish AI
-// can deadlock because it immediately asks the dozer to build its first structure.  Human players
-// click one of the PLAYER_UPGRADE buttons first; the resulting CommandSetUpgrade then exposes the
-// normal construction commands.  Mirror that flow for skirmish AI instead of bypassing command-set
-// validation.
-//-------------------------------------------------------------------------------------------------
-static Bool queueSkirmishAITechPathIfNeeded( Object *builder )
-{
-	if( builder == nullptr || !isDozer( builder ) )
-		return FALSE;
-
-	Player *player = builder->getControllingPlayer();
-	if( player == nullptr || !player->isSkirmishAIPlayer() )
-		return FALSE;
-
-	const CommandSet *commandSet = TheControlBar->findCommandSet( builder->getCommandSetString() );
-	if( commandSet == nullptr )
-		return FALSE;
-
-	ProductionUpdateInterface *production = builder->getProductionUpdateInterface();
-	if( production == nullptr )
-		return FALSE;
-
-	// If a technology choice from this command set is already queued, wait for it to complete.
-	for( Int i = 0; i < MAX_COMMANDS_PER_SET; ++i )
-	{
-		const CommandButton *button = commandSet->getCommandButton( i );
-		if( button == nullptr || button->getCommandType() != GUI_COMMAND_PLAYER_UPGRADE )
-			continue;
-
-		const UpgradeTemplate *upgrade = button->getUpgradeTemplate();
-		if( upgrade != nullptr && player->hasUpgradeInProduction( upgrade ) )
-		{
-			fprintf(stderr,
-			        "[AI-TECH-PATH] builder=%u commandSet='%s' upgrade='%s' result=already-queued\n",
-			        (unsigned)builder->getID(), builder->getCommandSetString().str(),
-			        upgrade->getUpgradeName().str());
-			return TRUE;
-		}
-	}
-
-	// Choose the first affordable, not-yet-completed player upgrade in command-set order. This is
-	// deterministic and preserves the mod's own technology-choice buttons and upgrade mechanics.
-	for( Int i = 0; i < MAX_COMMANDS_PER_SET; ++i )
-	{
-		const CommandButton *button = commandSet->getCommandButton( i );
-		if( button == nullptr || button->getCommandType() != GUI_COMMAND_PLAYER_UPGRADE )
-			continue;
-
-		const UpgradeTemplate *upgrade = button->getUpgradeTemplate();
-		if( upgrade == nullptr || upgrade->getUpgradeType() != UPGRADE_TYPE_PLAYER )
-			continue;
-
-		if( player->hasUpgradeComplete( upgrade ) )
-		{
-			fprintf(stderr,
-			        "[AI-TECH-PATH] builder=%u commandSet='%s' upgrade='%s' result=already-complete\n",
-			        (unsigned)builder->getID(), builder->getCommandSetString().str(),
-			        upgrade->getUpgradeName().str());
-			return TRUE;
-		}
-
-		if( TheUpgradeCenter->canAffordUpgrade( player, upgrade ) == FALSE )
-			continue;
-
-		if( production->queueUpgrade( upgrade ) )
-		{
-			fprintf(stderr,
-			        "[AI-TECH-PATH] builder=%u commandSet='%s' upgrade='%s' result=queued\n",
-			        (unsigned)builder->getID(), builder->getCommandSetString().str(),
-			        upgrade->getUpgradeName().str());
-			return TRUE;
-		}
-
-		fprintf(stderr,
-		        "[AI-TECH-PATH] builder=%u commandSet='%s' upgrade='%s' result=queue-rejected\n",
-		        (unsigned)builder->getID(), builder->getCommandSetString().str(),
-		        upgrade->getUpgradeName().str());
-	}
-
-	return FALSE;
-}
-
 // PUBLIC /////////////////////////////////////////////////////////////////////////////////////////
 
 //-------------------------------------------------------------------------------------------------
@@ -428,10 +344,6 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 	// A nullptr constructor Object means a script built building so let it slide.
 	if( (constructorObject != nullptr) && !isPossibleToMakeUnit(constructorObject, what) )
 	{
-		// Some mods temporarily replace the dozer's normal construction command set with a
-		// technology-choice set. Let skirmish AI make that choice through the real upgrade queue,
-		// then retry construction after CommandSetUpgrade exposes the normal build commands.
-		queueSkirmishAITechPathIfNeeded( constructorObject );
 		return nullptr;
 	}
 
