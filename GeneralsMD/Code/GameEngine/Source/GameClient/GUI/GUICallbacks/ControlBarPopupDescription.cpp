@@ -132,12 +132,17 @@ void ControlBar::showBuildTooltipLayout( GameWindow *cmdButton )
 {
 	// GeneralsX @tweak GitHubCopilot 27/05/2026 Trace command tooltip population and cost-line visibility decisions.
 	char log_buffer[512];
-	sprintf(log_buffer,
-		"[GX-ISSUE144] Tooltip show request cmdWindow=%p prevWindow=%p hidden=%d",
-		cmdButton,
-		prevWindow,
-		m_buildToolTipLayout ? m_buildToolTipLayout->isHidden() : -1);
-	fprintf(stderr, "%s\n", log_buffer);
+	static Int tooltipRequestDiagBudget = 16;
+	if (tooltipRequestDiagBudget > 0)
+	{
+		--tooltipRequestDiagBudget;
+		sprintf(log_buffer,
+			"[GX-ISSUE144] Tooltip show request cmdWindow=%p prevWindow=%p hidden=%d",
+			cmdButton,
+			prevWindow,
+			m_buildToolTipLayout ? m_buildToolTipLayout->isHidden() : -1);
+		fprintf(stderr, "%s\n", log_buffer);
+	}
 
 	if (TheInGameUI->areTooltipsDisabled() 	|| TheScriptEngine->isGameEnding())
 	{

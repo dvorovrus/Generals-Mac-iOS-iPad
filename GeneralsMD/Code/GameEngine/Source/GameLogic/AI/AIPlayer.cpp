@@ -1798,6 +1798,12 @@ void AIPlayer::buildSpecificAIBuilding(const AsciiString &thingName)
 void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 {
 	const Bool traceUpgrade = m_player && m_player->isSkirmishAIPlayer();
+	// Full factory scans are useful for initial diagnosis, but grow with every
+	// building and every retry. Keep request/result lines after this budget ends.
+	static Int factoryTraceBudget = 8;
+	const Bool traceFactories = traceUpgrade && factoryTraceBudget > 0;
+	if (traceFactories)
+		--factoryTraceBudget;
 	if (traceUpgrade)
 		fprintf(stderr,
 		        "[AI-UPGRADE] frame=%u playerIndex=%d upgrade='%s' stage=request\n",
@@ -1866,14 +1872,14 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 		{
 			if( factory->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 			{
-				if (traceUpgrade)
+				if (traceFactories)
 					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=under-construction\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;
 			}
 			if( factory->getStatusBits().test( OBJECT_STATUS_SOLD ) )
 			{
-				if (traceUpgrade)
+				if (traceFactories)
 					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=sold\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;
@@ -1882,7 +1888,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			const CommandSet *commandSet = TheControlBar->findCommandSet( factory->getCommandSetString() );
 			if( commandSet == nullptr)
 			{
-				if (traceUpgrade)
+				if (traceFactories)
 					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' result=missing-command-set\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(),
 					        factory->getCommandSetString().str());
@@ -1901,7 +1907,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			}
 			if (!canUpgradeHere)
 			{
-				if (traceUpgrade)
+				if (traceFactories)
 					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' upgrade='%s' result=no-command\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(),
 					        factory->getCommandSetString().str(), upgrade.str());
@@ -1911,7 +1917,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			// If it doesn't produce, continue.
 			if (!pu)
 			{
-				if (traceUpgrade)
+				if (traceFactories)
 					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=no-production-update\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;

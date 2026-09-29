@@ -1023,11 +1023,23 @@ void GameEngine::update()
 		// Long iOS matches can be terminated by memory pressure without a useful
 		// in-process crash stack. Keep a lightweight footprint trail in stderr so
 		// retained session logs show whether memory is climbing before an exit.
-		if (TheGameLogic != nullptr && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame())
+		if (TheGameLogic != nullptr)
 		{
 			static UnsignedInt nextMemoryDiagFrame = 0;
+			static UnsignedInt lastMemoryDiagFrame = 0;
+			static UnsignedInt memoryDiagSession = 0;
+			static Int lastMemoryDiagState = -1;
+			const Int state = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() ? 1 : 0;
 			const UnsignedInt frame = TheGameLogic->getFrame();
-			if (frame >= nextMemoryDiagFrame)
+			const Bool transition = state != lastMemoryDiagState;
+			const Bool frameReset = frame < lastMemoryDiagFrame;
+			if (transition || frameReset)
+			{
+				nextMemoryDiagFrame = 0;
+				if (state == 1)
+					++memoryDiagSession;
+			}
+			if (transition || frameReset || (state == 1 && frame >= nextMemoryDiagFrame))
 			{
 				task_vm_info_data_t vmInfo = {};
 				mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
@@ -1040,14 +1052,18 @@ void GameEngine::update()
 				if (kr == KERN_SUCCESS)
 				{
 					fprintf(stderr,
-					        "[MEMORY-DIAG] frame=%u footprintMB=%.1f residentMB=%.1f virtualMB=%.1f\n",
+					        "[MEMORY-DIAG] frame=%u footprintMB=%.1f residentMB=%.1f virtualMB=%.1f session=%u phase=%s reason=%s\n",
 					        (unsigned)frame,
 					        (double)vmInfo.phys_footprint / (1024.0 * 1024.0),
 					        (double)vmInfo.resident_size / (1024.0 * 1024.0),
-					        (double)vmInfo.virtual_size / (1024.0 * 1024.0));
+					        (double)vmInfo.virtual_size / (1024.0 * 1024.0),
+					        (unsigned)memoryDiagSession, state == 1 ? "match" : "menu",
+					        transition ? "transition" : (frameReset ? "frame-reset" : "periodic"));
 				}
 				nextMemoryDiagFrame = frame + 300;
 			}
+			lastMemoryDiagFrame = frame;
+			lastMemoryDiagState = state;
 		}
 #endif
 	}
