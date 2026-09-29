@@ -52,6 +52,10 @@
 #include <cstdio>
 #include <unistd.h>   // _exit()
 #include <glob.h>     // glob() for Vulkan ICD discovery
+#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
+#include <execinfo.h>
+#include <signal.h>
+#endif
 
 // USER INCLUDES (match WinMain.cpp pattern)
 #include "Lib/BaseType.h"
@@ -777,9 +781,50 @@ void GeneralsXClearIOSDiagnosticLogs()
 
 #endif
 
+#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
+static void MacFatalSignalHandler(int signalNumber)
+{
+	char header[128];
+	const int headerLength = snprintf(header, sizeof(header),
+	                                  "\n[FATAL-SIGNAL] signal=%d\n[FATAL-SIGNAL] native backtrace follows:\n",
+	                                  signalNumber);
+	if (headerLength > 0)
+	{
+		write(STDERR_FILENO, header, (size_t)headerLength);
+	}
+
+	void *frames[64];
+	const int frameCount = backtrace(frames, (int)(sizeof(frames) / sizeof(frames[0])));
+	if (frameCount > 0)
+	{
+		backtrace_symbols_fd(frames, frameCount, STDERR_FILENO);
+	}
+	_exit(128 + signalNumber);
+}
+
+static void InstallMacFatalSignalHandlers()
+{
+	struct sigaction action = {};
+	action.sa_handler = MacFatalSignalHandler;
+	sigemptyset(&action.sa_mask);
+	action.sa_flags = SA_RESETHAND;
+
+	const int signals[] = { SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE };
+	for (const int signalNumber : signals)
+	{
+		sigaction(signalNumber, &action, nullptr);
+	}
+}
+#endif
+
 int main(int argc, char* argv[])
 {
 	int exitcode = 1;
+
+#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
+	InstallMacFatalSignalHandlers();
+	fprintf(stderr, "[CRASH-DIAG] macOS fatal-signal backtrace handlers installed\n");
+#endif
 
 	// TheSuperHackers @build felipebraz 13/02/2026
 	// Store command line arguments in globals for CommandLine.cpp parser
