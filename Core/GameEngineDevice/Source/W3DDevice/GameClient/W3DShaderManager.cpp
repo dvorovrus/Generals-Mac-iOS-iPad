@@ -2810,6 +2810,28 @@ Int W3DShaderManager::getShaderPasses(ShaderTypes shader)
 //=============================================================================
 Int W3DShaderManager::setShader(ShaderTypes shader, Int pass)
 {
+	const Bool cloudRelated =
+		shader == ST_TERRAIN_BASE_NOISE1 ||
+		shader == ST_TERRAIN_BASE_NOISE12 ||
+		shader == ST_ROAD_BASE_NOISE1 ||
+		shader == ST_ROAD_BASE_NOISE12 ||
+		shader == ST_CLOUD_TEXTURE ||
+		shader == ST_FLAT_TERRAIN_BASE_NOISE1 ||
+		shader == ST_FLAT_TERRAIN_BASE_NOISE12;
+
+	static Int s_cloudShaderDiagBudget = 48;
+	if (cloudRelated && s_cloudShaderDiagBudget > 0)
+	{
+		--s_cloudShaderDiagBudget;
+		fprintf(stderr,
+		        "[CLOUD-PATH] shader=%d pass=%d cached=%d impl=%p passes=%d\n",
+		        (int)shader,
+		        (int)pass,
+		        (shader == m_currentShader && pass == m_currentShaderPass) ? 1 : 0,
+		        (void *)W3DShaders[shader],
+		        (int)W3DShadersPassCount[shader]);
+	}
+
 	if (shader == m_currentShader && pass == m_currentShaderPass)
 		return TRUE;	//shader is already set
 	m_currentShader=shader;
