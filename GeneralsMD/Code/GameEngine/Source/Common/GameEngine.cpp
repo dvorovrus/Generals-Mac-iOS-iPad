@@ -901,7 +901,22 @@ void GameEngine::resetSubsystems()
 {
 	// TheSuperHackers @fix xezon 09/06/2025 Reset GameLogic first to purge all world objects early.
 	// This avoids potentially catastrophic issues when objects and subsystems have cross dependencies.
+#if defined(__APPLE__)
+	malloc_statistics_t gameLogicBeforeStats = {};
+	malloc_zone_statistics(nullptr, &gameLogicBeforeStats);
+	const double gameLogicBeforeMB = (double)gameLogicBeforeStats.size_in_use / (1024.0 * 1024.0);
+#endif
+
 	TheGameLogic->reset();
+
+#if defined(__APPLE__)
+	malloc_statistics_t gameLogicAfterStats = {};
+	malloc_zone_statistics(nullptr, &gameLogicAfterStats);
+	const double gameLogicAfterMB = (double)gameLogicAfterStats.size_in_use / (1024.0 * 1024.0);
+	fprintf(stderr,
+	        "[RESET-MEM] stage=game-logic-pre beforeMB=%.1f afterMB=%.1f deltaMB=%+.1f\n",
+	        gameLogicBeforeMB, gameLogicAfterMB, gameLogicAfterMB - gameLogicBeforeMB);
+#endif
 
 	TheSubsystemList->resetAll();
 }

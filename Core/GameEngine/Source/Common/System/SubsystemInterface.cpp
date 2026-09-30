@@ -29,6 +29,10 @@
 #include "Common/SubsystemInterface.h"
 #include "Common/Xfer.h"
 
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#endif
+
 
 #ifdef DUMP_PERF_STATS
 #include "GameLogic/GameLogic.h"
@@ -206,11 +210,44 @@ void SubsystemInterfaceList::postProcessLoadAll()
 //-----------------------------------------------------------------------------
 void SubsystemInterfaceList::resetAll()
 {
+#if defined(__APPLE__)
+	malloc_statistics_t resetStartStats = {};
+	malloc_zone_statistics(nullptr, &resetStartStats);
+	const double resetStartMB = (double)resetStartStats.size_in_use / (1024.0 * 1024.0);
+	fprintf(stderr, "[RESET-MEM] stage=subsystems-start heapUsedMB=%.1f count=%u\n",
+	        resetStartMB, (unsigned)m_subsystems.size());
+#endif
+
 //	for (SubsystemList::iterator it = m_subsystems.begin(); it != m_subsystems.end(); ++it)
 	for (SubsystemList::reverse_iterator it = m_subsystems.rbegin(); it != m_subsystems.rend(); ++it)
 	{
-		(*it)->reset();
+		SubsystemInterface *sys = *it;
+#if defined(__APPLE__)
+		malloc_statistics_t beforeStats = {};
+		malloc_zone_statistics(nullptr, &beforeStats);
+		const double beforeMB = (double)beforeStats.size_in_use / (1024.0 * 1024.0);
+#endif
+
+		sys->reset();
+
+#if defined(__APPLE__)
+		malloc_statistics_t afterStats = {};
+		malloc_zone_statistics(nullptr, &afterStats);
+		const double afterMB = (double)afterStats.size_in_use / (1024.0 * 1024.0);
+		AsciiString subsystemName = sys->getName();
+		fprintf(stderr,
+		        "[RESET-MEM] subsystem='%s' beforeMB=%.1f afterMB=%.1f deltaMB=%+.1f\n",
+		        subsystemName.str(), beforeMB, afterMB, afterMB - beforeMB);
+#endif
 	}
+
+#if defined(__APPLE__)
+	malloc_statistics_t resetEndStats = {};
+	malloc_zone_statistics(nullptr, &resetEndStats);
+	const double resetEndMB = (double)resetEndStats.size_in_use / (1024.0 * 1024.0);
+	fprintf(stderr, "[RESET-MEM] stage=subsystems-end heapUsedMB=%.1f deltaMB=%+.1f\n",
+	        resetEndMB, resetEndMB - resetStartMB);
+#endif
 }
 
 //-----------------------------------------------------------------------------
