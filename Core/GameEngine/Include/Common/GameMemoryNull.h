@@ -63,6 +63,8 @@ public:
 class MemoryPoolFactory
 {
 public:
+	Int releaseEmpties();
+
 
 	void memoryPoolUsageReport( const char* filename, FILE *appendToFileInstead = nullptr );
 

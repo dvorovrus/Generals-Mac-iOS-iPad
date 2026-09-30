@@ -94,6 +94,11 @@ void MemoryPoolFactory::memoryPoolUsageReport( const char* filename, FILE *appen
 {
 }
 
+Int MemoryPoolFactory::releaseEmpties()
+{
+	return 0;
+}
+
 #ifdef MEMORYPOOL_DEBUG
 void MemoryPoolFactory::debugMemoryReport(Int flags, Int startCheckpoint, Int endCheckpoint, FILE *fp )
 {

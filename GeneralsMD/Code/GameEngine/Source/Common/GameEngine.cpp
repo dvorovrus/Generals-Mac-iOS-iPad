@@ -76,6 +76,7 @@
 #include "Common/GameLOD.h"
 #include "Common/Registry.h"
 #include "Common/GameCommon.h"	// FOR THE ALLOW_DEBUG_CHEATS_IN_RELEASE #define
+#include "Common/GameMemory.h"
 
 #include "GameLogic/Armor.h"
 #include "GameLogic/AI.h"
@@ -919,6 +920,23 @@ void GameEngine::resetSubsystems()
 #endif
 
 	TheSubsystemList->resetAll();
+
+#if defined(__APPLE__)
+	malloc_statistics_t trimBeforeStats = {};
+	malloc_zone_statistics(nullptr, &trimBeforeStats);
+	Int poolBytes = 0;
+	if (TheMemoryPoolFactory != nullptr)
+		poolBytes = TheMemoryPoolFactory->releaseEmpties();
+	const size_t mallocBytes = malloc_zone_pressure_relief(nullptr, 0);
+	malloc_statistics_t trimAfterStats = {};
+	malloc_zone_statistics(nullptr, &trimAfterStats);
+	fprintf(stderr,
+	        "[MEMORY-GC] phase=post-reset beforeMB=%.1f afterMB=%.1f poolReleasedMB=%.1f mallocReliefMB=%.1f\n",
+	        (double)trimBeforeStats.size_in_use / (1024.0 * 1024.0),
+	        (double)trimAfterStats.size_in_use / (1024.0 * 1024.0),
+	        (double)poolBytes / (1024.0 * 1024.0),
+	        (double)mallocBytes / (1024.0 * 1024.0));
+#endif
 }
 
 /// -----------------------------------------------------------------------------------------------

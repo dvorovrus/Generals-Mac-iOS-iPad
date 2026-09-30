@@ -553,6 +553,9 @@ public:
 	/// destroy the contents of all pools and dmas. (the pools and dma's are not destroyed, just reset)
 	void reset();
 
+	/// Release completely empty pool blobs back to the operating system without touching live allocations.
+	Int releaseEmpties();
+
 	void memoryPoolUsageReport( const char* filename, FILE *appendToFileInstead = nullptr );
 
 	#ifdef MEMORYPOOL_DEBUG

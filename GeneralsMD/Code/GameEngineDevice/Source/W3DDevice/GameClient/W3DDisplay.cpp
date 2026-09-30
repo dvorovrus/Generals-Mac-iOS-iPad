@@ -46,11 +46,15 @@ static void drawFramerateBar();
 #endif
 #include <time.h>
 #include <vector>
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "Common/FramePacer.h"
 #include "Common/ThingFactory.h"
 #include "Common/GlobalData.h"
+#include "Common/GameMemory.h"
 #include "Common/PerfTimer.h"
 #include "Common/FileSystem.h"
 #include "Common/LocalFileSystem.h"
@@ -1200,17 +1204,39 @@ void W3DDisplay::updateAverageFPS()
 	// Pair periodic resource counts with the process footprint trail. Avoid
 	// per-frame hash scans, and restart sampling when a new map resets time.
 	static UnsignedInt nextResourceFrame = 0;
+	static UnsignedInt nextMemoryTrimFrame = 1800;
 	static UnsignedInt lastResourceFrame = 0;
 	if (TheGameLogic && m_assetManager)
 	{
 		const UnsignedInt frame = TheGameLogic->getFrame();
 		if (frame < lastResourceFrame)
+		{
 			nextResourceFrame = 0;
+			nextMemoryTrimFrame = 1800;
+		}
 		if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && frame >= nextResourceFrame)
 		{
 			fprintf(stderr, "[RESOURCE-DIAG] sampleFrame=%u\n", (unsigned)frame);
 			m_assetManager->Log_Resource_Summary("match-periodic");
 			nextResourceFrame = frame + 300;
+		}
+
+		if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && frame >= nextMemoryTrimFrame)
+		{
+			m_assetManager->Log_Resource_Summary("match-gc-before");
+			m_assetManager->Release_Unused_Assets();
+			m_assetManager->Log_Resource_Summary("match-gc-after");
+
+			Int poolBytes = 0;
+			if (TheMemoryPoolFactory != nullptr)
+				poolBytes = TheMemoryPoolFactory->releaseEmpties();
+			const size_t mallocBytes = malloc_zone_pressure_relief(nullptr, 0);
+			fprintf(stderr,
+			        "[MEMORY-GC] frame=%u poolReleasedMB=%.1f mallocReliefMB=%.1f\n",
+			        (unsigned)frame,
+			        (double)poolBytes / (1024.0 * 1024.0),
+			        (double)mallocBytes / (1024.0 * 1024.0));
+			nextMemoryTrimFrame = frame + 1800;
 		}
 		lastResourceFrame = frame;
 	}

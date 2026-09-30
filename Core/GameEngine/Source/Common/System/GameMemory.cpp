@@ -2799,6 +2799,18 @@ void MemoryPoolFactory::reset()
 }
 
 //-----------------------------------------------------------------------------
+/** Release fully unused backing blobs while preserving every live allocation. */
+Int MemoryPoolFactory::releaseEmpties()
+{
+	Int released = 0;
+	for (MemoryPool *pool = m_firstPoolInFactory; pool; pool = pool->getNextPoolInList())
+	{
+		released += pool->releaseEmpties();
+	}
+	return released;
+}
+
+//-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_DEBUG
 static const char* s_specialPrefixes[MAX_SPECIAL_USED] =
 {
