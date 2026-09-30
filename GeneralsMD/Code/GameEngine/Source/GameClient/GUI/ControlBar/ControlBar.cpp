@@ -94,60 +94,6 @@ const Image* ControlBar::m_rankVeteranIcon	= nullptr;
 const Image* ControlBar::m_rankEliteIcon		= nullptr;
 const Image* ControlBar::m_rankHeroicIcon		= nullptr;
 
-#if defined(__APPLE__)
-static Int ScaleAppleControlBarY(Int value, Real factor)
-{
-	return (Int)(value * factor + (value >= 0 ? 0.5f : -0.5f));
-}
-
-static void ScaleAppleControlBarChildrenY(GameWindow *parent, Real factor)
-{
-	if (parent == nullptr)
-		return;
-
-	for (GameWindow *child = parent->winGetChild(); child != nullptr; child = child->winGetNext())
-	{
-		Int x = 0, y = 0, width = 0, height = 0;
-		child->winGetPosition(&x, &y);
-		child->winGetSize(&width, &height);
-		child->winSetPosition(x, ScaleAppleControlBarY(y, factor));
-		child->winSetSize(width, max(1, ScaleAppleControlBarY(height, factor)));
-		ScaleAppleControlBarChildrenY(child, factor);
-	}
-}
-
-static void FixAppleControlBarProAspect(GameWindow *parent)
-{
-	if (parent == nullptr || TheDisplay == nullptr || TheGlobalData == nullptr ||
-	    TheGlobalData->m_viewportHeightScale < 0.99f)
-		return;
-
-	const Int displayWidth = TheDisplay->getWidth();
-	const Int displayHeight = TheDisplay->getHeight();
-	if (displayWidth <= 0 || displayHeight <= 0)
-		return;
-
-	// Contra Control Bar Pro is authored at 1920x1080. Preserve its 16:9
-	// vertical scale instead of stretching the layout to the Apple aspect ratio.
-	const Real correction = ((Real)displayWidth * 1080.0f) / ((Real)displayHeight * 1920.0f);
-	if (correction < 0.65f || correction > 0.995f)
-		return;
-
-	Int x = 0, y = 0, width = 0, height = 0;
-	parent->winGetPosition(&x, &y);
-	parent->winGetSize(&width, &height);
-	const Int correctedHeight = max(1, ScaleAppleControlBarY(height, correction));
-	ScaleAppleControlBarChildrenY(parent, correction);
-	parent->winSetSize(width, correctedHeight);
-	parent->winSetPosition(x, displayHeight - correctedHeight);
-	fprintf(stderr,
-	        "[CONTROLBAR-APPLE] aspect-correct display=%dx%d factor=%.4f parent=%d,%d %dx%d -> %d,%d %dx%d\n",
-	        displayWidth, displayHeight, (double)correction,
-	        x, y, width, height,
-	        x, displayHeight - correctedHeight, width, correctedHeight);
-}
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CommandButton //////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1148,9 +1094,6 @@ void ControlBar::init()
 		NameKeyType id;
 		id = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ControlBarParent" );
 		m_contextParent[ CP_MASTER ] = TheWindowManager->winGetWindowFromId( nullptr, id );
-#if defined(__APPLE__)
-		FixAppleControlBarProAspect(m_contextParent[ CP_MASTER ]);
-#endif
 	m_contextParent[ CP_MASTER ]->winGetPosition(&m_defaultControlBarPosition.x, &m_defaultControlBarPosition.y);
 		{
 			Int controlBarWidth = 0;
