@@ -249,7 +249,8 @@ NSDictionary<NSString *, NSString *> *DefaultContraSettings()
         @"TextureReduction": @"0",
         @"MaxParticleCount": @"2500",
         @"TextureFilter": @"Anisotropic",
-        @"AnisotropyLevel": @"8"
+        @"AnisotropyLevel": @"8",
+        @"AntiAliasing": @"0"
     };
 }
 
@@ -404,6 +405,8 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UISegmentedControl *textureQualitySegment;
 @property(nonatomic, strong) UISegmentedControl *particleQualitySegment;
 @property(nonatomic, strong) UISegmentedControl *textureFilterSegment;
+@property(nonatomic, strong) UISegmentedControl *anisotropySegment;
+@property(nonatomic, strong) UISegmentedControl *msaaSegment;
 
 @property(nonatomic, strong) UIView *diagnosticsView;
 @property(nonatomic, strong) UILabel *diagnosticsText;
@@ -643,7 +646,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.heatEffectsSwitch = [[UISwitch alloc] init];
     self.textureQualitySegment = [self makeSegmented:@[@"High", @"Medium", @"Low"]];
     self.particleQualitySegment = [self makeSegmented:@[@"Low", @"Medium", @"High"]];
-    self.textureFilterSegment = [self makeSegmented:@[@"Bilinear", @"Trilinear", @"Anisotropic 8x"]];
+    self.textureFilterSegment = [self makeSegmented:@[@"Bilinear", @"Trilinear", @"Anisotropic"]];
+    self.anisotropySegment = [self makeSegmented:@[@"2x", @"4x", @"8x", @"16x"]];
+    self.msaaSegment = [self makeSegmented:@[@"Off", @"2x", @"4x", @"8x"]];
+    [self.textureFilterSegment addTarget:self action:@selector(textureFilterChanged:) forControlEvents:UIControlEventValueChanged];
 
     self.maxCameraSlider = [self makeSliderWithMin:300.0f max:800.0f];
     self.minCameraSlider = [self makeSliderWithMin:40.0f max:150.0f];
@@ -690,6 +696,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self segmentedRow:@"Texture quality" control:self.textureQualitySegment],
         [self segmentedRow:@"Particles" control:self.particleQualitySegment],
         [self segmentedRow:@"Texture filtering" control:self.textureFilterSegment],
+        [self segmentedRow:@"Anisotropy" control:self.anisotropySegment],
+        [self segmentedRow:@"MSAA" control:self.msaaSegment],
 
         [self sectionLabel:@"CAMERA / PERFORMANCE"],
         [self sliderRow:@"Maximum camera height" slider:self.maxCameraSlider value:self.maxCameraValue],
@@ -1161,6 +1169,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.textureQualitySegment.selectedSegmentIndex = 0;
     self.particleQualitySegment.selectedSegmentIndex = 1;
     self.textureFilterSegment.selectedSegmentIndex = 2;
+    self.anisotropySegment.selectedSegmentIndex = 2;
+    self.msaaSegment.selectedSegmentIndex = 0;
+    [self textureFilterChanged:self.textureFilterSegment];
 }
 
 - (void)loadContraSettingsControls
@@ -1222,6 +1233,13 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.textureFilterSegment.selectedSegmentIndex =
         [filter caseInsensitiveCompare:@"Bilinear"] == NSOrderedSame ? 0 :
         ([filter caseInsensitiveCompare:@"Trilinear"] == NSOrderedSame ? 1 : 2);
+
+    NSInteger anisotropy = [SettingValue(values, @"AnisotropyLevel", @"8") integerValue];
+    self.anisotropySegment.selectedSegmentIndex = anisotropy >= 16 ? 3 : (anisotropy >= 8 ? 2 : (anisotropy >= 4 ? 1 : 0));
+
+    NSInteger antiAliasing = [SettingValue(values, @"AntiAliasing", @"0") integerValue];
+    self.msaaSegment.selectedSegmentIndex = antiAliasing >= 8 ? 3 : (antiAliasing >= 4 ? 2 : (antiAliasing >= 2 ? 1 : 0));
+    [self textureFilterChanged:self.textureFilterSegment];
 }
 
 - (void)resetSettingsControls
@@ -1324,6 +1342,13 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.fpsValue.alpha = enabled ? 1.0 : 0.35;
 }
 
+- (void)textureFilterChanged:(UISegmentedControl *)sender
+{
+    BOOL anisotropic = self.textureFilterSegment.selectedSegmentIndex == 2;
+    self.anisotropySegment.enabled = anisotropic;
+    self.anisotropySegment.alpha = anisotropic ? 1.0 : 0.35;
+}
+
 - (BOOL)saveContraSettingsAndOptions:(NSError **)error
 {
     NSArray<NSString *> *controlBars = @[@"Contra", @"Pro", @"Standard"];
@@ -1339,6 +1364,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     NSArray<NSString *> *filters = @[@"Bilinear", @"Trilinear", @"Anisotropic"];
     NSString *filter = filters[MAX(0, MIN(2, self.textureFilterSegment.selectedSegmentIndex))];
+    NSArray<NSString *> *anisotropyLevels = @[@"2", @"4", @"8", @"16"];
+    NSString *anisotropy = anisotropyLevels[MAX(0, MIN(3, self.anisotropySegment.selectedSegmentIndex))];
+    NSArray<NSString *> *msaaLevels = @[@"0", @"2", @"4", @"8"];
+    NSString *antiAliasing = msaaLevels[MAX(0, MIN(3, self.msaaSegment.selectedSegmentIndex))];
 
     NSMutableDictionary<NSString *, NSString *> *contra = [DefaultContraSettings() mutableCopy];
     contra[@"ControlBar"] = controlBars[self.contraControlBarSegment.selectedSegmentIndex];
@@ -1365,7 +1394,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     contra[@"TextureReduction"] = [NSString stringWithFormat:@"%ld", (long)self.textureQualitySegment.selectedSegmentIndex];
     contra[@"MaxParticleCount"] = [NSString stringWithFormat:@"%ld", (long)particleCount];
     contra[@"TextureFilter"] = filter;
-    contra[@"AnisotropyLevel"] = self.textureFilterSegment.selectedSegmentIndex == 2 ? @"8" : @"2";
+    contra[@"AnisotropyLevel"] = anisotropy;
+    contra[@"AntiAliasing"] = antiAliasing;
 
     if (!WriteKeyValueFile(ContraSettingsPath(), contra, error))
         return NO;
@@ -1377,7 +1407,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         @"UseShadowVolumes", @"UseShadowDecals", @"UseCloudMap", @"UseLightMap",
         @"ShowSoftWaterEdge", @"BuildingOcclusion", @"ShowTrees", @"ExtraAnimations",
         @"DynamicLOD", @"HeatEffects", @"TextureReduction", @"MaxParticleCount",
-        @"TextureFilter", @"AnisotropyLevel"
+        @"TextureFilter", @"AnisotropyLevel", @"AntiAliasing"
     ])
     {
         options[key] = contra[key];
