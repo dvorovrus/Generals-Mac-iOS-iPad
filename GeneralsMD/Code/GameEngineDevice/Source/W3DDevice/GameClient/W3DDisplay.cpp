@@ -1160,6 +1160,8 @@ void W3DDisplay::init()
 //=============================================================================
 void W3DDisplay::reset()
 {
+	if (m_assetManager)
+		m_assetManager->Log_Resource_Summary("display-reset-before");
 
 	Display::reset();
 
@@ -1184,6 +1186,7 @@ void W3DDisplay::reset()
 	// release any unused assets from W3D
 	/// @todo really need that "scene abstraction", having this stuff in the display is icky
 	m_assetManager->Release_Unused_Assets();
+	m_assetManager->Log_Resource_Summary("display-reset-after");
 
 	if (TheWritableGlobalData)
 		TheWritableGlobalData->m_drawSkyBox =0;
@@ -1193,6 +1196,25 @@ const UnsignedInt START_CUMU_FRAME = LOGICFRAMES_PER_SECOND / 2;	// skip first h
 
 void W3DDisplay::updateAverageFPS()
 {
+#if defined(__APPLE__)
+	// Pair periodic resource counts with the process footprint trail. Avoid
+	// per-frame hash scans, and restart sampling when a new map resets time.
+	static UnsignedInt nextResourceFrame = 0;
+	static UnsignedInt lastResourceFrame = 0;
+	if (TheGameLogic && m_assetManager)
+	{
+		const UnsignedInt frame = TheGameLogic->getFrame();
+		if (frame < lastResourceFrame)
+			nextResourceFrame = 0;
+		if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && frame >= nextResourceFrame)
+		{
+			fprintf(stderr, "[RESOURCE-DIAG] sampleFrame=%u\n", (unsigned)frame);
+			m_assetManager->Log_Resource_Summary("match-periodic");
+			nextResourceFrame = frame + 300;
+		}
+		lastResourceFrame = frame;
+	}
+#endif
 	constexpr const Int FPS_HISTORY_SIZE = 30;
 
 	static Int64 lastUpdateTime64 = 0;
@@ -3622,7 +3644,9 @@ void W3DDisplay::doSmartAssetPurgeAndPreload(const char* usageFileName)
 	}
 
 	// just free everything if there's no exclusion list file (send in an empty list)
+	m_assetManager->Log_Resource_Summary("asset-purge-before");
 	m_assetManager->Free_Assets_With_Exclusion_List(names);
+	m_assetManager->Log_Resource_Summary("asset-purge-after");
 }
 
 //-------------------------------------------------------------------------------------------------

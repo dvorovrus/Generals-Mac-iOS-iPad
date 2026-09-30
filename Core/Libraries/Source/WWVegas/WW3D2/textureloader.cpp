@@ -1449,8 +1449,16 @@ static bool	Get_Texture_Information
 		}
 
 		Targa targa;
-		if (TARGA_ERROR_HANDLER(targa.Open(filename, TGA_READMODE), filename))
+		const long targaError = TARGA_ERROR_HANDLER(targa.Open(filename, TGA_READMODE), filename);
+		if (targaError)
 		{
+			fprintf(stderr, "[TEXTURE-DIAG] tga-open-failed path='%s' code=%ld reason=%s\n",
+			        filename, targaError,
+			        targaError == TGAERR_OPEN ? "file-unavailable" :
+			        targaError == TGAERR_READ ? "read-error" :
+			        targaError == TGAERR_SYNTAX ? "invalid-header" :
+			        targaError == TGAERR_NOTSUPPORTED ? "unsupported-format" :
+			        targaError == TGAERR_NOMEM ? "out-of-memory" : "unknown");
 			return false;
 		}
 

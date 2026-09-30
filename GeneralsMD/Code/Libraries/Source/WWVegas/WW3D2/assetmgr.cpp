@@ -1173,6 +1173,29 @@ void WW3DAssetManager::Release_All_Textures()
  * HISTORY:                                                                                    *
  *   2/18/99    EHC : Created.                                                                 *
  *=============================================================================================*/
+void WW3DAssetManager::Log_Resource_Summary(const char *phase)
+{
+	unsigned textures = 0, unused = 0;
+	double bytes = 0, unusedBytes = 0;
+	HashTemplateIterator<StringClass,TextureClass*> ite(TextureHash);
+	for (ite.First(); !ite.Is_Done(); ite.Next())
+	{
+		TextureClass *tex = ite.Peek_Value();
+		const unsigned size = tex->Get_Texture_Memory_Usage();
+		++textures;
+		bytes += size;
+		if (tex->Num_Refs() == 1)
+		{
+			++unused;
+			unusedBytes += size;
+		}
+	}
+	// This estimates managed texture storage, not total driver/GPU allocation.
+	fprintf(stderr, "[RESOURCE-DIAG] phase=%s prototypes=%d textures=%u textureMB=%.1f unusedTextures=%u unusedTextureMB=%.1f\n",
+	        phase, Prototypes.Count(), textures, bytes / (1024.0 * 1024.0),
+	        unused, unusedBytes / (1024.0 * 1024.0));
+}
+
 void WW3DAssetManager::Release_Unused_Textures()
 {
 	/*
@@ -1180,29 +1203,24 @@ void WW3DAssetManager::Release_Unused_Textures()
 	** refcount is one.
 	*/
 
-	unsigned count=0;
+	unsigned count;
 	TextureClass* temp_textures[256];
 
-	HashTemplateIterator<StringClass,TextureClass*> ite(TextureHash);
-	for (ite.First();!ite.Is_Done();ite.Next()) {
-		TextureClass* tex=ite.Peek_Value();
-		if (tex->Num_Refs() == 1) {
-			temp_textures[count++]=tex;
-			if (count==256) {
-				for (unsigned i=0;i<256;++i) {
-					TextureHash.Remove(temp_textures[i]->Get_Texture_Name());
-					temp_textures[i]->Release_Ref();
-				}
-				count=0;
-				ite.First();	// iterator doesn't support modifying the hash table while iterating, so start from the
-									// beginning.
-			}
+	// Delete only after iteration stops. Restarting inside a for loop used to
+	// advance past the first surviving entry, leaving an unused texture cached.
+	do {
+		count = 0;
+		HashTemplateIterator<StringClass,TextureClass*> ite(TextureHash);
+		for (ite.First(); !ite.Is_Done() && count < 256; ite.Next()) {
+			TextureClass *tex = ite.Peek_Value();
+			if (tex->Num_Refs() == 1)
+				temp_textures[count++] = tex;
 		}
-	}
-	for (unsigned i=0;i<count;++i) {
-		TextureHash.Remove(temp_textures[i]->Get_Texture_Name());
-		temp_textures[i]->Release_Ref();
-	}
+		for (unsigned i = 0; i < count; ++i) {
+			TextureHash.Remove(temp_textures[i]->Get_Texture_Name());
+			temp_textures[i]->Release_Ref();
+		}
+	} while (count == 256);
 }
 
 /***********************************************************************************************

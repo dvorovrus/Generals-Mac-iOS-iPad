@@ -31,6 +31,7 @@
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #include <mach/mach.h>
+#include <malloc/malloc.h>
 #endif
 
 #include "Common/ActionManager.h"
@@ -1051,14 +1052,20 @@ void GameEngine::update()
 
 				if (kr == KERN_SUCCESS)
 				{
+					malloc_statistics_t heap = {};
+					malloc_zone_statistics(nullptr, &heap);
 					fprintf(stderr,
-					        "[MEMORY-DIAG] frame=%u footprintMB=%.1f residentMB=%.1f virtualMB=%.1f session=%u phase=%s reason=%s\n",
+					        "[MEMORY-DIAG] frame=%u footprintMB=%.1f residentMB=%.1f virtualMB=%.1f session=%u phase=%s reason=%s heapUsedMB=%.1f heapReservedMB=%.1f compressedMB=%.1f objects=%u\n",
 					        (unsigned)frame,
 					        (double)vmInfo.phys_footprint / (1024.0 * 1024.0),
 					        (double)vmInfo.resident_size / (1024.0 * 1024.0),
 					        (double)vmInfo.virtual_size / (1024.0 * 1024.0),
 					        (unsigned)memoryDiagSession, state == 1 ? "match" : "menu",
-					        transition ? "transition" : (frameReset ? "frame-reset" : "periodic"));
+					        transition ? "transition" : (frameReset ? "frame-reset" : "periodic"),
+					        (double)heap.size_in_use / (1024.0 * 1024.0),
+					        (double)heap.size_allocated / (1024.0 * 1024.0),
+					        (double)vmInfo.compressed / (1024.0 * 1024.0),
+					        (unsigned)TheGameLogic->getObjectCount());
 				}
 				nextMemoryDiagFrame = frame + 300;
 			}
