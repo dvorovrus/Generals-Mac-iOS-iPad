@@ -78,6 +78,9 @@ static DynamicVectorClass<Vector3>				_TempNormalBuffer;
 static MultiListClass<MeshModelClass>			_RegisteredMeshList;
 static TextureCategoryList							texture_category_delete_list;
 static FVFCategoryList								fvf_category_container_delete_list;
+static unsigned _DX8TextureCategoryCount = 0;
+static unsigned _DX8FVFCategoryCount = 0;
+static unsigned _DX8RegisteredMeshCount = 0;
 
 // GeneralsX @diagnostic dvorovrus 27/09/2026
 // Texture loading is now healthy on iOS, but some Contra submeshes still render
@@ -337,6 +340,7 @@ DX8TextureCategoryClass::DX8TextureCategoryClass(
 	}
 
 	if (material) material->Add_Ref();
+	++_DX8TextureCategoryCount;
 }
 
 DX8TextureCategoryClass::~DX8TextureCategoryClass()
@@ -353,6 +357,8 @@ DX8TextureCategoryClass::~DX8TextureCategoryClass()
 	REF_PTR_RELEASE(material);
 
 	DEBUG_ASSERTCRASH(render_task_head == nullptr, ("~DX8TextureCategoryClass: Leaking render tasks"));
+	if (_DX8TextureCategoryCount > 0)
+		--_DX8TextureCategoryCount;
 }
 
 void DX8TextureCategoryClass::Add_Render_Task(DX8PolygonRendererClass * p_renderer,MeshClass * p_mesh)
@@ -570,6 +576,7 @@ DX8FVFCategoryContainer::DX8FVFCategoryContainer(unsigned FVF_,bool sorting_)
 	if ((FVF&D3DFVF_TEX6)==D3DFVF_TEX6) uv_coordinate_channels=6;
 	if ((FVF&D3DFVF_TEX7)==D3DFVF_TEX7) uv_coordinate_channels=7;
 	if ((FVF&D3DFVF_TEX8)==D3DFVF_TEX8) uv_coordinate_channels=8;
+	++_DX8FVFCategoryCount;
 }
 
 // ----------------------------------------------------------------------------
@@ -583,6 +590,8 @@ DX8FVFCategoryContainer::~DX8FVFCategoryContainer()
 			delete tex;
 		}
 	}
+	if (_DX8FVFCategoryCount > 0)
+		--_DX8FVFCategoryCount;
 }
 
 // ----------------------------------------------------------------------------
@@ -2148,6 +2157,21 @@ void DX8MeshRendererClass::Clear_Pending_Delete_Lists()
 	}
 }
 
+unsigned DX8MeshRendererClass::Get_Texture_Category_Count()
+{
+	return _DX8TextureCategoryCount;
+}
+
+unsigned DX8MeshRendererClass::Get_FVF_Category_Count()
+{
+	return _DX8FVFCategoryCount;
+}
+
+unsigned DX8MeshRendererClass::Get_Registered_Mesh_Count()
+{
+	return _DX8RegisteredMeshCount;
+}
+
 // ----------------------------------------------------------------------------
 
 static void Add_Rigid_Mesh_To_Container(FVFCategoryList* container_list,unsigned fvf,MeshModelClass* mmc)
@@ -2178,7 +2202,13 @@ void DX8MeshRendererClass::Unregister_Mesh_Type(MeshModelClass* mmc)
 	while (DX8PolygonRendererClass* n=mmc->PolygonRendererList.Remove_Head()) {
 		delete n;
 	}
-	_RegisteredMeshList.Remove(mmc);
+	if (_RegisteredMeshList.Contains(mmc)) {
+		_RegisteredMeshList.Remove(mmc);
+		if (_DX8RegisteredMeshCount > 0)
+			--_DX8RegisteredMeshCount;
+	} else {
+		_RegisteredMeshList.Remove(mmc);
+	}
 
 	// Also remove the gap filler!
 	if (mmc->GapFiller) {
@@ -2264,6 +2294,7 @@ void DX8MeshRendererClass::Register_Mesh_Type(MeshModelClass* mmc)
 			*/
 			if (mmc->PolygonRendererList.Is_Empty() == false) {
 				_RegisteredMeshList.Add_Tail(mmc);
+				++_DX8RegisteredMeshCount;
 			}
 			else {
 				WWDEBUG_SAY(("Error: Register_Mesh_Type failed! file: %s line: %d",__FILE__,__LINE__));
@@ -2398,6 +2429,7 @@ void DX8MeshRendererClass::Invalidate( bool shutdown)
 {
 	WWMEMLOG(MEM_RENDERER);
 	_RegisteredMeshList.Reset_List();
+	_DX8RegisteredMeshCount = 0;
 
 	for (int i=0;i<texture_category_container_lists_rigid.Count();++i) {
 		Invalidate_FVF_Category_Container_List(*texture_category_container_lists_rigid[i]);

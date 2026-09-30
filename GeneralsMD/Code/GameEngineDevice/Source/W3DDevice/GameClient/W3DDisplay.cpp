@@ -102,7 +102,10 @@ static void drawFramerateBar();
 #include "WW3D2/dx8caps.h"
 #include "WW3D2/dx8vertexbuffer.h"
 #include "WW3D2/dx8indexbuffer.h"
+#include "WW3D2/dx8renderer.h"
+#include "WW3D2/dx8polygonrenderer.h"
 #include "WW3D2/surfaceclass.h"
+#include "sharebuf.h"
 #include "WW3D2/ww3dformat.h"
 #include "WW3D2/agg_def.h"
 #include "WW3D2/render2dsentence.h"
@@ -120,8 +123,9 @@ static void drawFramerateBar();
 static void Log_Render_Memory_Summary(const char *phase, UnsignedInt frame)
 {
 	const double mb = 1024.0 * 1024.0;
+	const ShareBufferDiagStats &share = Get_Share_Buffer_Diag_Stats();
 	fprintf(stderr,
-	        "[RENDER-MEM] phase=%s frame=%u vbCount=%u vbVertices=%u vbMB=%.2f ibCount=%u ibIndices=%u ibMB=%.2f surfaces=%u surfaceMB=%.2f meshModels=%u\n",
+	        "[RENDER-MEM] phase=%s frame=%u vbCount=%u vbVertices=%u vbMB=%.2f ibCount=%u ibIndices=%u ibMB=%.2f surfaces=%u surfaceMB=%.2f meshModels=%u matDescs=%u shareGeomCount=%u shareGeomMB=%.2f shareMatCount=%u shareMatMB=%.2f shareOtherCount=%u shareOtherMB=%.2f polyRenderers=%u textureCats=%u fvfCats=%u registeredMeshes=%u\n",
 	        phase != nullptr ? phase : "unknown",
 	        (unsigned)frame,
 	        VertexBufferClass::Get_Total_Buffer_Count(),
@@ -132,7 +136,18 @@ static void Log_Render_Memory_Summary(const char *phase, UnsignedInt frame)
 	        (double)IndexBufferClass::Get_Total_Allocated_Memory() / mb,
 	        SurfaceClass::Get_Total_Surface_Count(),
 	        (double)SurfaceClass::Get_Total_Allocated_Memory() / mb,
-	        MeshModelClass::Get_Total_Model_Count());
+	        MeshModelClass::Get_Total_Model_Count(),
+	        MeshMatDescClass::Get_Total_Desc_Count(),
+	        share.GeometryCount,
+	        (double)share.GeometryBytes / mb,
+	        share.MaterialCount,
+	        (double)share.MaterialBytes / mb,
+	        share.OtherCount,
+	        (double)share.OtherBytes / mb,
+	        DX8PolygonRendererClass::Get_Total_Renderer_Count(),
+	        DX8MeshRendererClass::Get_Texture_Category_Count(),
+	        DX8MeshRendererClass::Get_FVF_Category_Count(),
+	        DX8MeshRendererClass::Get_Registered_Mesh_Count());
 }
 #endif
 
