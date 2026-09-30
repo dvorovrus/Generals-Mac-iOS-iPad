@@ -125,7 +125,7 @@ static void Log_Render_Memory_Summary(const char *phase, UnsignedInt frame)
 	const double mb = 1024.0 * 1024.0;
 	const ShareBufferDiagStats &share = Get_Share_Buffer_Diag_Stats();
 	fprintf(stderr,
-	        "[RENDER-MEM] phase=%s frame=%u vbCount=%u vbVertices=%u vbMB=%.2f ibCount=%u ibIndices=%u ibMB=%.2f surfaces=%u surfaceMB=%.2f meshModels=%u matDescs=%u shareGeomCount=%u shareGeomMB=%.2f shareMatCount=%u shareMatMB=%.2f shareOtherCount=%u shareOtherMB=%.2f polyRenderers=%u textureCats=%u fvfCats=%u registeredMeshes=%u\n",
+	        "[RENDER-MEM] phase=%s frame=%u vbCount=%u vbVertices=%u vbMB=%.2f ibCount=%u ibIndices=%u ibMB=%.2f surfaces=%u surfaceMB=%.2f meshModels=%u matDescs=%u shareGeomCount=%u shareGeomMB=%.2f shareMatCount=%u shareMatMB=%.2f shareOtherCount=%u shareOtherMB=%.2f polyRenderers=%u textureCats=%u fvfCats=%u registeredMeshes=%u pendingTextureCats=%u pendingFvfCats=%u tempVertices=%u tempNormals=%u\n",
 	        phase != nullptr ? phase : "unknown",
 	        (unsigned)frame,
 	        VertexBufferClass::Get_Total_Buffer_Count(),
@@ -147,7 +147,11 @@ static void Log_Render_Memory_Summary(const char *phase, UnsignedInt frame)
 	        DX8PolygonRendererClass::Get_Total_Renderer_Count(),
 	        DX8MeshRendererClass::Get_Texture_Category_Count(),
 	        DX8MeshRendererClass::Get_FVF_Category_Count(),
-	        DX8MeshRendererClass::Get_Registered_Mesh_Count());
+	        DX8MeshRendererClass::Get_Registered_Mesh_Count(),
+	        DX8MeshRendererClass::Get_Pending_Texture_Category_Count(),
+	        DX8MeshRendererClass::Get_Pending_FVF_Category_Count(),
+	        DX8MeshRendererClass::Get_Temp_Vertex_Count(),
+	        DX8MeshRendererClass::Get_Temp_Normal_Count());
 }
 #endif
 
@@ -3718,8 +3722,14 @@ void W3DDisplay::doSmartAssetPurgeAndPreload(const char* usageFileName)
 
 	// just free everything if there's no exclusion list file (send in an empty list)
 	m_assetManager->Log_Resource_Summary("asset-purge-before");
+#if defined(__APPLE__)
+	Log_Render_Memory_Summary("asset-purge-before", TheGameLogic ? TheGameLogic->getFrame() : 0);
+#endif
 	m_assetManager->Free_Assets_With_Exclusion_List(names);
 	m_assetManager->Log_Resource_Summary("asset-purge-after");
+#if defined(__APPLE__)
+	Log_Render_Memory_Summary("asset-purge-after", TheGameLogic ? TheGameLogic->getFrame() : 0);
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------

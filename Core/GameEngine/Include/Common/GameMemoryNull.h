@@ -64,6 +64,7 @@ class MemoryPoolFactory
 {
 public:
 	Int releaseEmpties();
+	void logDiagnostics(const char *phase, UnsignedInt frame, Bool detailed);
 
 
 	void memoryPoolUsageReport( const char* filename, FILE *appendToFileInstead = nullptr );

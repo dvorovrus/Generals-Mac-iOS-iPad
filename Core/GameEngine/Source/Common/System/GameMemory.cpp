@@ -2810,6 +2810,95 @@ Int MemoryPoolFactory::releaseEmpties()
 	return released;
 }
 
+void MemoryPoolFactory::logDiagnostics(const char *phase, UnsignedInt frame, Bool detailed)
+{
+	const double mb = 1024.0 * 1024.0;
+	long long usedBytes = 0;
+	long long capacityBytes = 0;
+	long long peakUsedBytes = 0;
+	long long usedBlocks = 0;
+	long long totalBlocks = 0;
+	long long peakBlocks = 0;
+	Int poolCount = 0;
+	Int blobCount = 0;
+
+	struct TopPool
+	{
+		MemoryPool *pool;
+		long long slackBytes;
+	};
+	TopPool top[8] = {};
+
+	for (MemoryPool *pool = m_firstPoolInFactory; pool; pool = pool->getNextPoolInList())
+	{
+		const long long allocSize = pool->getAllocationSize();
+		const long long used = pool->getUsedBlockCount();
+		const long long total = pool->getTotalBlockCount();
+		const long long peak = pool->getPeakBlockCount();
+		const long long slack = (total - used) * allocSize;
+		++poolCount;
+		blobCount += pool->countBlobsInPool();
+		usedBlocks += used;
+		totalBlocks += total;
+		peakBlocks += peak;
+		usedBytes += used * allocSize;
+		capacityBytes += total * allocSize;
+		peakUsedBytes += peak * allocSize;
+
+		if (detailed && slack > 0)
+		{
+			for (Int i = 0; i < 8; ++i)
+			{
+				if (top[i].pool == nullptr || slack > top[i].slackBytes)
+				{
+					for (Int j = 7; j > i; --j)
+						top[j] = top[j - 1];
+					top[i].pool = pool;
+					top[i].slackBytes = slack;
+					break;
+				}
+			}
+		}
+	}
+
+	fprintf(stderr,
+	        "[POOL-DIAG] phase=%s frame=%u pools=%d blobs=%d usedBlocks=%lld freeBlocks=%lld totalBlocks=%lld peakBlocks=%lld usedMB=%.2f capacityMB=%.2f slackMB=%.2f peakUsedMB=%.2f\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        poolCount,
+	        blobCount,
+	        usedBlocks,
+	        totalBlocks - usedBlocks,
+	        totalBlocks,
+	        peakBlocks,
+	        (double)usedBytes / mb,
+	        (double)capacityBytes / mb,
+	        (double)(capacityBytes - usedBytes) / mb,
+	        (double)peakUsedBytes / mb);
+
+	if (detailed)
+	{
+		for (Int i = 0; i < 8 && top[i].pool != nullptr; ++i)
+		{
+			MemoryPool *pool = top[i].pool;
+			fprintf(stderr,
+			        "[POOL-TOP] phase=%s frame=%u rank=%d name=%s blockBytes=%d used=%d free=%d total=%d peak=%d blobs=%d slackMB=%.2f capacityMB=%.2f\n",
+			        phase != nullptr ? phase : "unknown",
+			        (unsigned)frame,
+			        i + 1,
+			        pool->getPoolName() != nullptr ? pool->getPoolName() : "unknown",
+			        pool->getAllocationSize(),
+			        pool->getUsedBlockCount(),
+			        pool->getFreeBlockCount(),
+			        pool->getTotalBlockCount(),
+			        pool->getPeakBlockCount(),
+			        pool->countBlobsInPool(),
+			        (double)top[i].slackBytes / mb,
+			        (double)pool->getTotalBlockCount() * (double)pool->getAllocationSize() / mb);
+		}
+	}
+}
+
 //-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_DEBUG
 static const char* s_specialPrefixes[MAX_SPECIAL_USED] =

@@ -556,6 +556,9 @@ public:
 	/// Release completely empty pool blobs back to the operating system without touching live allocations.
 	Int releaseEmpties();
 
+	/// Emit aggregate pool usage and, when requested, the pools retaining the most free capacity.
+	void logDiagnostics(const char *phase, UnsignedInt frame, Bool detailed);
+
 	void memoryPoolUsageReport( const char* filename, FILE *appendToFileInstead = nullptr );
 
 	#ifdef MEMORYPOOL_DEBUG

@@ -228,6 +228,7 @@ public:
 	unsigned Get_Heap_Size() const { return TotalHeapSize; }
 	unsigned Get_Allocated_Size() const { return TotalAllocatedSize; }
 	unsigned Get_Allocation_Count() const { return TotalAllocationCount; }
+	unsigned Get_Element_Size() const { return esize; }
 
 protected:
 	struct Link
@@ -377,9 +378,19 @@ public:
 	unsigned Get_Total_Heap_Size();
 	unsigned Get_Total_Allocated_Size();
 	unsigned Get_Total_Allocation_Count();
+	unsigned long long Get_Total_Heap_Size64();
+	unsigned long long Get_Total_Allocated_Size64();
 	unsigned Get_Total_Actual_Memory_Usage() { return ActualMemoryUsage; }
+	unsigned Get_Bucket_Count() const { return MAX_ALLOC_SIZE / ALLOC_STEP; }
+	unsigned Get_Bucket_Block_Size(unsigned index);
+	unsigned Get_Bucket_Heap_Size(unsigned index);
+	unsigned Get_Bucket_Allocated_Size(unsigned index);
+	unsigned Get_Bucket_Allocation_Count(unsigned index);
+	unsigned Get_Malloc_Allocated_Size() const { return AllocatedWithMalloc; }
+	unsigned Get_Malloc_Allocation_Count() const { return AllocatedWithMallocCount; }
 
 	static FastAllocatorGeneral* Get_Allocator();
+	static FastAllocatorGeneral* Peek_Allocator();
 
 protected:
    FastFixedAllocator allocators[MAX_ALLOC_SIZE/ALLOC_STEP];
@@ -420,6 +431,54 @@ WWINLINE unsigned FastAllocatorGeneral::Get_Total_Allocation_Count()
 		count+=allocators[i].Get_Allocation_Count();
 	}
 	return count;
+}
+
+WWINLINE unsigned long long FastAllocatorGeneral::Get_Total_Heap_Size64()
+{
+	unsigned long long size = AllocatedWithMalloc;
+	for (int i = 0; i < MAX_ALLOC_SIZE / ALLOC_STEP; ++i) {
+		FastCriticalSectionClass::LockClass lock(CriticalSections[i]);
+		size += allocators[i].Get_Heap_Size();
+	}
+	return size;
+}
+
+WWINLINE unsigned long long FastAllocatorGeneral::Get_Total_Allocated_Size64()
+{
+	unsigned long long size = AllocatedWithMalloc;
+	for (int i = 0; i < MAX_ALLOC_SIZE / ALLOC_STEP; ++i) {
+		FastCriticalSectionClass::LockClass lock(CriticalSections[i]);
+		size += allocators[i].Get_Allocated_Size();
+	}
+	return size;
+}
+
+WWINLINE unsigned FastAllocatorGeneral::Get_Bucket_Block_Size(unsigned index)
+{
+	if (index >= Get_Bucket_Count()) return 0;
+	FastCriticalSectionClass::LockClass lock(CriticalSections[index]);
+	return allocators[index].Get_Element_Size();
+}
+
+WWINLINE unsigned FastAllocatorGeneral::Get_Bucket_Heap_Size(unsigned index)
+{
+	if (index >= Get_Bucket_Count()) return 0;
+	FastCriticalSectionClass::LockClass lock(CriticalSections[index]);
+	return allocators[index].Get_Heap_Size();
+}
+
+WWINLINE unsigned FastAllocatorGeneral::Get_Bucket_Allocated_Size(unsigned index)
+{
+	if (index >= Get_Bucket_Count()) return 0;
+	FastCriticalSectionClass::LockClass lock(CriticalSections[index]);
+	return allocators[index].Get_Allocated_Size();
+}
+
+WWINLINE unsigned FastAllocatorGeneral::Get_Bucket_Allocation_Count(unsigned index)
+{
+	if (index >= Get_Bucket_Count()) return 0;
+	FastCriticalSectionClass::LockClass lock(CriticalSections[index]);
+	return allocators[index].Get_Allocation_Count();
 }
 
 // ----------------------------------------------------------------------------

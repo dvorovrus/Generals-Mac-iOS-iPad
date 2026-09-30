@@ -2172,6 +2172,26 @@ unsigned DX8MeshRendererClass::Get_Registered_Mesh_Count()
 	return _DX8RegisteredMeshCount;
 }
 
+unsigned DX8MeshRendererClass::Get_Pending_Texture_Category_Count()
+{
+	return (unsigned)texture_category_delete_list.Count();
+}
+
+unsigned DX8MeshRendererClass::Get_Pending_FVF_Category_Count()
+{
+	return (unsigned)fvf_category_container_delete_list.Count();
+}
+
+unsigned DX8MeshRendererClass::Get_Temp_Vertex_Count()
+{
+	return (unsigned)_TempVertexBuffer.Count();
+}
+
+unsigned DX8MeshRendererClass::Get_Temp_Normal_Count()
+{
+	return (unsigned)_TempNormalBuffer.Count();
+}
+
 // ----------------------------------------------------------------------------
 
 static void Add_Rigid_Mesh_To_Container(FVFCategoryList* container_list,unsigned fvf,MeshModelClass* mmc)
