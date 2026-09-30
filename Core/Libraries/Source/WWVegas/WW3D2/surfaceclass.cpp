@@ -73,33 +73,20 @@ static unsigned long long Estimate_Surface_Bytes(IDirect3DSurface8 *surface)
 
 	const unsigned long long width = desc.Width;
 	const unsigned long long height = desc.Height;
-	switch (desc.Format)
+	const WW3DFormat format = D3DFormat_To_WW3DFormat(desc.Format);
+	switch (format)
 	{
-	case D3DFMT_R8G8B8: return width * height * 3ULL;
-	case D3DFMT_A8R8G8B8:
-	case D3DFMT_X8R8G8B8:
-	case D3DFMT_X8L8V8U8: return width * height * 4ULL;
-	case D3DFMT_R5G6B5:
-	case D3DFMT_X1R5G5B5:
-	case D3DFMT_A1R5G5B5:
-	case D3DFMT_A4R4G4B4:
-	case D3DFMT_A8R3G3B2:
-	case D3DFMT_X4R4G4B4:
-	case D3DFMT_A8P8:
-	case D3DFMT_A8L8:
-	case D3DFMT_U8V8:
-	case D3DFMT_L6V5U5: return width * height * 2ULL;
-	case D3DFMT_R3G3B2:
-	case D3DFMT_A8:
-	case D3DFMT_P8:
-	case D3DFMT_L8:
-	case D3DFMT_A4L4: return width * height;
-	case D3DFMT_DXT1: return ((width + 3ULL) / 4ULL) * ((height + 3ULL) / 4ULL) * 8ULL;
-	case D3DFMT_DXT2:
-	case D3DFMT_DXT3:
-	case D3DFMT_DXT4:
-	case D3DFMT_DXT5: return ((width + 3ULL) / 4ULL) * ((height + 3ULL) / 4ULL) * 16ULL;
-	default: return 0;
+	case WW3D_FORMAT_DXT1:
+		return ((width + 3ULL) / 4ULL) * ((height + 3ULL) / 4ULL) * 8ULL;
+	case WW3D_FORMAT_DXT2:
+	case WW3D_FORMAT_DXT3:
+	case WW3D_FORMAT_DXT4:
+	case WW3D_FORMAT_DXT5:
+		return ((width + 3ULL) / 4ULL) * ((height + 3ULL) / 4ULL) * 16ULL;
+	case WW3D_FORMAT_UNKNOWN:
+		return 0;
+	default:
+		return width * height * (unsigned long long)::Get_Bytes_Per_Pixel(format);
 	}
 }
 
