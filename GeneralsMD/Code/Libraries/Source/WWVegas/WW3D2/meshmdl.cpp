@@ -59,6 +59,7 @@ static DynamicVectorClass<Vector3>	_TempVertexBuffer;
 static DynamicVectorClass<Vector3>	_TempNormalBuffer;
 static DynamicVectorClass<Vector4>	_TempTransformedVertexBuffer;
 static DynamicVectorClass<unsigned long> _TempClipFlagBuffer;
+static unsigned _MeshModelCount = 0;
 
 
 /*
@@ -81,6 +82,7 @@ MeshModelClass::MeshModelClass() :
 	CurMatDesc = DefMatDesc;
 
 	MatInfo = NEW_REF( MaterialInfoClass, () );
+	++_MeshModelCount;
 }
 
 MeshModelClass::MeshModelClass(const MeshModelClass & that) :
@@ -99,6 +101,7 @@ MeshModelClass::MeshModelClass(const MeshModelClass & that) :
 	CurMatDesc = DefMatDesc;
 
 	clone_materials(that);
+	++_MeshModelCount;
 }
 
 MeshModelClass::~MeshModelClass()
@@ -109,7 +112,14 @@ MeshModelClass::~MeshModelClass()
 
 	delete DefMatDesc;
 	delete AlternateMatDesc;
+	if (_MeshModelCount > 0)
+		--_MeshModelCount;
 
+}
+
+unsigned MeshModelClass::Get_Total_Model_Count()
+{
+	return _MeshModelCount;
 }
 
 MeshModelClass & MeshModelClass::operator = (const MeshModelClass & that)

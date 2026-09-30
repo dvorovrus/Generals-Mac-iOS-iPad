@@ -155,6 +155,8 @@ public:
 	MeshModelClass(const MeshModelClass & that);
 	virtual ~MeshModelClass() override;
 
+	static unsigned Get_Total_Model_Count();
+
 	MeshModelClass & operator = (const MeshModelClass & that);
 	void							Reset(int polycount,int vertcount,int passcount);
 	void							Register_For_Rendering();

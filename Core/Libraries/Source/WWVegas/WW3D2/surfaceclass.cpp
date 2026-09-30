@@ -58,6 +58,51 @@
 #include "bound.h"
 #include <d3dx8.h>
 
+static unsigned _SurfaceCount = 0;
+static unsigned long long _SurfaceTotalSize = 0;
+
+static unsigned long long Estimate_Surface_Bytes(IDirect3DSurface8 *surface)
+{
+	if (surface == nullptr)
+		return 0;
+
+	D3DSURFACE_DESC desc;
+	::ZeroMemory(&desc, sizeof(desc));
+	if (FAILED(surface->GetDesc(&desc)))
+		return 0;
+
+	const unsigned long long width = desc.Width;
+	const unsigned long long height = desc.Height;
+	switch (desc.Format)
+	{
+	case D3DFMT_R8G8B8: return width * height * 3ULL;
+	case D3DFMT_A8R8G8B8:
+	case D3DFMT_X8R8G8B8:
+	case D3DFMT_X8L8V8U8: return width * height * 4ULL;
+	case D3DFMT_R5G6B5:
+	case D3DFMT_X1R5G5B5:
+	case D3DFMT_A1R5G5B5:
+	case D3DFMT_A4R4G4B4:
+	case D3DFMT_A8R3G3B2:
+	case D3DFMT_X4R4G4B4:
+	case D3DFMT_A8P8:
+	case D3DFMT_A8L8:
+	case D3DFMT_U8V8:
+	case D3DFMT_L6V5U5: return width * height * 2ULL;
+	case D3DFMT_R3G3B2:
+	case D3DFMT_A8:
+	case D3DFMT_P8:
+	case D3DFMT_L8:
+	case D3DFMT_A4L4: return width * height;
+	case D3DFMT_DXT1: return ((width + 3ULL) / 4ULL) * ((height + 3ULL) / 4ULL) * 8ULL;
+	case D3DFMT_DXT2:
+	case D3DFMT_DXT3:
+	case D3DFMT_DXT4:
+	case D3DFMT_DXT5: return ((width + 3ULL) / 4ULL) * ((height + 3ULL) / 4ULL) * 16ULL;
+	default: return 0;
+	}
+}
+
 void Convert_Pixel(Vector3 &rgb, const SurfaceClass::SurfaceDescription &sd, const unsigned char * pixel)
 {
 	const float scale=1/255.0f;
@@ -165,37 +210,66 @@ void Convert_Pixel(unsigned char * pixel,const SurfaceClass::SurfaceDescription 
 *************************************************************************/
 SurfaceClass::SurfaceClass(unsigned width, unsigned height, WW3DFormat format):
 	D3DSurface(nullptr),
+	TrackedBytes(0),
 	SurfaceFormat(format)
 {
 	WWASSERT(width);
 	WWASSERT(height);
 	D3DSurface = DX8Wrapper::_Create_DX8_Surface(width, height, format);
+	TrackedBytes = Estimate_Surface_Bytes(D3DSurface);
+	++_SurfaceCount;
+	_SurfaceTotalSize += TrackedBytes;
 }
 
 SurfaceClass::SurfaceClass(const char *filename):
-	D3DSurface(nullptr)
+	D3DSurface(nullptr),
+	TrackedBytes(0)
 {
 	D3DSurface = DX8Wrapper::_Create_DX8_Surface(filename);
 	SurfaceDescription desc;
 	Get_Description(desc);
 	SurfaceFormat=desc.Format;
+	TrackedBytes = Estimate_Surface_Bytes(D3DSurface);
+	++_SurfaceCount;
+	_SurfaceTotalSize += TrackedBytes;
 }
 
 SurfaceClass::SurfaceClass(IDirect3DSurface8 *d3d_surface)	:
-	D3DSurface (nullptr)
+	D3DSurface (nullptr),
+	TrackedBytes(0)
 {
 	Attach (d3d_surface);
 	SurfaceDescription desc;
 	Get_Description(desc);
 	SurfaceFormat=desc.Format;
+	TrackedBytes = Estimate_Surface_Bytes(D3DSurface);
+	++_SurfaceCount;
+	_SurfaceTotalSize += TrackedBytes;
 }
 
 SurfaceClass::~SurfaceClass()
 {
+	if (_SurfaceCount > 0)
+		--_SurfaceCount;
+	if (_SurfaceTotalSize >= TrackedBytes)
+		_SurfaceTotalSize -= TrackedBytes;
+	else
+		_SurfaceTotalSize = 0;
+
 	if (D3DSurface) {
 		D3DSurface->Release();
 		D3DSurface = nullptr;
 	}
+}
+
+unsigned SurfaceClass::Get_Total_Surface_Count()
+{
+	return _SurfaceCount;
+}
+
+unsigned long long SurfaceClass::Get_Total_Allocated_Memory()
+{
+	return _SurfaceTotalSize;
 }
 
 void SurfaceClass::Get_Description(SurfaceDescription &surface_desc)

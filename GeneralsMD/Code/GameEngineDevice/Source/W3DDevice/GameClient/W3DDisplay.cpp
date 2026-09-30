@@ -100,6 +100,9 @@ static void drawFramerateBar();
 #include "WW3D2/part_emt.h"
 #include "WW3D2/part_ldr.h"
 #include "WW3D2/dx8caps.h"
+#include "WW3D2/dx8vertexbuffer.h"
+#include "WW3D2/dx8indexbuffer.h"
+#include "WW3D2/surfaceclass.h"
 #include "WW3D2/ww3dformat.h"
 #include "WW3D2/agg_def.h"
 #include "WW3D2/render2dsentence.h"
@@ -112,6 +115,26 @@ static void drawFramerateBar();
 #include "WW3D2/meshmdl.h"
 #include "WW3D2/rddesc.h"
 #include "TARGA.h"
+
+#if defined(__APPLE__)
+static void Log_Render_Memory_Summary(const char *phase, UnsignedInt frame)
+{
+	const double mb = 1024.0 * 1024.0;
+	fprintf(stderr,
+	        "[RENDER-MEM] phase=%s frame=%u vbCount=%u vbVertices=%u vbMB=%.2f ibCount=%u ibIndices=%u ibMB=%.2f surfaces=%u surfaceMB=%.2f meshModels=%u\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        VertexBufferClass::Get_Total_Buffer_Count(),
+	        VertexBufferClass::Get_Total_Allocated_Vertices(),
+	        (double)VertexBufferClass::Get_Total_Allocated_Memory() / mb,
+	        IndexBufferClass::Get_Total_Buffer_Count(),
+	        IndexBufferClass::Get_Total_Allocated_Indices(),
+	        (double)IndexBufferClass::Get_Total_Allocated_Memory() / mb,
+	        SurfaceClass::Get_Total_Surface_Count(),
+	        (double)SurfaceClass::Get_Total_Allocated_Memory() / mb,
+	        MeshModelClass::Get_Total_Model_Count());
+}
+#endif
 
 #include "GameLogic/ScriptEngine.h"		// For TheScriptEngine - jkmcd
 #include "GameLogic/GameLogic.h"
@@ -1166,6 +1189,9 @@ void W3DDisplay::reset()
 {
 	if (m_assetManager)
 		m_assetManager->Log_Resource_Summary("display-reset-before");
+#if defined(__APPLE__)
+	Log_Render_Memory_Summary("display-reset-before", TheGameLogic ? TheGameLogic->getFrame() : 0);
+#endif
 
 	Display::reset();
 
@@ -1191,6 +1217,9 @@ void W3DDisplay::reset()
 	/// @todo really need that "scene abstraction", having this stuff in the display is icky
 	m_assetManager->Release_Unused_Assets();
 	m_assetManager->Log_Resource_Summary("display-reset-after");
+#if defined(__APPLE__)
+	Log_Render_Memory_Summary("display-reset-after", TheGameLogic ? TheGameLogic->getFrame() : 0);
+#endif
 
 	if (TheWritableGlobalData)
 		TheWritableGlobalData->m_drawSkyBox =0;
@@ -1218,14 +1247,17 @@ void W3DDisplay::updateAverageFPS()
 		{
 			fprintf(stderr, "[RESOURCE-DIAG] sampleFrame=%u\n", (unsigned)frame);
 			m_assetManager->Log_Resource_Summary("match-periodic");
+			Log_Render_Memory_Summary("match-periodic", frame);
 			nextResourceFrame = frame + 300;
 		}
 
 		if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && frame >= nextMemoryTrimFrame)
 		{
 			m_assetManager->Log_Resource_Summary("match-gc-before");
+			Log_Render_Memory_Summary("match-gc-before", frame);
 			m_assetManager->Release_Unused_Assets();
 			m_assetManager->Log_Resource_Summary("match-gc-after");
+			Log_Render_Memory_Summary("match-gc-after", frame);
 
 			Int poolBytes = 0;
 			if (TheMemoryPoolFactory != nullptr)

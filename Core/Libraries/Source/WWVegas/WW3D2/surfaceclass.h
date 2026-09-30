@@ -143,10 +143,14 @@ class SurfaceClass : public RefCountClass
 
 		WW3DFormat Get_Surface_Format() const { return SurfaceFormat; }
 
+		static unsigned Get_Total_Surface_Count();
+		static unsigned long long Get_Total_Allocated_Memory();
+
 	private:
 
 		// Direct3D surface object
 		IDirect3DSurface8 *D3DSurface;
+		unsigned long long TrackedBytes;
 
 		WW3DFormat SurfaceFormat;
 	friend class TextureClass;
