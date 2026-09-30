@@ -52,6 +52,10 @@
 #include "Common/Errors.h"
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
+#if defined(__APPLE__)
+#include <atomic>
+#include <malloc/malloc.h>
+#endif
 #ifdef MEMORYPOOL_DEBUG
 #include "GameClient/ClientRandomValue.h"
 #endif
@@ -399,6 +403,9 @@ private:
 
 	MemoryPoolBlob				*m_owningBlob;			///< will be null if the single block was allocated via sysAllocate()
 	MemoryPoolSingleBlock	*m_nextBlock;				///< if m_owningBlob is nonnull, this points to next free (unallocated) block in the blob; if m_owningBlob is null, this points to the next used (allocated) raw block in the pool.
+#if defined(__APPLE__)
+	Int										m_diagLogicalSize;	///< diagnostic-only logical size for DMA raw-block accounting
+#endif
 #ifdef MPSB_DLINK
 	MemoryPoolSingleBlock	*m_prevBlock;				///< if m_owningBlob is nonnull, this points to prev free (unallocated) block in the blob; if m_owningBlob is null, this points to the prev used (allocated) raw block in the pool.
 #endif
@@ -440,6 +447,9 @@ public:
 	MemoryPoolSingleBlock *getNextFreeBlock();
 	void setNextFreeBlock(MemoryPoolSingleBlock *b);
 	MemoryPoolSingleBlock *getNextRawBlock();
+#if defined(__APPLE__)
+	Int getDiagLogicalSize() const { return m_diagLogicalSize; }
+#endif
 	void setNextRawBlock(MemoryPoolSingleBlock *b);
 
 #ifdef MEMORYPOOL_DEBUG
@@ -865,6 +875,9 @@ void MemoryPoolSingleBlock::initBlock(Int logicalSize, MemoryPoolBlob *owningBlo
 	// Note that while it is OK for owningBlob to be null, it is NEVER ok
 	// for owningFactory to be null.
 	DEBUG_ASSERTCRASH(owningFactory, ("null factory"));
+#if defined(__APPLE__)
+	m_diagLogicalSize = logicalSize;
+#endif
 
 #ifdef MEMORYPOOL_DEBUG
 {
@@ -2407,6 +2420,41 @@ void DynamicMemoryAllocator::reset()
 	m_usedBlocksInDma = 0;
 }
 
+void DynamicMemoryAllocator::getRawDiagnostics(Int *count, unsigned long long *logicalBytes, unsigned long long *actualBytes, Int *maxLogical, Int buckets[8]) const
+{
+	if (count) *count = 0;
+	if (logicalBytes) *logicalBytes = 0;
+	if (actualBytes) *actualBytes = 0;
+	if (maxLogical) *maxLogical = 0;
+	if (buckets)
+		for (Int i = 0; i < 8; ++i) buckets[i] = 0;
+
+	for (MemoryPoolSingleBlock *block = m_rawBlocks; block; block = block->getNextRawBlock())
+	{
+#if defined(__APPLE__)
+		const Int logical = block->getDiagLogicalSize();
+#else
+		const Int logical = 0;
+#endif
+		if (count) ++(*count);
+		if (logicalBytes) *logicalBytes += (unsigned long long)logical;
+		if (actualBytes) *actualBytes += (unsigned long long)MemoryPoolSingleBlock::calcRawBlockSize(logical);
+		if (maxLogical && logical > *maxLogical) *maxLogical = logical;
+		if (buckets)
+		{
+			Int bucket = 0;
+			if (logical > 1024) bucket = 1;
+			if (logical > 4096) bucket = 2;
+			if (logical > 16384) bucket = 3;
+			if (logical > 65536) bucket = 4;
+			if (logical > 262144) bucket = 5;
+			if (logical > 1048576) bucket = 6;
+			if (logical > 4194304) bucket = 7;
+			++buckets[bucket];
+		}
+	}
+}
+
 //-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_DEBUG
 /**
@@ -2863,6 +2911,37 @@ void MemoryPoolFactory::logDiagnostics(const char *phase, UnsignedInt frame, Boo
 
 	fprintf(stderr,
 	        "[POOL-DIAG] phase=%s frame=%u pools=%d blobs=%d usedBlocks=%lld freeBlocks=%lld totalBlocks=%lld peakBlocks=%lld usedMB=%.2f capacityMB=%.2f slackMB=%.2f peakUsedMB=%.2f\n",
+	Int rawCount = 0;
+	unsigned long long rawLogicalBytes = 0;
+	unsigned long long rawActualBytes = 0;
+	Int rawMaxLogical = 0;
+	Int rawBuckets[8] = { 0 };
+	for (DynamicMemoryAllocator *dma = m_firstDmaInFactory; dma; dma = dma->getNextDmaInList())
+	{
+		Int count = 0;
+		unsigned long long logical = 0;
+		unsigned long long actual = 0;
+		Int maxLogical = 0;
+		Int buckets[8] = { 0 };
+		dma->getRawDiagnostics(&count, &logical, &actual, &maxLogical, buckets);
+		rawCount += count;
+		rawLogicalBytes += logical;
+		rawActualBytes += actual;
+		if (maxLogical > rawMaxLogical) rawMaxLogical = maxLogical;
+		for (Int i = 0; i < 8; ++i) rawBuckets[i] += buckets[i];
+	}
+
+	fprintf(stderr,
+	        "[DMA-RAW] phase=%s frame=%u count=%d logicalMB=%.2f actualMB=%.2f maxKB=%.1f b0_1K=%d b1_4K=%d b4_16K=%d b16_64K=%d b64_256K=%d b256K_1M=%d b1_4M=%d b4MPlus=%d\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        rawCount,
+	        (double)rawLogicalBytes / mb,
+	        (double)rawActualBytes / mb,
+	        (double)rawMaxLogical / 1024.0,
+	        rawBuckets[0], rawBuckets[1], rawBuckets[2], rawBuckets[3],
+	        rawBuckets[4], rawBuckets[5], rawBuckets[6], rawBuckets[7]);
+
 	        phase != nullptr ? phase : "unknown",
 	        (unsigned)frame,
 	        poolCount,
@@ -3488,11 +3567,50 @@ void operator delete[](void * p, const char *, int)
 #include <new>
 #include <cstdlib>
 
+#if defined(__APPLE__)
+static std::atomic<unsigned long long> s_alignedLiveBytes{0};
+static std::atomic<unsigned long long> s_alignedPeakBytes{0};
+static std::atomic<unsigned long long> s_alignedTotalBytes{0};
+static std::atomic<unsigned long long> s_alignedLiveCount{0};
+static std::atomic<unsigned long long> s_alignedTotalCount{0};
+
+static void AlignedDiagAdd(void *p)
+{
+	const unsigned long long bytes = p ? (unsigned long long)::malloc_size(p) : 0;
+	const unsigned long long live = s_alignedLiveBytes.fetch_add(bytes, std::memory_order_relaxed) + bytes;
+	s_alignedTotalBytes.fetch_add(bytes, std::memory_order_relaxed);
+	s_alignedLiveCount.fetch_add(1, std::memory_order_relaxed);
+	s_alignedTotalCount.fetch_add(1, std::memory_order_relaxed);
+	unsigned long long peak = s_alignedPeakBytes.load(std::memory_order_relaxed);
+	while (live > peak && !s_alignedPeakBytes.compare_exchange_weak(peak, live, std::memory_order_relaxed)) {}
+}
+
+static void AlignedDiagRemove(void *p)
+{
+	if (!p) return;
+	const unsigned long long bytes = (unsigned long long)::malloc_size(p);
+	s_alignedLiveBytes.fetch_sub(bytes, std::memory_order_relaxed);
+	s_alignedLiveCount.fetch_sub(1, std::memory_order_relaxed);
+}
+
+void getAlignedAllocationDiagnostics(unsigned long long *liveBytes, unsigned long long *peakBytes, unsigned long long *totalBytes, unsigned long long *liveCount, unsigned long long *totalCount)
+{
+	if (liveBytes) *liveBytes = s_alignedLiveBytes.load(std::memory_order_relaxed);
+	if (peakBytes) *peakBytes = s_alignedPeakBytes.load(std::memory_order_relaxed);
+	if (totalBytes) *totalBytes = s_alignedTotalBytes.load(std::memory_order_relaxed);
+	if (liveCount) *liveCount = s_alignedLiveCount.load(std::memory_order_relaxed);
+	if (totalCount) *totalCount = s_alignedTotalCount.load(std::memory_order_relaxed);
+}
+#endif
+
 void *operator new(size_t size, std::align_val_t alignment)
 {
 	void *p = nullptr;
 	if (::posix_memalign(&p, static_cast<size_t>(alignment), size) != 0)
 		throw std::bad_alloc();
+#if defined(__APPLE__)
+	AlignedDiagAdd(p);
+#endif
 	return p;
 }
 
@@ -3501,26 +3619,41 @@ void *operator new[](size_t size, std::align_val_t alignment)
 	void *p = nullptr;
 	if (::posix_memalign(&p, static_cast<size_t>(alignment), size) != 0)
 		throw std::bad_alloc();
+#if defined(__APPLE__)
+	AlignedDiagAdd(p);
+#endif
 	return p;
 }
 
 void operator delete(void *p, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p);
+#endif
 	::free(p);
 }
 
 void operator delete[](void *p, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p);
+#endif
 	::free(p);
 }
 
 void operator delete(void *p, size_t, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p);
+#endif
 	::free(p);
 }
 
 void operator delete[](void *p, size_t, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p);
+#endif
 	::free(p);
 }
 #endif // !_WIN32

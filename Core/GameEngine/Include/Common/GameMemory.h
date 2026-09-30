@@ -472,6 +472,7 @@ public:
 
 	Int getDmaMemoryPoolCount() const { return m_numPools; }
 	MemoryPool* getNthDmaMemoryPool(Int i) const { return m_pools[i]; }
+	void getRawDiagnostics(Int *count, unsigned long long *logicalBytes, unsigned long long *actualBytes, Int *maxLogical, Int buckets[8]) const;
 
 	#ifdef MEMORYPOOL_DEBUG
 
@@ -832,6 +833,10 @@ extern Bool isMemoryManagerOfficiallyInited();
 extern void shutdownMemoryManager();
 
 extern MemoryPoolFactory *TheMemoryPoolFactory;
+
+#if defined(__APPLE__)
+void getAlignedAllocationDiagnostics(unsigned long long *liveBytes, unsigned long long *peakBytes, unsigned long long *totalBytes, unsigned long long *liveCount, unsigned long long *totalCount);
+#endif
 extern DynamicMemoryAllocator *TheDynamicMemoryAllocator;
 
 /**

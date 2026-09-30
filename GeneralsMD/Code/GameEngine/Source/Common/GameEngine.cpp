@@ -32,6 +32,128 @@
 #include <TargetConditionals.h>
 #include <mach/mach.h>
 #include <malloc/malloc.h>
+
+struct MallocDiagHistogram
+{
+	unsigned long long count[10];
+	unsigned long long bytes[10];
+	unsigned long long totalCount;
+	unsigned long long totalBytes;
+	unsigned long long maxBytes;
+};
+
+static kern_return_t MallocDiagReader(task_t task, vm_address_t address, vm_size_t size, void **localMemory)
+{
+	(void)task;
+	(void)size;
+	*localMemory = reinterpret_cast<void *>(address);
+	return KERN_SUCCESS;
+}
+
+static unsigned MallocDiagBucket(unsigned long long bytes)
+{
+	if (bytes <= 64ULL) return 0;
+	if (bytes <= 256ULL) return 1;
+	if (bytes <= 1024ULL) return 2;
+	if (bytes <= 4096ULL) return 3;
+	if (bytes <= 16384ULL) return 4;
+	if (bytes <= 65536ULL) return 5;
+	if (bytes <= 262144ULL) return 6;
+	if (bytes <= 1048576ULL) return 7;
+	if (bytes <= 4194304ULL) return 8;
+	return 9;
+}
+
+static void MallocDiagRecorder(task_t task, void *context, unsigned type, vm_range_t *ranges, unsigned count)
+{
+	(void)task;
+	if ((type & MALLOC_PTR_IN_USE_RANGE_TYPE) == 0 || context == nullptr || ranges == nullptr)
+		return;
+
+	MallocDiagHistogram *hist = reinterpret_cast<MallocDiagHistogram *>(context);
+	for (unsigned i = 0; i < count; ++i)
+	{
+		const unsigned long long bytes = (unsigned long long)ranges[i].size;
+		const unsigned bucket = MallocDiagBucket(bytes);
+		++hist->count[bucket];
+		hist->bytes[bucket] += bytes;
+		++hist->totalCount;
+		hist->totalBytes += bytes;
+		if (bytes > hist->maxBytes)
+			hist->maxBytes = bytes;
+	}
+}
+
+static void LogMallocZoneDiagnostics(const char *phase, unsigned int frame)
+{
+	const double mb = 1024.0 * 1024.0;
+	vm_address_t *zoneAddresses = nullptr;
+	unsigned zoneCount = 0;
+	const kern_return_t kr = malloc_get_all_zones(mach_task_self(), nullptr, &zoneAddresses, &zoneCount);
+	if (kr != KERN_SUCCESS || zoneAddresses == nullptr)
+	{
+		fprintf(stderr, "[MALLOC-ZONE] phase=%s frame=%u error=%d zones=0\n",
+		        phase != nullptr ? phase : "unknown", (unsigned)frame, (int)kr);
+		return;
+	}
+
+	MallocDiagHistogram hist = {};
+	for (unsigned i = 0; i < zoneCount; ++i)
+	{
+		malloc_zone_t *zone = reinterpret_cast<malloc_zone_t *>(zoneAddresses[i]);
+		if (zone == nullptr)
+			continue;
+
+		malloc_statistics_t stats = {};
+		malloc_zone_statistics(zone, &stats);
+		const char *zoneName = zone->zone_name != nullptr ? zone->zone_name : "unnamed";
+		fprintf(stderr,
+		        "[MALLOC-ZONE] phase=%s frame=%u index=%u name=%s blocks=%u usedMB=%.2f allocatedMB=%.2f freeMB=%.2f maxUsedMB=%.2f\n",
+		        phase != nullptr ? phase : "unknown",
+		        (unsigned)frame,
+		        i,
+		        zoneName,
+		        (unsigned)stats.blocks_in_use,
+		        (double)stats.size_in_use / mb,
+		        (double)stats.size_allocated / mb,
+		        (double)(stats.size_allocated >= stats.size_in_use ? stats.size_allocated - stats.size_in_use : 0) / mb,
+		        (double)stats.max_size_in_use / mb);
+
+		if (zone->introspect != nullptr && zone->introspect->enumerator != nullptr)
+		{
+			zone->introspect->enumerator(
+				mach_task_self(),
+				&hist,
+				MALLOC_PTR_IN_USE_RANGE_TYPE,
+				zoneAddresses[i],
+				MallocDiagReader,
+				MallocDiagRecorder);
+		}
+	}
+
+	static const char *bucketNames[10] = {
+		"0_64B", "65_256B", "257B_1K", "1K_4K", "4K_16K",
+		"16K_64K", "64K_256K", "256K_1M", "1M_4M", "4MPlus"
+	};
+	fprintf(stderr,
+	        "[MALLOC-HIST] phase=%s frame=%u zones=%u totalCount=%llu totalMB=%.2f maxKB=%.1f\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        zoneCount,
+	        hist.totalCount,
+	        (double)hist.totalBytes / mb,
+	        (double)hist.maxBytes / 1024.0);
+	for (unsigned i = 0; i < 10; ++i)
+	{
+		fprintf(stderr,
+		        "[MALLOC-BUCKET] phase=%s frame=%u bucket=%s count=%llu mb=%.2f\n",
+		        phase != nullptr ? phase : "unknown",
+		        (unsigned)frame,
+		        bucketNames[i],
+		        hist.count[i],
+		        (double)hist.bytes[i] / mb);
+	}
+}
 #endif
 
 #include "Common/ActionManager.h"
@@ -1129,6 +1251,24 @@ void GameEngine::update()
 
 					if (TheMemoryPoolFactory != nullptr)
 						TheMemoryPoolFactory->logDiagnostics(state == 1 ? "match" : "menu", frame, detailedMemoryDiag);
+
+					unsigned long long alignedLiveBytes = 0;
+					unsigned long long alignedPeakBytes = 0;
+					unsigned long long alignedTotalBytes = 0;
+					unsigned long long alignedLiveCount = 0;
+					unsigned long long alignedTotalCount = 0;
+					getAlignedAllocationDiagnostics(&alignedLiveBytes, &alignedPeakBytes, &alignedTotalBytes, &alignedLiveCount, &alignedTotalCount);
+					fprintf(stderr,
+					        "[ALIGNED-DIAG] phase=%s frame=%u liveCount=%llu liveMB=%.2f peakMB=%.2f totalCount=%llu totalAllocatedMB=%.2f\n",
+					        state == 1 ? "match" : "menu",
+					        (unsigned)frame,
+					        alignedLiveCount,
+					        (double)alignedLiveBytes / mb,
+					        (double)alignedPeakBytes / mb,
+					        alignedTotalCount,
+					        (double)alignedTotalBytes / mb);
+					if (detailedMemoryDiag)
+						LogMallocZoneDiagnostics(state == 1 ? "match" : "menu", frame);
 
 					if (fastAllocator != nullptr && detailedMemoryDiag)
 					{
