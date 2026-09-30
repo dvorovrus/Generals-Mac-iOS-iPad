@@ -2909,8 +2909,6 @@ void MemoryPoolFactory::logDiagnostics(const char *phase, UnsignedInt frame, Boo
 		}
 	}
 
-	fprintf(stderr,
-	        "[POOL-DIAG] phase=%s frame=%u pools=%d blobs=%d usedBlocks=%lld freeBlocks=%lld totalBlocks=%lld peakBlocks=%lld usedMB=%.2f capacityMB=%.2f slackMB=%.2f peakUsedMB=%.2f\n",
 	Int rawCount = 0;
 	unsigned long long rawLogicalBytes = 0;
 	unsigned long long rawActualBytes = 0;
@@ -2932,16 +2930,7 @@ void MemoryPoolFactory::logDiagnostics(const char *phase, UnsignedInt frame, Boo
 	}
 
 	fprintf(stderr,
-	        "[DMA-RAW] phase=%s frame=%u count=%d logicalMB=%.2f actualMB=%.2f maxKB=%.1f b0_1K=%d b1_4K=%d b4_16K=%d b16_64K=%d b64_256K=%d b256K_1M=%d b1_4M=%d b4MPlus=%d\n",
-	        phase != nullptr ? phase : "unknown",
-	        (unsigned)frame,
-	        rawCount,
-	        (double)rawLogicalBytes / mb,
-	        (double)rawActualBytes / mb,
-	        (double)rawMaxLogical / 1024.0,
-	        rawBuckets[0], rawBuckets[1], rawBuckets[2], rawBuckets[3],
-	        rawBuckets[4], rawBuckets[5], rawBuckets[6], rawBuckets[7]);
-
+	        "[POOL-DIAG] phase=%s frame=%u pools=%d blobs=%d usedBlocks=%lld freeBlocks=%lld totalBlocks=%lld peakBlocks=%lld usedMB=%.2f capacityMB=%.2f slackMB=%.2f peakUsedMB=%.2f\n",
 	        phase != nullptr ? phase : "unknown",
 	        (unsigned)frame,
 	        poolCount,
@@ -2954,6 +2943,17 @@ void MemoryPoolFactory::logDiagnostics(const char *phase, UnsignedInt frame, Boo
 	        (double)capacityBytes / mb,
 	        (double)(capacityBytes - usedBytes) / mb,
 	        (double)peakUsedBytes / mb);
+
+	fprintf(stderr,
+	        "[DMA-RAW] phase=%s frame=%u count=%d logicalMB=%.2f actualMB=%.2f maxKB=%.1f b0_1K=%d b1_4K=%d b4_16K=%d b16_64K=%d b64_256K=%d b256K_1M=%d b1_4M=%d b4MPlus=%d\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        rawCount,
+	        (double)rawLogicalBytes / mb,
+	        (double)rawActualBytes / mb,
+	        (double)rawMaxLogical / 1024.0,
+	        rawBuckets[0], rawBuckets[1], rawBuckets[2], rawBuckets[3],
+	        rawBuckets[4], rawBuckets[5], rawBuckets[6], rawBuckets[7]);
 
 	if (detailed)
 	{
