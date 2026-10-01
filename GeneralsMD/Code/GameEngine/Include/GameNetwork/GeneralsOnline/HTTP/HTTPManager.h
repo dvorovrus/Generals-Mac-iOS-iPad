@@ -6,10 +6,14 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
+#if defined(_WIN32)
 #include <winhttp.h>
+#endif
 #include "../NGMP_include.h"
 
+#if defined(_WIN32)
 #pragma comment(lib, "winhttp.lib")
+#endif
 
 enum class EHTTPVerb
 {

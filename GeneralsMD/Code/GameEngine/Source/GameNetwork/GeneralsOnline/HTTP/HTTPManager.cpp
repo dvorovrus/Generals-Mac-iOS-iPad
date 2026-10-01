@@ -162,7 +162,8 @@ bool HTTPManager::DeterminePlatformProxySettings()
 {
 	CHECK_MAIN_THREAD;
 
-	WINHTTP_CURRENT_USER_IE_PROXY_CONFIG pProxyConfig;
+#if defined(_WIN32)
+	WINHTTP_CURRENT_USER_IE_PROXY_CONFIG pProxyConfig = {};
 	WinHttpGetIEProxyConfigForCurrentUser(&pProxyConfig);
 
 	if (pProxyConfig.lpszProxy != nullptr)
@@ -192,6 +193,11 @@ bool HTTPManager::DeterminePlatformProxySettings()
 	if (pProxyConfig.lpszProxy) GlobalFree(pProxyConfig.lpszProxy);
 	if (pProxyConfig.lpszAutoConfigUrl) GlobalFree(pProxyConfig.lpszAutoConfigUrl);
 	if (pProxyConfig.lpszProxyBypass) GlobalFree(pProxyConfig.lpszProxyBypass);
+#else
+	m_bProxyEnabled = false;
+	m_strProxyAddr.clear();
+	m_proxyPort = 0;
+#endif
 
 	return m_bProxyEnabled;
 }
