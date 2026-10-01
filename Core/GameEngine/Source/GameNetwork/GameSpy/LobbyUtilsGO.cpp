@@ -265,7 +265,7 @@ static void gameTooltip(GameWindow* window,
 		return;
 	}
 
-	Int gameID = (Int)GadgetListBoxGetItemData(window, row, 0);
+	Int gameID = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(window, row, 0)));
 #if defined(GENERALS_ONLINE)
 	NGMP_OnlineServices_LobbyInterface* pLobbyInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_LobbyInterface>();
 	if (pLobbyInterface == nullptr)
@@ -538,7 +538,6 @@ void GrabWindowInfo()
 	listboxLobbyGamesLargeID = NAMEKEY( "WOLCustomLobby.wnd:ListboxGamesLarge" );
 	listboxLobbyGamesLarge = TheWindowManager->winGetWindowFromId(nullptr, listboxLobbyGamesLargeID);
 	listboxLobbyGamesLarge->winSetTooltipFunc(gameTooltip);
-	SetListBoxRowAnimMode(listboxLobbyGamesLarge, LIST_ROW_ANIM_ID);
 //
 //	listboxLobbyGameInfoID = NAMEKEY( "WOLCustomLobby.wnd:ListboxGameInfo" );
 //	listboxLobbyGameInfo = TheWindowManager->winGetWindowFromId(nullptr, listboxLobbyGameInfoID);
@@ -1215,7 +1214,7 @@ void RefreshGameListBox(GameWindow* win, Bool showMap)
 	GadgetListBoxGetSelected(win, &selectedIndex);
 	if (selectedIndex != -1)
 	{
-		selectedID = ResolveGameListLobbyID((Int)GadgetListBoxGetItemData(win, selectedIndex));
+		selectedID = ResolveGameListLobbyID(static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(win, selectedIndex))));
 	}
 	int prevPos = GadgetListBoxGetTopVisibleEntry(win);
 
@@ -1332,7 +1331,7 @@ void RefreshGameInfoListBox( GameWindow *mainWin, GameWindow *win )
 //		return;
 //	}
 //
-//	Int selectedID = (Int)GadgetListBoxGetItemData(mainWin, selected);
+//	Int selectedID = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(mainWin, selected)));
 //	if (selectedID < 0)
 //	{
 //		return;
@@ -1465,7 +1464,7 @@ void playerTemplateComboBoxTooltip(GameWindow *wndComboBox, WinInstanceData *ins
 {
 	Int index = 0;
 	GadgetComboBoxGetSelectedPos(wndComboBox, &index);
-	Int templateNum = (Int)GadgetComboBoxGetItemData(wndComboBox, index);
+	Int templateNum = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetComboBoxGetItemData(wndComboBox, index)));
 	UnicodeString ustringTooltip;
 	if (templateNum == -1)
 	{
@@ -1496,7 +1495,7 @@ void playerTemplateListBoxTooltip(GameWindow *wndListBox, WinInstanceData *instD
 	if (row == -1 || col == -1)
 		return;
 
-	Int templateNum = (Int)GadgetListBoxGetItemData(wndListBox, row, col);
+	Int templateNum = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(wndListBox, row, col)));
 	UnicodeString ustringTooltip;
 	if (templateNum == -1)
 	{

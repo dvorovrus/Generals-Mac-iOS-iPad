@@ -337,6 +337,21 @@ void SetLobbyAttemptHostJoin(Bool start)
 	s_tryingToHostOrJoin = start;
 }
 
+// Lobby player list: rebuilt only when the roster changes; stats are fetched only for visible rows.
+
+struct LobbyPlayerRow
+{
+	int64_t     userID = 0;
+	Bool        isAdmin = FALSE;
+	Bool        isFriend = FALSE;
+	Bool        isIgnored = FALSE;
+	Bool        iconResolved = FALSE; // icon painted from fresh stats
+	std::string displayName;
+	std::string sortKey; // lowercase display name
+};
+
+static std::vector<LobbyPlayerRow> s_lobbyPlayerRows;   // index == row
+
 // Tooltips -------------------------------------------------------------------------------
 
 static void playerTooltip(GameWindow *window,
@@ -738,7 +753,7 @@ static void PopulateLobbyFilterComboBox(GameWindow* comboBox)
 		const Bool isActiveFilter = (filterEntry.filter == theLobbyFilter);
 		idx = GadgetComboBoxAddEntry(comboBox, UnicodeString(filterEntry.label),
 			GameSpyColor[isActiveFilter ? GSCOLOR_CURRENTROOM : GSCOLOR_DEFAULT]);
-		GadgetComboBoxSetItemData(comboBox, idx, (void*)filterEntry.filter);
+		GadgetComboBoxSetItemData(comboBox, idx, reinterpret_cast<void*>(static_cast<intptr_t>(filterEntry.filter)));
 	}
 
 	// The collapsed combo always identifies the room. The active filter is indicated by its color only when expanded.
@@ -835,20 +850,6 @@ const Image* LookupSmallRankImage(Int side, Int rankPoints)
 	return img;
 }
 
-// Lobby player list: rebuilt only when the roster changes; stats are fetched only for visible rows.
-
-struct LobbyPlayerRow
-{
-	int64_t     userID = 0;
-	Bool        isAdmin = FALSE;
-	Bool        isFriend = FALSE;
-	Bool        isIgnored = FALSE;
-	Bool        iconResolved = FALSE; // icon painted from fresh stats
-	std::string displayName;
-	std::string sortKey; // lowercase display name
-};
-
-static std::vector<LobbyPlayerRow> s_lobbyPlayerRows;   // index == row
 static std::string s_lobbyRosterSignature;              // rebuild when it changes
 
 // Last resolved (rank points, favorite side) per user; avoids icon blink on a cache miss.
@@ -1335,11 +1336,9 @@ void WOLLobbyMenuInit( WindowLayout *layout, void *userData )
 	listboxLobbyPlayers = TheWindowManager->winGetWindowFromId(parent, listboxLobbyPlayersID);
 	GadgetListBoxRemoveMultiSelect(listboxLobbyPlayers);
 	listboxLobbyPlayers->winSetTooltipFunc(playerTooltip);
-	SetListBoxRowAnimMode(listboxLobbyPlayers, LIST_ROW_ANIM_ID);
 
 	listboxLobbyChatID = TheNameKeyGenerator->nameToKey("WOLCustomLobby.wnd:ListboxChat");
 	listboxLobbyChat = TheWindowManager->winGetWindowFromId(parent, listboxLobbyChatID);
-	SetListBoxRowAnimMode(listboxLobbyChat, LIST_ROW_ANIM_SLOT);
 
 	comboLobbyGroupRoomsID = TheNameKeyGenerator->nameToKey("WOLCustomLobby.wnd:ComboBoxGroupRooms");
 	comboLobbyGroupRooms = TheWindowManager->winGetWindowFromId(parent, comboLobbyGroupRoomsID);
@@ -2373,7 +2372,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 				if ( controlID == GetGameListBoxID() )
 				{
 					int rowSelected = mData2;
-					int64_t lobbyID = rowSelected >= 0 ? ResolveGameListLobbyID((Int)GadgetListBoxGetItemData(control, rowSelected, 0)) : 0;
+					int64_t lobbyID = rowSelected >= 0 ? ResolveGameListLobbyID(static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(control, rowSelected, 0)))) : 0;
 					if( lobbyID >= 0 )
 					{
 						buttonJoin->winEnable(TRUE);
@@ -2457,7 +2456,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					GadgetListBoxGetSelected(GetGameListBox(), &selected);
 					if (selected >= 0)
 					{
-						int64_t selectedID = ResolveGameListLobbyID((Int)GadgetListBoxGetItemData(GetGameListBox(), selected));
+						int64_t selectedID = ResolveGameListLobbyID(static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(GetGameListBox(), selected))));
 						if (selectedID >= 0)
 						{
 							auto Lobby = pLobbyInterface->GetLobbyFromID(selectedID);
@@ -2518,7 +2517,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					GadgetListBoxGetSelected(GetGameListBox(), &selected);
 					if (selected >= 0)
 					{
-						Int selectedID = (Int)GadgetListBoxGetItemData(GetGameListBox(), selected);
+						Int selectedID = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(GetGameListBox(), selected)));
 						if (selectedID > 0)
 						{
 							StagingRoomMap *srm = TheGameSpyInfo->getStagingRoomList();
@@ -2642,7 +2641,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					GadgetComboBoxGetSelectedPos(comboLobbyGroupRooms, &pos);
 					if (pos >= 0)
 					{
-						Int itemData = (Int)GadgetComboBoxGetItemData(comboLobbyGroupRooms, pos);
+						Int itemData = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetComboBoxGetItemData(comboLobbyGroupRooms, pos)));
 						if (itemData == LOBBY_COMBO_SEPARATOR_ITEM_DATA)
 						{
 							PopulateLobbyFilterComboBox(comboLobbyGroupRooms);
@@ -2791,7 +2790,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 									break;
 								}
 
-								Int selectedID = (Int)GadgetListBoxGetItemData(control, rc->pos);
+								Int selectedID = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(control, rc->pos)));
 								if (selectedID > 0)
 								{
 									StagingRoomMap* srm = TheGameSpyInfo->getStagingRoomList();
@@ -2816,7 +2815,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 											rcMenu->winHide(FALSE);
 											rcMenu->winSetPosition(rc->mouseX, rc->mouseY);
 
-											rcMenu->winSetUserData((void*)selectedID);
+											rcMenu->winSetUserData(reinterpret_cast<void*>(static_cast<intptr_t>(selectedID)));
 											TheWindowManager->winSetLoneWindow(rcMenu);
 										}
 									}
@@ -2902,7 +2901,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 						break;
 					}
 
-					Int selectedID = (Int)GadgetListBoxGetItemData(control, rc->pos);
+					Int selectedID = static_cast<Int>(reinterpret_cast<intptr_t>(GadgetListBoxGetItemData(control, rc->pos)));
 					if (selectedID > 0)
 					{
 						StagingRoomMap *srm = TheGameSpyInfo->getStagingRoomList();

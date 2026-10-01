@@ -25,7 +25,7 @@ struct LobbyMemberEntry : public NetworkMemberBase
 	int startpos = -1;
 	bool has_map = false;
 
-	uint16_t m_SlotIndex = 999999;
+	uint16_t m_SlotIndex = 0xFFFFu;
 	uint16_t m_SlotState = SlotState::SLOT_OPEN;
 
 	std::string region;

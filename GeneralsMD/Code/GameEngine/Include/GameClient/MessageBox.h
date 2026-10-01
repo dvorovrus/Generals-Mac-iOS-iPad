@@ -31,6 +31,8 @@
 
 #include "GameClient/GameWindowManager.h"
 
+GameWindow *MessageBoxNoButtons(UnicodeString titleString, UnicodeString bodyString, bool bShowLogo);
+
 GameWindow *MessageBoxYesNo(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc yesCallback,GameWinMsgBoxFunc noCallback);  ///< convenience function for displaying a Message box with Yes and No buttons
 GameWindow *QuitMessageBoxYesNo(UnicodeString titleString,UnicodeString bodyString,GameWinMsgBoxFunc yesCallback,GameWinMsgBoxFunc noCallback);  ///< convenience function for displaying a Message box with Yes and No buttons
 
