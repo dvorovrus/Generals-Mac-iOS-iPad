@@ -1268,7 +1268,10 @@ void GameEngine::update()
 					        alignedTotalCount,
 					        (double)alignedTotalBytes / mb);
 					if (detailedMemoryDiag)
+					{
+						logAlignedAllocationCallers(state == 1 ? "match" : "menu", frame);
 						LogMallocZoneDiagnostics(state == 1 ? "match" : "menu", frame);
+					}
 
 					if (fastAllocator != nullptr && detailedMemoryDiag)
 					{

@@ -836,6 +836,7 @@ extern MemoryPoolFactory *TheMemoryPoolFactory;
 
 #if defined(__APPLE__)
 void getAlignedAllocationDiagnostics(unsigned long long *liveBytes, unsigned long long *peakBytes, unsigned long long *totalBytes, unsigned long long *liveCount, unsigned long long *totalCount);
+void logAlignedAllocationCallers(const char *phase, UnsignedInt frame);
 #endif
 extern DynamicMemoryAllocator *TheDynamicMemoryAllocator;
 
