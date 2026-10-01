@@ -51,6 +51,10 @@
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PeerThread.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/OnlineServices_Init.h"
+#include "GameNetwork/GeneralsOnline/PluginInterfaces.h"
+#endif
 
 #include "WWDownload/Registry.h"
 #include "WWDownload/urlBuilder.h"
@@ -217,6 +221,7 @@ static void startOnline()
 
 	TheScriptEngine->signalUIInteract(TheShellHookNames[SHELL_SCRIPT_HOOK_MAIN_MENU_ONLINE_SELECTED]);
 
+#if !defined(GENERALS_ONLINE)
 	DEBUG_ASSERTCRASH( !TheGameSpyBuddyMessageQueue, ("TheGameSpyBuddyMessageQueue exists!") );
 	DEBUG_ASSERTCRASH( !TheGameSpyPeerMessageQueue, ("TheGameSpyPeerMessageQueue exists!") );
 	DEBUG_ASSERTCRASH( !TheGameSpyInfo, ("TheGameSpyInfo exists!") );
@@ -239,6 +244,11 @@ static void startOnline()
 	else
 		TheShell->push( "Menus/GameSpyLoginQuick.wnd" );
 #endif // ALLOW_NON_PROFILED_LOGIN
+#else
+	// Reuse the original WOL login screen; its callbacks are redirected to
+	// Generals Online when the online feature is enabled.
+	TheShell->push("Menus/GameSpyLoginProfile.wnd");
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -826,6 +836,42 @@ void StartPatchCheck()
 	timeThroughOnline++;
 	checksLeftBeforeOnline = 0;
 
+#if defined(GENERALS_ONLINE)
+	NGMP_OnlineServicesManager::CreateInstance();
+	NGMP_OnlineServicesManager *onlineServices = NGMP_OnlineServicesManager::GetInstance();
+	if (onlineServices == nullptr)
+	{
+		cantConnectBeforeOnline = TRUE;
+		startOnline();
+		return;
+	}
+
+	onlineServices->Init();
+
+#if defined(__APPLE__)
+	// First Apple milestone runs the service-supported 30 Hz client and uses
+	// one shared Apple runtime CRC seed so Mac and iPad agree on lobby content.
+	// IPA/app updates remain external; Windows parity is a later milestone.
+	onlineServices->PrepareAppleNetworkCRC([]()
+		{
+			queuedDownloads.clear();
+			mustDownloadPatch = FALSE;
+			startOnline();
+		});
+#else
+	onlineCancelWindow = MessageBoxCancel(TheGameText->fetch("GUI:CheckingForPatches"),
+		TheGameText->fetch("GUI:CheckingForPatches"), CancelPatchCheckCallbackAndReopenDropdown);
+	onlineServices->StartVersionCheck([](bool success, bool needsUpdate)
+		{
+			cantConnectBeforeOnline = !success;
+			mustDownloadPatch = needsUpdate;
+			if (success && !needsUpdate)
+				startOnline();
+			else if (!success)
+				startOnline();
+		});
+#endif
+#else
 	onlineCancelWindow = MessageBoxCancel(TheGameText->fetch("GUI:CheckingForPatches"),
 		TheGameText->fetch("GUI:CheckingForPatches"), CancelPatchCheckCallbackAndReopenDropdown);
 
@@ -842,6 +888,7 @@ void StartPatchCheck()
 		reallyStartPatchCheck();
 		break;
 	}
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////

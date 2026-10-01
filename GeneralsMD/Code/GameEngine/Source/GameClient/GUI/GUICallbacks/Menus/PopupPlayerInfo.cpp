@@ -57,6 +57,9 @@
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/GameSpy/LobbyUtils.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NGMP_include.h"
+#endif
 
 #include "WWDownload/Registry.h"
 
@@ -86,7 +89,11 @@ static GameWindow *checkBoxNonAsianFont = nullptr;
 
 static Bool isOverlayActive = false;
 static Bool raiseMessageBox = false;
+#if defined(GENERALS_ONLINE)
+static int64_t lookAtPlayerID = 0;
+#else
 static Int lookAtPlayerID = 0;
+#endif
 static std::string lookAtPlayerName;
 
 
@@ -259,11 +266,19 @@ RankPoints::RankPoints()
 
 RankPoints *TheRankPointValues = nullptr;
 
-void SetLookAtPlayer( Int id, AsciiString nick)
+#if defined(GENERALS_ONLINE)
+void SetLookAtPlayer(int64_t id, UnicodeString nick)
+{
+	lookAtPlayerID = id;
+	lookAtPlayerName = to_utf8(nick.str());
+}
+#else
+void SetLookAtPlayer(Int id, AsciiString nick)
 {
 	lookAtPlayerID = id;
 	lookAtPlayerName = nick.str();
 }
+#endif
 
 //	BATTLE_HONOR_LADDER_CHAMP		= 0x0000001,
 //	BATTLE_HONOR_STREAK					= 0x0000002,

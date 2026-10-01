@@ -54,6 +54,12 @@
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/InGameUI.h"
 #include "TARGA.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NextGenTransport.h"
+#include "GameNetwork/GeneralsOnline/NGMPGame.h"
+#include "GameNetwork/GeneralsOnline/NGMP_include.h"
+extern NGMPGame* TheNGMPGame;
+#endif
 
 static Bool hasValidTransferFileExtension(const AsciiString& filePath)
 {
@@ -1597,7 +1603,16 @@ void ConnectionManager::initTransport() {
 	DEBUG_LOG(("ConnectionManager::initTransport - Initializing Transport"));
 
 	delete m_transport;
+#if defined(GENERALS_ONLINE)
+	// Online games use the Generals Online P2P/relay transport. LAN keeps the
+	// existing local-network transport path.
+	if (TheLAN == nullptr)
+		m_transport = new NextGenTransport;
+	else
+		m_transport = new Transport;
+#else
 	m_transport = new Transport;
+#endif
 	m_transport->reset();
 	m_transport->init(m_localAddr, m_localPort);
 }
@@ -1962,6 +1977,31 @@ void ConnectionManager::quitGame() {
 
 	disconnectLocalPlayer();
 }
+
+#if defined(GENERALS_ONLINE)
+PlayerLeaveCode ConnectionManager::disconnectPlayer(int64_t userID)
+{
+	if (TheNGMPGame != nullptr)
+	{
+		for (Int slotIndex = 0; slotIndex < MAX_SLOTS; ++slotIndex)
+		{
+			NGMPGameSlot* slot = TheNGMPGame->getGameSpySlot(slotIndex);
+			if (slot != nullptr && slot->m_userID == userID)
+			{
+				NetworkLog(ELogVerbosity::LOG_RELEASE,
+					"[NGMP] Disconnecting service user %lld from game slot %d",
+					static_cast<long long>(userID), slotIndex);
+				return disconnectPlayer(slotIndex);
+			}
+		}
+	}
+
+	NetworkLog(ELogVerbosity::LOG_RELEASE,
+		"[NGMP] Could not map disconnected service user %lld to a game slot",
+		static_cast<long long>(userID));
+	return PLAYERLEAVECODE_UNKNOWN;
+}
+#endif
 
 void ConnectionManager::disconnectLocalPlayer() {
 	// kill the frame data and the connections for all the other players.

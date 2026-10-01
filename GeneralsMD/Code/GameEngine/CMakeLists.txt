@@ -1132,6 +1132,51 @@ set(GAMEENGINE_SRC
     Source/Precompiled/PreRTS.cpp
 )
 
+if(SAGE_USE_GENERALS_ONLINE)
+    # Use service-backed multiplayer UI implementations only in Online builds.
+    # The legacy files remain untouched and continue to power normal Original/
+    # Enhanced/Contra builds when SAGE_USE_GENERALS_ONLINE is OFF.
+    list(REMOVE_ITEM GAMEENGINE_SRC
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLLoginMenu.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLWelcomeMenu.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLLobbyMenu.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLGameSetupMenu.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/PopupHostGame.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/PopupJoinGame.cpp
+    )
+    list(APPEND GAMEENGINE_SRC
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLLoginMenuGO.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLWelcomeMenuGO.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLLobbyMenuGO.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/WOLGameSetupMenuGO.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/PopupHostGameGO.cpp
+        Source/GameClient/GUI/GUICallbacks/Menus/PopupJoinGameGO.cpp
+    )
+    list(APPEND GAMEENGINE_SRC
+        Source/GameNetwork/GeneralsOnline/GeneralsOnline_Settings.cpp
+        Source/GameNetwork/GeneralsOnline/NetworkBitstream.cpp
+        Source/GameNetwork/GeneralsOnline/NetworkMesh.cpp
+        Source/GameNetwork/GeneralsOnline/NextGenTransport.cpp
+        Source/GameNetwork/GeneralsOnline/NGMP_Helpers.cpp
+        Source/GameNetwork/GeneralsOnline/NGMPGame.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_Auth.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_Init.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_LobbyInterface.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_MatchmakingInterface.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_Moderation.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_RoomsInterface.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_SocialInterface.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_StatsInterface.cpp
+        Source/GameNetwork/GeneralsOnline/HTTP/HTTPManager.cpp
+        Source/GameNetwork/GeneralsOnline/HTTP/HTTPRequest.cpp
+    )
+    if(WIN32)
+        list(APPEND GAMEENGINE_SRC
+            Source/GameNetwork/GeneralsOnline/PluginInterfaces.cpp
+        )
+    endif()
+endif()
+
 if(RTS_GAMEMEMORY_ENABLE)
     # Uses the original Game Memory implementation.
     list(APPEND GAMEENGINE_SRC
@@ -1158,6 +1203,12 @@ target_include_directories(z_gameengine PUBLIC
     ../CompatLib/Include  # Needed for d3dx8math.h in PCH
 )
 
+if(SAGE_USE_GENERALS_ONLINE)
+    target_include_directories(z_gameengine PUBLIC
+        Include/GameNetwork/GeneralsOnline/Vendor
+    )
+endif()
+
 # Ensure DXVK headers are available when building on Linux
 if(NOT SAGE_USE_DX8 AND dxvk_SOURCE_DIR)
     target_include_directories(z_gameengine PUBLIC
@@ -1182,6 +1233,24 @@ target_link_libraries(z_gameengine PUBLIC
     z_wwvegas
     d3d8lib  # Ensure DirectX8 headers available (Windows SDK or DXVK)
 )
+
+if(SAGE_USE_GENERALS_ONLINE)
+    find_package(CURL CONFIG REQUIRED)
+    find_package(GameNetworkingSockets CONFIG REQUIRED)
+    target_link_libraries(z_gameengine PUBLIC
+        CURL::libcurl
+        GameNetworkingSockets::GameNetworkingSockets_s
+    )
+
+    if(APPLE)
+        # Secure Transport / Apple trust store used by the pinned curl port;
+        # SystemConfiguration is also used by Apple networking backends.
+        target_link_libraries(z_gameengine PUBLIC
+            "-framework Security"
+            "-framework SystemConfiguration"
+        )
+    endif()
+endif()
 
 target_precompile_headers(z_gameengine PRIVATE
     [["Utility/CppMacros.h"]] # Must be first, to be removed when abandoning VC6

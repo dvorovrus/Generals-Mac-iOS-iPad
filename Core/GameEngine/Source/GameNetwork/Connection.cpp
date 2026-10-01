@@ -29,7 +29,11 @@
 #include "GameNetwork/networkutil.h"
 #include "GameLogic/GameLogic.h"
 
+#if defined(GENERALS_ONLINE)
+enum { MaxQuitFlushTime = 5000 }; // GO transport tears down independently; do not stall exit for 30 seconds.
+#else
 enum { MaxQuitFlushTime = 30000 }; // wait this many milliseconds at most to retry things before quitting
+#endif
 
 /**
  * The constructor.

@@ -6,12 +6,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-BUILD_DIR="${PROJECT_ROOT}/build/ios-vulkan"
+BUILD_DIR="${GX_BUILD_DIR:-${PROJECT_ROOT}/build/ios-vulkan}"
 IOS_DIR="${PROJECT_ROOT}/ios"
 DERIVED="${IOS_DIR}/build"
 OUT_DIR="${PROJECT_ROOT}/build/ios-package"
 APP_NAME="GeneralsXZH"
 BUNDLE_ID="${GX_BUNDLE_ID:-com.dvorov.generalszh.launcher}"
+IPA_NAME="${GX_IPA_NAME:-GeneralsXZH-launcher-unsigned.ipa}"
 VERSION_FILE="${IOS_DIR}/version.env"
 
 PROJECT_VERSION="0.0.0"
@@ -127,7 +128,7 @@ find "${APP}" -name "_CodeSignature" -type d -prune -exec rm -rf {} + 2>/dev/nul
 rm -f "${APP}/embedded.mobileprovision"
 
 IPA_STAGE="${OUT_DIR}/ipa-stage"
-IPA_PATH="${OUT_DIR}/GeneralsXZH-launcher-unsigned.ipa"
+IPA_PATH="${OUT_DIR}/${IPA_NAME}"
 rm -rf "${IPA_STAGE}" "${IPA_PATH}"
 mkdir -p "${IPA_STAGE}/Payload"
 cp -R "${APP}" "${IPA_STAGE}/Payload/"

@@ -578,6 +578,12 @@ public:
 	// the trailing '\' is included!
   const AsciiString &getPath_UserData() const { return m_userDataDir; }
 
+#if defined(__APPLE__) && defined(GENERALS_ONLINE)
+  // Recompute the runtime network CRC using a Windows Generals Online EXE
+  // seed while still hashing this build's version and multiplayer scripts.
+  static UnsignedInt generateExeCRCForApple(UnsignedInt executableSeedCRC);
+#endif
+
 private:
 
 	static UnsignedInt generateExeCRC();

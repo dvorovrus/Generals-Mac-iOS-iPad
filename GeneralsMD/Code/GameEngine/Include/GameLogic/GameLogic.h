@@ -192,6 +192,9 @@ public:
 	Bool isLoadingMap() const { return m_loadingMap; }			// Whenever a map is in the process of loading.
 	Bool isLoadingSave() const { return m_loadingSave; }		// Whenever a saved game is in the process of loading.
 	Bool isClearingGameData() const { return m_clearingGameData; }
+#if defined(GENERALS_ONLINE)
+	bool IsLoadScreenActive() const { return m_loadScreen != nullptr; }
+#endif
 
 	void enableScoring(Bool score) { m_isScoringEnabled = score; }
 	Bool isScoringEnabled() const { return m_isScoringEnabled; }

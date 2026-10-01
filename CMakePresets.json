@@ -48,6 +48,17 @@
       }
     },
     {
+      "name": "ios-vulkan-online",
+      "inherits": "ios-vulkan",
+      "displayName": "iPad Zero Hour + Generals Online (arm64 + MoltenVK)",
+      "binaryDir": "${sourceDir}/build/ios-vulkan-online",
+      "cacheVariables": {
+        "SAGE_USE_GENERALS_ONLINE": "ON",
+        "SAGE_USE_DETERMINISTIC_MATH": "ON",
+        "VCPKG_MANIFEST_FEATURES": "generals-online"
+      }
+    },
+    {
       "name": "macos-vulkan",
       "displayName": "macOS Contra Dev (arm64 + MoltenVK)",
       "generator": "Ninja",
@@ -81,6 +92,17 @@
       "environment": {
         "PKG_CONFIG_PATH": "/opt/homebrew/lib/pkgconfig"
       }
+    },
+    {
+      "name": "macos-vulkan-online",
+      "inherits": "macos-vulkan",
+      "displayName": "macOS Zero Hour + Generals Online (arm64 + MoltenVK)",
+      "binaryDir": "${sourceDir}/build/macos-vulkan-online",
+      "cacheVariables": {
+        "SAGE_USE_GENERALS_ONLINE": "ON",
+        "SAGE_USE_DETERMINISTIC_MATH": "ON",
+        "VCPKG_MANIFEST_FEATURES": "generals-online"
+      }
     }
   ],
   "buildPresets": [
@@ -90,9 +112,19 @@
       "displayName": "Build iPad Zero Hour"
     },
     {
+      "name": "ios-vulkan-online",
+      "configurePreset": "ios-vulkan-online",
+      "displayName": "Build iPad Zero Hour + Generals Online"
+    },
+    {
       "name": "macos-vulkan",
       "configurePreset": "macos-vulkan",
       "displayName": "Build macOS Contra Dev"
+    },
+    {
+      "name": "macos-vulkan-online",
+      "configurePreset": "macos-vulkan-online",
+      "displayName": "Build macOS Zero Hour + Generals Online"
     }
   ]
 }
