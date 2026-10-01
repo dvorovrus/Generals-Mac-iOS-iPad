@@ -17,6 +17,13 @@ extern "C" {
 //-------------------------------------------------------------------------------------------------
 OpenALAudioFileCache::OpenALAudioFileCache() : m_maxSize(14*1024*1024), m_currentlyUsedSize(0)
 {
+#if defined(__APPLE__)
+	// GeneralsX: OpenAL stores decoded PCM, not compressed OGG/MP3 bytes. Give Apple builds
+	// enough room to avoid pathological reload churn while still bounding iPad/macOS audio memory.
+	m_maxSize = 64 * 1024 * 1024;
+#endif
+	fprintf(stderr, "[AUDIO-CACHE] event=init entries=0 usedPCM_MB=0.00 limitMB=%.2f\n",
+		(double)m_maxSize / (1024.0 * 1024.0));
 }
 
 Bool OpenALAudioFileCache::decodeFFmpeg(OpenAudioFile* file)
@@ -45,7 +52,6 @@ Bool OpenALAudioFileCache::decodeFFmpeg(OpenAudioFile* file)
 			// Directly copy interleaved audio
 			audioData.insert(audioData.end(), frame->data[0], frame->data[0] + frame_data_size);
 		}
-		file->m_fileSize += frame_data_size;
 		file->m_totalSamples += frame->nb_samples;
 		};
 
@@ -55,6 +61,13 @@ Bool OpenALAudioFileCache::decodeFFmpeg(OpenAudioFile* file)
 	// Read all packets inside the file
 	while (file->m_ffmpegFile->decodePacket()) {
 	}
+
+	// Cache accounting must use the decoded PCM size that OpenAL actually retains.
+	if (audioData.size() > std::numeric_limits<UnsignedInt>::max()) {
+		DEBUG_LOG(("Decoded audio buffer is too large for cache accounting: %zu bytes\n", audioData.size()));
+		return false;
+	}
+	file->m_fileSize = static_cast<UnsignedInt>(audioData.size());
 
 	// Fill the buffer with the audio data
 	alBufferData(file->m_buffer, OpenALAudioManager::getALFormat(file->m_ffmpegFile->getNumChannels(), file->m_ffmpegFile->getBytesPerSample() * 8),
@@ -132,8 +145,6 @@ ALuint OpenALAudioFileCache::getBufferForFile(const OpenFileInfo &fileInfo)
 		return 0;
 	}
 
-	UnsignedInt fileSize = file->size();
-
 	OpenAudioFile openedAudioFile;
 	alGenBuffers(1, &openedAudioFile.m_buffer);
 	openedAudioFile.m_eventInfo = eventToOpenFrom ? eventToOpenFrom->getAudioEventInfo() : NULL;
@@ -160,7 +171,8 @@ ALuint OpenALAudioFileCache::getBufferForFile(const OpenFileInfo &fileInfo)
 
 	openedAudioFile.m_ffmpegFile->close();
 
-	openedAudioFile.m_fileSize = fileSize;
+	// m_fileSize is the decoded PCM byte count set by decodeFFmpeg(). OpenAL retains this
+	// memory, so using the compressed on-disk file size here would undercount the cache badly.
 	m_currentlyUsedSize += openedAudioFile.m_fileSize;
 	if (m_currentlyUsedSize > m_maxSize) {
 		DEBUG_LOG(("Audio Cache is full, trying to free some space\n"));
@@ -174,6 +186,13 @@ ALuint OpenALAudioFileCache::getBufferForFile(const OpenFileInfo &fileInfo)
 	}
 
 	m_openFiles[strToFind] = openedAudioFile;
+	fprintf(stderr,
+	        "[AUDIO-CACHE] event=load name=%s entries=%zu samplePCM_KB=%.1f usedPCM_MB=%.2f limitMB=%.2f\n",
+	        strToFind.str(),
+	        m_openFiles.size(),
+	        (double)openedAudioFile.m_fileSize / 1024.0,
+	        (double)m_currentlyUsedSize / (1024.0 * 1024.0),
+	        (double)m_maxSize / (1024.0 * 1024.0));
 	return openedAudioFile.m_buffer;
 }
 
@@ -213,9 +232,9 @@ void OpenALAudioFileCache::setMaxSize(UnsignedInt size)
 {
 	// Protect the function, in case we're trying to use this value elsewhere.
 
-	// Hardcoded to 14MiB for now, this is a workaround for the limit
-	//  set by the default config files being 4MB and causing needless reloads.
-	//m_maxSize = size;
+	// Keep the runtime cache cap controlled by the backend. Apple builds use 64 MiB of
+	// decoded PCM; other OpenAL builds retain the legacy 14 MiB cap.
+	(void)size;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -296,15 +315,28 @@ Bool OpenALAudioFileCache::freeEnoughSpaceForSample(const OpenAudioFile& sampleT
 		return FALSE;
 	}
 
+	UnsignedInt evictedBytes = 0;
+	UnsignedInt evictedCount = 0;
 	std::list<AsciiString>::iterator ait;
 	for (ait = filesToClose.begin(); ait != filesToClose.end(); ++ait) {
 		OpenFilesHashIt itToErase = m_openFiles.find(*ait);
 		if (itToErase != m_openFiles.end()) {
+			const UnsignedInt pcmBytes = itToErase->second.m_fileSize;
 			releaseOpenAudioFile(&itToErase->second);
-			m_currentlyUsedSize -= itToErase->second.m_fileSize;
+			m_currentlyUsedSize = m_currentlyUsedSize >= pcmBytes ? m_currentlyUsedSize - pcmBytes : 0;
+			evictedBytes += pcmBytes;
+			++evictedCount;
 			m_openFiles.erase(itToErase);
 		}
 	}
+
+	fprintf(stderr,
+	        "[AUDIO-CACHE] event=evict evicted=%u evictedPCM_MB=%.2f entries=%zu usedPCM_MB=%.2f limitMB=%.2f\n",
+	        (unsigned)evictedCount,
+	        (double)evictedBytes / (1024.0 * 1024.0),
+	        m_openFiles.size(),
+	        (double)m_currentlyUsedSize / (1024.0 * 1024.0),
+	        (double)m_maxSize / (1024.0 * 1024.0));
 
 	return TRUE;
 }
