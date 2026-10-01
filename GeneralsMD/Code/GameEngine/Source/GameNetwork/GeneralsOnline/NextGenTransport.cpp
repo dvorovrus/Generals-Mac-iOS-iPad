@@ -355,7 +355,7 @@ Bool NextGenTransport::doRecv(void)
                 const uint32_t numBytesWithHeader = msg->m_cbSize;
 
                 // is it an AC packet?
-                std::vector<byte> vecDataWithHeader;
+                std::vector<unsigned char> vecDataWithHeader;
                 vecDataWithHeader.resize(numBytesWithHeader);
                 memcpy(vecDataWithHeader.data(), msg->GetData(), numBytesWithHeader);
 
@@ -364,7 +364,7 @@ Bool NextGenTransport::doRecv(void)
                 {
                     ENetworkChannel netChannel = (ENetworkChannel)vecDataWithHeader[0];
 
-                    std::vector<byte> vecPacketDataWithoutHeader;
+                    std::vector<unsigned char> vecPacketDataWithoutHeader;
                     vecPacketDataWithoutHeader.resize(numBytesWithHeader - sizeof(ENetworkChannel));
                     memcpy(vecPacketDataWithoutHeader.data(), (char*)msg->GetData() + sizeof(ENetworkChannel), numBytesWithHeader - sizeof(ENetworkChannel));
 
@@ -437,7 +437,7 @@ Bool NextGenTransport::doRecv(void)
                         if (payloadLen > 0)
                         {
                             std::memcpy(incomingMessage.data,
-                                static_cast<unsigned char*>(vecPacketDataWithoutHeader.data()) + sizeof(TransportMessageHeader),
+                                vecPacketDataWithoutHeader.data() + sizeof(TransportMessageHeader),
                                 payloadLen);
                         }
 
@@ -655,7 +655,7 @@ Bool NextGenTransport::doSend(void)
             // CRITICAL FIX: Create a temporary buffer with ONLY header + data
             // Do NOT send the entire TransportMessage struct which contains metadata
             // (length, addr, port fields that corrupt the packet on the wire)
-            std::vector<byte> packetData;
+            std::vector<unsigned char> packetData;
             packetData.resize(totalLen);
             
             // Copy header

@@ -1215,7 +1215,7 @@ void PlayerConnection::LiteUpdateForAC()
 
 			// is it an AC packet?
 			// TODO_AC: Improve detection, just add a 'msg type' to the start of the packet
-			std::vector<byte> vecData;
+			std::vector<unsigned char> vecData;
 			vecData.resize(numBytes);
 			memcpy(vecData.data(), msg->GetData(), numBytes);
 
@@ -1230,7 +1230,7 @@ void PlayerConnection::LiteUpdateForAC()
 
 					// remove header
 					// TODO_AC: Optimize this
-					std::vector<byte> vecDataAC;
+					std::vector<unsigned char> vecDataAC;
 					vecDataAC.resize(numBytes - sizeof(ENetworkChannel));
 					memcpy(vecDataAC.data(), (char*)msg->GetData() + sizeof(ENetworkChannel), numBytes - sizeof(ENetworkChannel));
 
