@@ -54,7 +54,6 @@
       "binaryDir": "${sourceDir}/build/ios-vulkan-online",
       "cacheVariables": {
         "SAGE_USE_GENERALS_ONLINE": "ON",
-        "SAGE_USE_DETERMINISTIC_MATH": "ON",
         "VCPKG_MANIFEST_FEATURES": "generals-online"
       }
     },
@@ -100,7 +99,6 @@
       "binaryDir": "${sourceDir}/build/macos-vulkan-online",
       "cacheVariables": {
         "SAGE_USE_GENERALS_ONLINE": "ON",
-        "SAGE_USE_DETERMINISTIC_MATH": "ON",
         "VCPKG_MANIFEST_FEATURES": "generals-online"
       }
     }
