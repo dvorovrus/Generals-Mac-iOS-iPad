@@ -1,4 +1,4 @@
-# iOS-only clean build
+# iOS-only build with persistent dependency and compiler caches
 name: Build iOS Generals Online
 
 on:
@@ -38,6 +38,11 @@ jobs:
     name: GeneralsXZH iOS + Generals Online
     runs-on: macos-latest
     timeout-minutes: 150
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ci-cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPILERCHECK: content
 
     steps:
       - name: Checkout
@@ -57,7 +62,39 @@ jobs:
       - name: Install build tools
         run: |
           brew update
-          brew install cmake ninja meson pkg-config autoconf autoconf-archive automake libtool xcodegen glslang protobuf
+          brew install cmake ninja meson pkg-config autoconf autoconf-archive automake libtool xcodegen glslang protobuf ccache
+
+      - name: Prepare build caches
+        id: cache-context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${GITHUB_WORKSPACE}/.ci-cache/vcpkg" "${CCACHE_DIR}"
+          echo "VCPKG_BINARY_SOURCES=clear;files,${GITHUB_WORKSPACE}/.ci-cache/vcpkg,readwrite" >> "${GITHUB_ENV}"
+          # Keep caches separate when the runner's compiler or SDK changes.
+          TOOLCHAIN=$( { xcodebuild -version; xcrun --sdk iphoneos --show-sdk-version; xcrun clang --version; } | shasum -a 256 | cut -d ' ' -f 1)
+          echo "toolchain=${TOOLCHAIN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .ci-cache/vcpkg
+          key: ios-online-vcpkg-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-context.outputs.toolchain }}-${{ hashFiles('vcpkg.json', 'vcpkg-lock.json', 'cmake/**', 'CMakePresets.json', '.github/workflows/build-ios-online.yml') }}
+          restore-keys: |
+            ios-online-vcpkg-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-context.outputs.toolchain }}-
+
+      - name: Restore compiler cache
+        id: compiler-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ios-online-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-context.outputs.toolchain }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ios-online-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-context.outputs.toolchain }}-
+
+      - name: Reset compiler cache statistics
+        run: ccache --zero-stats
 
       - name: Install Vulkan SDK
         shell: bash
@@ -103,12 +140,34 @@ jobs:
           cmake --preset ios-vulkan-online 2>&1 | tee logs/configure_ios_online.log
           test ${PIPESTATUS[0]} -eq 0
 
+      # Save before compiling the engine, so source errors cannot discard the cache.
+      - name: Save vcpkg binaries
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: .ci-cache/vcpkg
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
       - name: Build iOS engine
+        id: engine-build
         run: |
           mkdir -p logs
           NPROC=$(sysctl -n hw.ncpu)
           cmake --build build/ios-vulkan-online --target z_generals -j "${NPROC}" 2>&1 | tee logs/build_ios_online.log
           test ${PIPESTATUS[0]} -eq 0
+
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() && (steps.engine-build.outcome == 'success' || steps.engine-build.outcome == 'failure') }}
+        run: ccache --show-stats
+
+      - name: Save compiler cache
+        if: ${{ !cancelled() && (steps.engine-build.outcome == 'success' || steps.engine-build.outcome == 'failure') }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
 
       - name: Verify binary
         run: |

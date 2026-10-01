@@ -1242,6 +1242,11 @@ if(SAGE_USE_GENERALS_ONLINE)
         GameNetworkingSockets::GameNetworkingSockets_s
     )
 
+    # GO helpers use SDL_OpenURL even when the update checker is disabled.
+    if(SAGE_USE_SDL3)
+        target_link_libraries(z_gameengine PRIVATE SDL3::SDL3)
+    endif()
+
     if(APPLE)
         # Secure Transport / Apple trust store used by the pinned curl port;
         # SystemConfiguration is also used by Apple networking backends.
