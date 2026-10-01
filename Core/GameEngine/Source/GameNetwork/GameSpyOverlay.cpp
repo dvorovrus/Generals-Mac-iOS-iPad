@@ -137,6 +137,14 @@ void GSMessageBoxYesNo(UnicodeString title, UnicodeString message, GameWinMsgBox
 	cancelFunc = newNoFunc;
 }
 
+#if defined(GENERALS_ONLINE)
+void GSMessageBoxCancel(UnicodeString title, UnicodeString message, GameWinMsgBoxFunc newCancelFunc)
+{
+	ClearGSMessageBoxes();
+	messageBoxWindow = MessageBoxCancel(title, message, newCancelFunc);
+}
+#endif
+
 void GSMessageBoxNoButtons(UnicodeString title, UnicodeString message, bool bShowLogo)
 {
 	ClearGSMessageBoxes();

@@ -871,7 +871,7 @@ static void handleStartingCashSelection()
 	Int selIndex;
 	GadgetComboBoxGetSelectedPos(comboBoxStartingCash, &selIndex);
 
-	UnsignedInt startingCashValue = (UnsignedInt)GadgetComboBoxGetItemData(comboBoxStartingCash, selIndex);
+	UnsignedInt startingCashValue = static_cast<UnsignedInt>(reinterpret_cast<uintptr_t>(GadgetComboBoxGetItemData(comboBoxStartingCash, selIndex)));
 
 	Money startingCash;
 	startingCash.deposit(startingCashValue, FALSE);
@@ -890,7 +890,7 @@ static void handleStartingCashSelection()
     GadgetComboBoxGetSelectedPos(comboBoxStartingCash, &selIndex);
 
     Money startingCash;
-    startingCash.deposit( (UnsignedInt)GadgetComboBoxGetItemData( comboBoxStartingCash, selIndex ), FALSE, FALSE );
+    startingCash.deposit(static_cast<UnsignedInt>(reinterpret_cast<uintptr_t>(GadgetComboBoxGetItemData(comboBoxStartingCash, selIndex))), FALSE, FALSE);
     myGame->setStartingCash( startingCash );
     myGame->resetAccepted();
 

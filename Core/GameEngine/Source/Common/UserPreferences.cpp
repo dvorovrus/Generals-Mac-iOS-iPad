@@ -50,6 +50,12 @@
 #include "GameClient/MapUtil.h"
 #include "GameClient/ChallengeGenerals.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
+#if defined(GENERALS_ONLINE)
+#include "Common/GlobalData.h"
+#include "GameNetwork/GeneralsOnline/NGMP_interfaces.h"
+#include "GameNetwork/GeneralsOnline/OnlineServices_Init.h"
+#include <filesystem>
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -427,8 +433,20 @@ Int QuickMatchPreferences::getSide()
 CustomMatchPreferences::CustomMatchPreferences()
 {
 	AsciiString userPrefFilename;
+#if defined(GENERALS_ONLINE)
+	NGMP_OnlineServices_AuthInterface* auth =
+		NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_AuthInterface>();
+	const int64_t userID = auth != nullptr ? auth->GetUserID() : -1;
+	userPrefFilename.format("GeneralsOnlineData\\CustomPref%lld.ini", static_cast<long long>(userID));
+
+	AsciiString prefsDirectory = TheGlobalData->getPath_UserData();
+	prefsDirectory.concat("GeneralsOnlineData");
+	std::error_code ec;
+	std::filesystem::create_directories(prefsDirectory.str(), ec);
+#else
 	Int localProfile = TheGameSpyInfo->getLocalProfileID();
 	userPrefFilename.format("GeneralsOnline\\CustomPref%d.ini", localProfile);
+#endif
 	load(userPrefFilename);
 }
 
@@ -442,6 +460,23 @@ void CustomMatchPreferences::setLastLadder(const AsciiString& addr, UnsignedShor
 	strVal.format("%d", port);
 	(*this)["LastLadderAddr"] = addr;
 	(*this)["LastLadderPort"] = strVal;
+}
+
+AsciiString CustomMatchPreferences::getLastLobbyName() const
+{
+	CustomMatchPreferences::const_iterator it = find("LastLobbyName");
+	if (it == end())
+	{
+		return AsciiString::TheEmptyString;
+	}
+	AsciiString ret = it->second;
+	ret.trim();
+	return ret;
+}
+
+void CustomMatchPreferences::setLastLobbyName(const AsciiString& name)
+{
+	(*this)["LastLobbyName"] = name;
 }
 
 AsciiString CustomMatchPreferences::getLastLadderAddr()
