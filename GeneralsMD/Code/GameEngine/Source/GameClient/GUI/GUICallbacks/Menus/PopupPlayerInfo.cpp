@@ -272,6 +272,12 @@ void SetLookAtPlayer(int64_t id, UnicodeString nick)
 	lookAtPlayerID = id;
 	lookAtPlayerName = to_utf8(nick.str());
 }
+
+void SetLookAtPlayer(int64_t id, AsciiString nick)
+{
+	lookAtPlayerID = id;
+	lookAtPlayerName = nick.str();
+}
 #else
 void SetLookAtPlayer(Int id, AsciiString nick)
 {
