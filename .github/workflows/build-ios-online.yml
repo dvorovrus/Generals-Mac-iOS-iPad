@@ -158,7 +158,7 @@ jobs:
           echo "- Engine: GeneralsXZH arm64" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Launcher: native UIKit" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Generals Online: enabled (Apple 30 Hz milestone)" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Deterministic math: pending dedicated cross-platform implementation" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Deterministic math: enabled for Apple Online presets" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Retail GameData: not included" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Mod profiles: not included" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Artifact size: ${IPA_SIZE}" >> "${GITHUB_STEP_SUMMARY}"
