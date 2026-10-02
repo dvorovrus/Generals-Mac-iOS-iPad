@@ -1,4 +1,4 @@
-name: Build iOS Launcher Fast
+name: Shared | iPad | Launcher Fast
 
 on:
   workflow_dispatch:
