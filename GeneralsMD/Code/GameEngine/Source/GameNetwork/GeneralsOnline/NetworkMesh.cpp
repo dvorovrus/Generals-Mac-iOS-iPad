@@ -725,6 +725,15 @@ NetworkMesh::NetworkMesh()
 
 	// 0 = library default, 1 = native, 2 = WebRTC
 	m_iceImplementation = (serviceConf.ice_implementation >= 0 && serviceConf.ice_implementation <= 2) ? serviceConf.ice_implementation : 2;
+#if defined(__APPLE__)
+	// Apple builds include the native ICE backend, but not the optional WebRTC backend.
+	// Selecting WebRTC makes ConnectP2PCustomSignaling fail before a peer can connect.
+	if (m_iceImplementation == 2)
+	{
+		m_iceImplementation = 1;
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "NetworkMesh: Apple build forcing native ICE implementation 1");
+	}
+#endif
 	NetworkLog(ELogVerbosity::LOG_RELEASE, "NetworkMesh: using ICE implementation %d (0=default, 1=native, 2=WebRTC)", m_iceImplementation);
 
 	m_pSignaling = new CSignalingClient(SteamNetworkingSockets());

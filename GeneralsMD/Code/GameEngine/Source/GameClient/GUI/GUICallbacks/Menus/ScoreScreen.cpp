@@ -1649,6 +1649,13 @@ winName.format("ScoreScreen.wnd:StaticTextScore%d", pos);
 	if ( screenType == SCORESCREEN_INTERNET )
 	{
 		DEBUG_LOG(("populatePlayerInfo() - SCORESCREEN_INTERNET"));
+#if defined(GENERALS_ONLINE)
+		// Generals Online does not initialize the legacy GameSpy score/stat singletons.
+		// The visible score UI is already populated above; skip the legacy reporting path
+		// instead of dereferencing stale GameSpy state while leaving the match.
+		DEBUG_LOG(("populatePlayerInfo() - Generals Online: skipping legacy GameSpy stats path"));
+		return;
+#endif
 		if (TheGameSpyGame && !TheGameSpyGame->getUseStats()
 		 && !TheGameSpyGame->isQMGame() )  //QuickMatch games always record stats
 			return;	//the host has requested not to record stats for this game.

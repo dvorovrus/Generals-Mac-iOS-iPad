@@ -694,6 +694,8 @@ void createGame()
 		return;
 	}
 
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-PASSWORD] Creating lobby passworded=%d passwordLength=%d",
+		passwd.isNotEmpty() ? 1 : 0, passwd.getLength());
 	pLobbyInterface->CreateLobby(gameName, md->m_displayName, md->m_fileName, md->m_isOfficial, md->m_numPlayers, limitArmies, useStats, TheGlobalData->m_defaultStartingCash.countMoney(), passwd.isNotEmpty(), std::string(passwd.str()), bAllowObservers);
 
 	GSMessageBoxCancel(UnicodeString(L"Creating Lobby"), UnicodeString(L"Lobby Creation is in progress..."), nullptr);

@@ -961,6 +961,7 @@ static void WOLLockSettings()
 
 static void StartPressed()
 {
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-START] StartPressed entered");
 	Bool isReady = TRUE;
 	Bool allHaveMap = TRUE;
 	Int playerCount = 0;
@@ -971,11 +972,15 @@ static void StartPressed()
 	NGMPGame* myGame = pLobbyInterface == nullptr ? nullptr : pLobbyInterface->GetCurrentGame();
 
 	if (pLobbyInterface == nullptr || !myGame || pAuthInterface == nullptr)
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-START] Missing lobby/game/auth interface");
 		return;
+	}
 
 	NetworkMesh* pMesh = NGMP_OnlineServicesManager::GetNetworkMesh();
 	if (pMesh == nullptr)
 	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-START] Network mesh is null");
 		return;
 	}
 
@@ -988,7 +993,10 @@ static void StartPressed()
 		}
 	}
 
-	if (pMesh->GetAllConnections().size() < numHumanPlayers - 1)
+	const size_t requiredConnections = numHumanPlayers > 0 ? static_cast<size_t>(numHumanPlayers - 1) : 0;
+	const size_t currentConnections = pMesh->GetAllConnections().size();
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-START] humans=%d connections=%zu required=%zu", numHumanPlayers, currentConnections, requiredConnections);
+	if (currentConnections < requiredConnections)
 	{
 		UnicodeString text(L"Connections: Some players are still connecting. Try again shortly:");
 		GadgetListBoxAddEntryText(listboxGameSetupChat, text, GameMakeColor(255, 194, 15, 255), -1, -1);
@@ -1037,22 +1045,28 @@ static void StartPressed()
 	}
 	for( int i = 0; i < MAX_SLOTS; i++ )
 	{
-		bool bIsAccepted = myGame->getSlot(i)->isAccepted();
-		bool bIsHuman = myGame->getSlot(i)->isHuman();
+		GameSlot* slot = myGame->getSlot(i);
+		if (slot == nullptr)
+		{
+			NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-START] Slot %d is null; skipping", i);
+			continue;
+		}
+		bool bIsAccepted = slot->isAccepted();
+		bool bIsHuman = slot->isHuman();
 		if ((bIsAccepted == FALSE) && (bIsHuman == TRUE))
 		{
 			isReady = FALSE;
-			if (!myGame->getSlot(i)->hasMap() && !willTransfer)
+			if (!slot->hasMap() && !willTransfer)
 			{
 				UnicodeString msg;
-				msg.format(TheGameText->fetch("GUI:PlayerNoMap"), myGame->getSlot(i)->getName().str(), mapDisplayName.str());
+				msg.format(TheGameText->fetch("GUI:PlayerNoMap"), slot->getName().str(), mapDisplayName.str());
 				GadgetListBoxAddEntryText(listboxGameSetupChat, msg, GameSpyColor[GSCOLOR_DEFAULT], -1, -1);
 				allHaveMap = FALSE;
 			}
 		}
-		if(myGame->getSlot(i)->isOccupied() && myGame->getSlot(i)->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
+		if(slot->isOccupied() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
 		{
-			if (myGame->getSlot(i)->isHuman())
+			if (slot->isHuman())
 				humanCount++;
 			playerCount++;
 		}
@@ -4071,6 +4085,11 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 					break;
 
 				GameWindow *control = (GameWindow *)mData1;
+				if (control == nullptr)
+				{
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-START] GBM_SELECTED received null control");
+					break;
+				}
 				Int controlID = control->winGetWindowId();
 				static int buttonCommunicatorID = NAMEKEY("GameSpyGameOptionsMenu.wnd:ButtonCommunicator");
 
@@ -4120,6 +4139,7 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 				}
 				else if ( controlID == buttonStartID )
 				{
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-START] Start button selected");
 					savePlayerInfo();
 					
 					NGMP_OnlineServices_LobbyInterface* pLobbyInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_LobbyInterface>();

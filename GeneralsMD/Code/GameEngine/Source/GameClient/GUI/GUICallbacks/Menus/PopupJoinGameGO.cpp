@@ -273,9 +273,10 @@ static void joinGame( AsciiString password )
 	}
 
 #if defined(GENERALS_ONLINE)
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-PASSWORD] Joining lobby %d passworded=%d passwordLength=%d",
+		lobbyTryingToJoin.lobbyID, lobbyTryingToJoin.passworded ? 1 : 0, password.getLength());
 	pLobbyInterface->JoinLobby(lobbyTryingToJoin, password.str());
-	
-	DEBUG_LOG(("Attempting to join game %d(%s) with password [%s]\n", lobbyTryingToJoin.lobbyID, lobbyTryingToJoin.name.c_str(), password.str()));
+	DEBUG_LOG(("Attempting to join game %d(%s); password length=%d\n", lobbyTryingToJoin.lobbyID, lobbyTryingToJoin.name.c_str(), password.getLength()));
 #else
 	PeerRequest req;
 	req.peerRequestType = PeerRequest::PEERREQUEST_JOINSTAGINGROOM;
