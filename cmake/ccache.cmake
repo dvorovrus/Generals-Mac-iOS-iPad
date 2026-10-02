@@ -17,13 +17,21 @@ if(SAGE_USE_CCACHE)
         set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}" CACHE STRING "C++ compiler launcher")
         message(STATUS "ccache enabled: ${CCACHE_PROGRAM}")
         
-        # GeneralsX @build BenderAI 25/02/2026
-        # Use CCACHE_SLOPPINESS env var so we don't mutate the global ccache config
-        # as a side-effect of CMake configure.  The env var is inherited by compiler
-        # invocations launched through CMAKE_<LANG>_COMPILER_LAUNCHER.
+        # Configure-time environment changes do not survive a separate cmake --build.
+        # Put the PCH settings in the generated launcher instead of the global config.
         if(APPLE)
-            set(ENV{CCACHE_SLOPPINESS} "time_macros,locale")
-            message(STATUS "ccache: CCACHE_SLOPPINESS=time_macros,locale set for this build")
+            foreach(lang C CXX)
+                if(CMAKE_${lang}_COMPILER_LAUNCHER STREQUAL "${CCACHE_PROGRAM}")
+                    set(CMAKE_${lang}_COMPILER_LAUNCHER
+                        "${CMAKE_COMMAND};-E;env;CCACHE_SLOPPINESS=pch_defines,time_macros,locale;${CCACHE_PROGRAM}")
+                endif()
+            endforeach()
+            # Do not embed checkout timestamps in Clang PCH files restored on a new runner.
+            add_compile_options(
+                "$<$<COMPILE_LANG_AND_ID:C,Clang,AppleClang>:SHELL:-Xclang -fno-pch-timestamp>"
+                "$<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:SHELL:-Xclang -fno-pch-timestamp>"
+            )
+            message(STATUS "ccache: Apple PCH support enabled")
         endif()
     else()
         message(STATUS "ccache not found, building without compiler cache")

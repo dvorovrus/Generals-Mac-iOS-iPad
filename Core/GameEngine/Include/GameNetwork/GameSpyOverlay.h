@@ -38,6 +38,7 @@
 void ClearGSMessageBoxes();	///< Tear down any GS message boxes (e.g. in case we have a new one to put up)
 void GSMessageBoxOk(UnicodeString titleString,UnicodeString bodyString, GameWinMsgBoxFunc okFunc = nullptr);	///< Display a Message box with Ok button and track it
 void GSMessageBoxOkCancel(UnicodeString title, UnicodeString message, GameWinMsgBoxFunc okFunc, GameWinMsgBoxFunc cancelFunc);	///< Display a Message box with Ok/Cancel buttons and track it
+void GSMessageBoxOkCancelWithLabels(UnicodeString title, UnicodeString message, UnicodeString okLabel, UnicodeString cancelLabel, GameWinMsgBoxFunc okFunc, GameWinMsgBoxFunc cancelFunc);
 void GSMessageBoxYesNo(UnicodeString title, UnicodeString message, GameWinMsgBoxFunc yesFunc, GameWinMsgBoxFunc noFunc);
 #if defined(GENERALS_ONLINE)
 void GSMessageBoxCancel(UnicodeString title, UnicodeString message, GameWinMsgBoxFunc cancelFunc);

@@ -614,7 +614,7 @@ void NGMP_OnlineServices_LobbyInterface::SearchForLobbies(std::function<void()> 
 				}
 				else
 				{
-					lobbyEntry.map_path = std::format("{}\\{}", TheMapCache->getUserMapDir(true).str(), lobbyEntry.map_path.c_str());
+					lobbyEntry.map_path = std::format("{}\\{}", TheMapCache->getUserMapDir().str(), lobbyEntry.map_path.c_str());
 				}
 
 				// NOTE: These fields won't be present becauase they're private properties
@@ -949,7 +949,7 @@ void NGMP_OnlineServices_LobbyInterface::UpdateRoomDataCache(std::function<void(
 						else
 						{
 							// TODO_NGMP: This needs to match identically, but why did it change from the base game?
-							AsciiString strUserMapDIr = TheMapCache->getUserMapDir(true);
+							AsciiString strUserMapDIr = TheMapCache->getUserMapDir();
 							strUserMapDIr.toLower();
 
 							lobbyEntry.map_path = std::format("{}\\{}", strUserMapDIr.str(), lobbyEntry.map_path.c_str());

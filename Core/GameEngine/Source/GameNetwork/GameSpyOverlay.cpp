@@ -28,8 +28,11 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "Common/AudioEventRTS.h"
+#include "Common/NameKeyGenerator.h"
 
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetPushButton.h"
+#include "GameClient/GameWindowManager.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/ShellHooks.h"
@@ -123,6 +126,20 @@ void GSMessageBoxOkCancel(UnicodeString title, UnicodeString message, GameWinMsg
 	messageBoxWindow = MessageBoxOkCancel(title, message, messageBoxOK, messageBoxCancel);
 	okFunc = newOkFunc;
 	cancelFunc = newCancelFunc;
+}
+
+void GSMessageBoxOkCancelWithLabels(UnicodeString title, UnicodeString message, UnicodeString okLabel, UnicodeString cancelLabel, GameWinMsgBoxFunc newOkFunc, GameWinMsgBoxFunc newCancelFunc)
+{
+	GSMessageBoxOkCancel(title, message, newOkFunc, newCancelFunc);
+	if (!messageBoxWindow)
+		return;
+
+	GameWindow *okButton = TheWindowManager->winGetWindowFromId(messageBoxWindow, NAMEKEY("MessageBox.wnd:ButtonOk"));
+	GameWindow *cancelButton = TheWindowManager->winGetWindowFromId(messageBoxWindow, NAMEKEY("MessageBox.wnd:ButtonCancel"));
+	if (okButton)
+		GadgetButtonSetText(okButton, okLabel);
+	if (cancelButton)
+		GadgetButtonSetText(cancelButton, cancelLabel);
 }
 
 /**
