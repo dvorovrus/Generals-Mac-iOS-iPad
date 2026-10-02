@@ -467,6 +467,12 @@ static void updateOverallStats()
 
 void UpdateLocalPlayerStats()
 {
+#if defined(GENERALS_ONLINE)
+	// Generals Online intentionally skips SetUpGameSpy(), so the legacy
+	// TheGameSpyInfo/TheGameSpyPSMessageQueue singletons are not available.
+	// Local player data is service-backed; do not enter the legacy stats UI path.
+	return;
+#else
 	GameWindow *welcomeParent = TheWindowManager->winGetWindowFromId( nullptr, NAMEKEY("WOLWelcomeMenu.wnd:WOLWelcomeMenuParent") );
 
 	if (welcomeParent)
@@ -477,6 +483,7 @@ void UpdateLocalPlayerStats()
 	{
 		PopulatePlayerInfoWindows( "WOLQuickMatchMenu.wnd" );
 	}
+#endif
 }
 
 static Bool raiseMessageBoxes = FALSE;
