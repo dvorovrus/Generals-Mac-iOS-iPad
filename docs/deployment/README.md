@@ -87,6 +87,9 @@ This creates the canonical folders without moving or deleting existing user file
 # Online
 ./scripts/deploy/macos/generals-deploy.sh full macos online \
   --ipa ~/Downloads/GeneralsZH-iPad-unsigned.ipa
+
+# Fast local Online development after GameData is installed once
+./scripts/build/macos/build-macos-online-local.sh --run
 ```
 
 ## Workspace layout

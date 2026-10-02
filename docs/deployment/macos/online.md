@@ -8,32 +8,58 @@ Status: experimental, but the macOS app is installable.
 
 ## Fast local development
 
-Install clean Zero Hour GameData once into:
+Use the existing repository checkout on `feature/generals-online-apple`; a second worktree is not required.
+
+Generals Online keeps clean Zero Hour data separately at:
 
 ```text
 ~/GeneralsX/Online/GeneralsZH
 ```
 
-Then the normal edit/test loop is:
+If clean Zero Hour data already exists at `~/GeneralsX/GeneralsZH`, initialize Online data once with:
+
+```bash
+mkdir -p ~/GeneralsX/Online/GeneralsZH
+rsync -a --delete ~/GeneralsX/GeneralsZH/ ~/GeneralsX/Online/GeneralsZH/
+```
+
+Verify that retail BIG archives are present:
+
+```bash
+find ~/GeneralsX/Online/GeneralsZH -maxdepth 1 -type f -iname "*.big" | wc -l
+```
+
+If there is no existing clean GameData directory, install it once from an Original/full IPA:
+
+```bash
+bash scripts/build/macos/install-macos-online-data.sh /path/to/GeneralsZH-FULL-unsigned.ipa
+```
+
+After that, the normal edit/test loop is only:
 
 ```bash
 git pull --ff-only
 ./scripts/build/macos/build-macos-online-local.sh --run
 ```
 
-The first run configures `macos-vulkan-online`. Later runs are incremental and rebuild only changed targets.
+The first run configures `macos-vulkan-online`. Later runs reuse `build/macos-vulkan-online` and rebuild only changed targets.
 
 Useful options:
 
 ```bash
-./scripts/build/macos/build-macos-online-local.sh --configure
+# Force CMake reconfigure when presets/build configuration changed.
+./scripts/build/macos/build-macos-online-local.sh --configure --run
+
+# Remove only the Online build/package outputs and rebuild from scratch.
 ./scripts/build/macos/build-macos-online-local.sh --clean --run
 ```
 
-Local app:
+Local outputs:
 
 ```text
+build/macos-vulkan-online/
 build/macos-online-package/GeneralsZH-Online-Dev.app
+GeneralsZH-Online-macos-arm64.tar
 ```
 
 Runtime log:
