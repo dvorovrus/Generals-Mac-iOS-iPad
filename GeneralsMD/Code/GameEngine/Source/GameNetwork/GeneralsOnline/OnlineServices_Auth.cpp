@@ -21,7 +21,12 @@
 #endif
 
 #if defined(__APPLE__)
+// The engine already defines Byte as signed char. Apple's Security umbrella pulls
+// in MacTypes.h, which defines Byte as UInt8. Rename the SDK spelling only while
+// parsing the framework headers to avoid the otherwise-fatal typedef collision.
+#define Byte AppleSecurityByte
 #include <Security/Security.h>
+#undef Byte
 #endif
 
 #if defined(USE_TEST_ENV)
