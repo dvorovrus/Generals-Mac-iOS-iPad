@@ -31,6 +31,11 @@ FastAllocatorGeneral* FastAllocatorGeneral::Get_Allocator()
 	return generalAllocator;
 }
 
+FastAllocatorGeneral* FastAllocatorGeneral::Peek_Allocator()
+{
+	return generalAllocator;
+}
+
 FastAllocatorGeneral::FastAllocatorGeneral() : MemoryLeakLogEnabled(false), AllocatedWithMalloc(0), AllocatedWithMallocCount(0), ActualMemoryUsage(0)
 {
 	int alloc_size=ALLOC_STEP;

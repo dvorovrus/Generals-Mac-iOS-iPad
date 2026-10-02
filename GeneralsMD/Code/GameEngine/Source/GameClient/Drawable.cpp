@@ -132,9 +132,14 @@ static GameFont *ResolveDrawableCaptionFont()
 
 	// TEST: hardcode Arial Unicode MS
 	font = TheFontLibrary->getFont("Arial Unicode MS", pointSize, bold);
-	sprintf(log_buffer, "[GX-ISSUE144] TEST ResolveCaptionFont Arial Unicode MS %s pointSize=%d bold=%d",
-		font ? "HIT" : "MISS", pointSize, bold);
-	fprintf(stderr, "%s\n", log_buffer);
+	static Int captionFontDiagBudget = 8;
+	if (captionFontDiagBudget > 0)
+	{
+		--captionFontDiagBudget;
+		sprintf(log_buffer, "[GX-ISSUE144] TEST ResolveCaptionFont Arial Unicode MS %s pointSize=%d bold=%d",
+			font ? "HIT" : "MISS", pointSize, bold);
+		fprintf(stderr, "%s\n", log_buffer);
+	}
 	if (font) return font;
 
 	font = TheFontLibrary->getFont("Arial", pointSize, bold);
@@ -392,20 +397,9 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatusBits statu
 	m_expirationDate = 0;  // 0 == never expires
 
 	m_lastConstructDisplayed = -1.0f;
-	//Fix for the building percent
-	m_constructDisplayString = TheDisplayStringManager->newDisplayString();
-	if (m_constructDisplayString)
-	{
-		GameFont *ctorFont = ResolveDrawableCaptionFont();
-		m_constructDisplayString->setFont(ctorFont);
-		{
-			char _lb[256];
-			sprintf(_lb, "[GX-ISSUE144] Drawable ctor constructDS font=%s size=%d",
-				ctorFont ? ctorFont->nameString.str() : "NULL",
-				ctorFont ? ctorFont->pointSize : -1);
-			fprintf(stderr, "%s\n", _lb);
-		}
-	}
+	// Allocate the construction caption lazily when an unfinished building is drawn.
+	// Units, projectiles and other drawables never need this display string.
+	m_constructDisplayString = nullptr;
 
 	m_ambientSound = nullptr;
   m_ambientSoundEnabled = true;
@@ -3698,6 +3692,7 @@ void Drawable::drawConstructPercent( const IRegion2D *healthBarRegion )
 		m_constructDisplayString = TheDisplayStringManager->newDisplayString();
 		if (m_constructDisplayString)
 		{
+			m_lastConstructDisplayed = -1.0f;
 			m_constructDisplayString->setFont(ResolveDrawableCaptionFont());
 			sprintf(log_buffer,
 				"[GX-ISSUE144] Drawable construct string allocated drawable=%p obj=%p",
@@ -3706,6 +3701,9 @@ void Drawable::drawConstructPercent( const IRegion2D *healthBarRegion )
 			fprintf(stderr, "%s\n", log_buffer);
 		}
 	}
+
+	if (m_constructDisplayString == nullptr)
+		return;
 
 	// set the string if the value has changed
 	if( m_lastConstructDisplayed != obj->getConstructionPercent() )
@@ -3735,20 +3733,25 @@ void Drawable::drawConstructPercent( const IRegion2D *healthBarRegion )
 		// record this percent as our last displayed so we don't un-necessarily rebuild the string
 		m_lastConstructDisplayed = obj->getConstructionPercent();
 
-		// Log actual text content (convert wchar to narrow for logging)
-		const WideChar *ws = buffer.str();
-		char narrow[128] = {};
-		for (int _i = 0; _i < 64 && ws[_i]; ++_i)
-			narrow[_i] = (ws[_i] < 128) ? (char)ws[_i] : '?';
-		GameFont *curFont = m_constructDisplayString->getFont();
-		sprintf(log_buffer,
-			"[GX-ISSUE144] Drawable construct text update drawable=%p pct=%g len=%d text=\"%s\" font=%s",
-			this,
-			(double)obj->getConstructionPercent(),
-			buffer.getLength(),
-			narrow,
-			curFont ? curFont->nameString.str() : "NULL");
-		fprintf(stderr, "%s\n", log_buffer);
+		static Int constructTextDiagBudget = 16;
+		if (constructTextDiagBudget > 0)
+		{
+			--constructTextDiagBudget;
+			// Log actual text content (convert wchar to narrow for logging)
+			const WideChar *ws = buffer.str();
+			char narrow[128] = {};
+			for (int _i = 0; _i < 64 && ws[_i]; ++_i)
+				narrow[_i] = (ws[_i] < 128) ? (char)ws[_i] : '?';
+			GameFont *curFont = m_constructDisplayString->getFont();
+			sprintf(log_buffer,
+				"[GX-ISSUE144] Drawable construct text update drawable=%p pct=%g len=%d text=\"%s\" font=%s",
+				this,
+				(double)obj->getConstructionPercent(),
+				buffer.getLength(),
+				narrow,
+				curFont ? curFont->nameString.str() : "NULL");
+			fprintf(stderr, "%s\n", log_buffer);
+		}
 	}
 
 	// get center position in drawable

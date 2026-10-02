@@ -59,6 +59,7 @@
 #include "ddsfile.h"
 #include "bitmaphandler.h"
 #include "wwprofile.h"
+#include <cstdio>
 
 bool TextureLoader::TextureLoadSuspended;
 int TextureLoader::TextureInactiveOverrideTime = 0;
@@ -1227,11 +1228,39 @@ bool TextureLoadTaskClass::Begin_Load()
 
 	// if not loaded, abort.
 	if (!loaded) {
+		fprintf(stderr,
+		        "[TEXTURE-DIAG] begin-load-failed path='%s' requestedFormat=%d compression=%d mipRequest=%u reduction=%u\n",
+		        Texture != nullptr ? Texture->Get_Full_Path().str() : "<null>",
+		        (int)Format,
+		        (Texture != nullptr && Texture->Is_Compression_Allowed()) ? 1 : 0,
+		        (unsigned)MipLevelCount,
+		        (unsigned)Reduction);
 		return false;
 	}
 
-	// lock surfaces in preparation for copy
+	// Lock surfaces in preparation for copy. DXVK can reject LockRect for
+	// platform-specific texture formats (notably legacy bump formats such as
+	// V8U8). Do not continue into BitmapHandler::Copy_Image with a null pBits.
 	Lock_Surfaces();
+	for (unsigned int level = 0; level < MipLevelCount; ++level)
+	{
+		if (LockedSurfacePtr[level] == nullptr || LockedSurfacePitch[level] == 0)
+		{
+			fprintf(stderr,
+			        "[TEXTURE-DIAG] lock-validation-failed path='%s' format=%d level=%u mipCount=%u\n",
+			        Texture != nullptr ? Texture->Get_Full_Path().str() : "<null>",
+			        (int)Format,
+			        level,
+			        (unsigned)MipLevelCount);
+			if (D3DTexture != nullptr)
+			{
+				D3DTexture->Release();
+				D3DTexture = nullptr;
+			}
+			MipLevelCount = 0;
+			return false;
+		}
+	}
 
 	State = STATE_LOAD_BEGUN;
 
@@ -1261,6 +1290,19 @@ bool TextureLoadTaskClass::Load()
 	// otherwise, load uncompressed mipmaps
 	if (!loaded) {
 		loaded = Load_Uncompressed_Mipmap();
+	}
+
+	if (!loaded)
+	{
+		fprintf(stderr,
+		        "[TEXTURE-DIAG] mip-load-failed path='%s' allocated=%s size=%ux%u format=%d mipCount=%u reduction=%u\n",
+		        Texture != nullptr ? Texture->Get_Full_Path().str() : "<null>",
+		        D3DTexture != nullptr ? "yes" : "no",
+		        (unsigned)Width,
+		        (unsigned)Height,
+		        (int)Format,
+		        (unsigned)MipLevelCount,
+		        (unsigned)Reduction);
 	}
 
 	State = STATE_LOAD_MIPMAP;
@@ -1317,9 +1359,18 @@ void TextureLoadTaskClass::Apply_Missing_Texture()
 		return;
 	}
 
+	fprintf(stderr,
+	        "[TEXTURE-DIAG] applying-missing-texture path='%s' requestedFormat=%d compression=%d\n",
+	        Texture->Get_Full_Path().str(),
+	        (int)Format,
+	        Texture->Is_Compression_Allowed() ? 1 : 0);
+
 	D3DTexture = MissingTexture::_Get_Missing_Texture();
 	if (D3DTexture == nullptr)
 	{
+		fprintf(stderr,
+		        "[TEXTURE-DIAG] missing-texture-fallback-null path='%s'\n",
+		        Texture->Get_Full_Path().str());
 		return;
 	}
 	Apply(true);
@@ -1398,8 +1449,16 @@ static bool	Get_Texture_Information
 		}
 
 		Targa targa;
-		if (TARGA_ERROR_HANDLER(targa.Open(filename, TGA_READMODE), filename))
+		const long targaError = TARGA_ERROR_HANDLER(targa.Open(filename, TGA_READMODE), filename);
+		if (targaError)
 		{
+			fprintf(stderr, "[TEXTURE-DIAG] tga-open-failed path='%s' code=%ld reason=%s\n",
+			        filename, targaError,
+			        targaError == TGAERR_OPEN ? "file-unavailable" :
+			        targaError == TGAERR_READ ? "read-error" :
+			        targaError == TGAERR_SYNTAX ? "invalid-header" :
+			        targaError == TGAERR_NOTSUPPORTED ? "unsupported-format" :
+			        targaError == TGAERR_NOMEM ? "out-of-memory" : "unknown");
 			return false;
 		}
 
@@ -1860,17 +1919,44 @@ void TextureLoadTaskClass::Lock_Surfaces()
 
 	for (unsigned int i = 0; i < MipLevelCount; ++i)
 	{
-		D3DLOCKED_RECT locked_rect;
-		DX8_ErrorCode
+		D3DLOCKED_RECT locked_rect = {};
+		const HRESULT result = Peek_D3D_Texture()->LockRect
 		(
-			Peek_D3D_Texture()->LockRect
-			(
-				i,
-				&locked_rect,
-				nullptr,
-				0
-			)
+			i,
+			&locked_rect,
+			nullptr,
+			0
 		);
+		DX8_ErrorCode(result);
+
+		if (FAILED(result) || locked_rect.pBits == nullptr || locked_rect.Pitch <= 0)
+		{
+			fprintf(stderr,
+			        "[TEXTURE-DIAG] lock-failed path='%s' format=%d level=%u hr=0x%08x pBits=%p pitch=%d\n",
+			        Texture != nullptr ? Texture->Get_Full_Path().str() : "<null>",
+			        (int)Format,
+			        i,
+			        (unsigned int)result,
+			        locked_rect.pBits,
+			        (int)locked_rect.Pitch);
+
+			// Undo any earlier successful locks before returning. Begin_Load()
+			// will detect the null slot and fall back to the missing texture
+			// instead of passing a null pointer to the image converter.
+			for (unsigned int j = 0; j < i; ++j)
+			{
+				if (LockedSurfacePtr[j] != nullptr)
+				{
+					DX8_ErrorCode(Peek_D3D_Texture()->UnlockRect(j));
+					LockedSurfacePtr[j] = nullptr;
+					LockedSurfacePitch[j] = 0;
+				}
+			}
+			LockedSurfacePtr[i] = nullptr;
+			LockedSurfacePitch[i] = 0;
+			return;
+		}
+
 		LockedSurfacePtr[i]		= (unsigned char *)locked_rect.pBits;
 		LockedSurfacePitch[i]	= locked_rect.Pitch;
 	}

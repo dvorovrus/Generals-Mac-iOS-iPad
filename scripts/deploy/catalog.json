@@ -39,7 +39,7 @@
       "enhanced": {
         "title": "Zero Hour Enhanced",
         "status": "stable-local",
-        "branch": "ios-clean",
+        "branch": "main",
         "buildMode": "local",
         "workflow": null,
         "artifact": null,
@@ -52,7 +52,7 @@
       "all": {
         "title": "All-in-One: Original + Enhanced + Contra X",
         "status": "stable-local",
-        "branch": "ios-clean",
+        "branch": "main",
         "buildMode": "local",
         "workflow": null,
         "artifact": null,
@@ -94,7 +94,7 @@
       "contra": {
         "title": "Contra X Beta 2 + Patch 1",
         "status": "stable",
-        "branch": "ios-clean",
+        "branch": "main",
         "buildMode": "github",
         "workflow": "build-macos-contra-dev.yml",
         "artifact": "GeneralsZH-ContraX-macos-arm64",
@@ -143,12 +143,12 @@
   },
   "internal": {
     "ipadEngineShell": {
-      "branch": "ios-clean",
+      "branch": "main",
       "workflow": "build-ios-shell.yml",
       "artifact": "GeneralsXZH-launcher-unsigned"
     },
     "ipadLauncherFast": {
-      "branch": "ios-clean",
+      "branch": "main",
       "workflow": "build-ios-launcher-fast.yml",
       "artifact": "GeneralsXZH-launcher-unsigned"
     }

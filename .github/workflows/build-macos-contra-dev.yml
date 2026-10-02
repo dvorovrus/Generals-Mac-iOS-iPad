@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - ios-clean
+      - main
     paths:
       - 'GeneralsMD/**'
       - 'Core/**'
@@ -90,19 +90,19 @@ jobs:
           CXX: clang++
         run: |
           mkdir -p logs
-          cmake --preset macos-vulkan 2>&1 | tee logs/configure_macos.log
+          cmake --preset macos-contra-vulkan 2>&1 | tee logs/configure_macos.log
           test ${PIPESTATUS[0]} -eq 0
 
       - name: Build engine
         run: |
           mkdir -p logs
           NPROC=$(sysctl -n hw.ncpu)
-          cmake --build build/macos-vulkan --target z_generals -j "${NPROC}" 2>&1 | tee logs/build_macos.log
+          cmake --build build/macos-contra-vulkan --target z_generals -j "${NPROC}" 2>&1 | tee logs/build_macos.log
           test ${PIPESTATUS[0]} -eq 0
 
       - name: Verify binary
         run: |
-          BIN="build/macos-vulkan/GeneralsMD/GeneralsXZH"
+          BIN="build/macos-contra-vulkan/GeneralsMD/GeneralsXZH"
           test -f "${BIN}"
           file "${BIN}"
           file "${BIN}" | grep -q "Mach-O"

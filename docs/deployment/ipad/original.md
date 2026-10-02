@@ -12,7 +12,7 @@ The tool triggers `build-ipad.yml`, waits for success, downloads artifact `Gener
 
 Expected IPA: `GeneralsZH-iPad-unsigned.ipa`.
 
-Local fallback exists on `ios-clean`:
+Local fallback exists on `main`:
 
 ```powershell
 .\scripts\build\ios\windows\build-original.ps1

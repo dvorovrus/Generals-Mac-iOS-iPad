@@ -78,6 +78,80 @@ target_sources(z_generals PRIVATE
     $<$<NOT:$<BOOL:${WIN32}>>:LinuxStubs.cpp>
 )
 
+# GeneralsX @feature dvorovrus 26/09/2026 Native UIKit profile launcher for iOS.
+# Keep launcher UI in its own dylib: launcher-only changes can then be rebuilt and
+# repackaged without recompiling the whole GeneralsX engine.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(GX_PROJECT_VERSION "0.0.0")
+    set(GX_ENGINE_VERSION "0.0.0")
+    set(GX_LAUNCHER_VERSION "0.0.0")
+    set(GX_VERSION_FILE "${CMAKE_SOURCE_DIR}/ios/version.env")
+    if(EXISTS "${GX_VERSION_FILE}")
+        file(STRINGS "${GX_VERSION_FILE}" GX_VERSION_LINES)
+        foreach(GX_VERSION_LINE IN LISTS GX_VERSION_LINES)
+            if(GX_VERSION_LINE MATCHES "^PROJECT_VERSION=(.+)$")
+                set(GX_PROJECT_VERSION "${CMAKE_MATCH_1}")
+            elseif(GX_VERSION_LINE MATCHES "^ENGINE_VERSION=(.+)$")
+                set(GX_ENGINE_VERSION "${CMAKE_MATCH_1}")
+            elseif(GX_VERSION_LINE MATCHES "^LAUNCHER_VERSION=(.+)$")
+                set(GX_LAUNCHER_VERSION "${CMAKE_MATCH_1}")
+            endif()
+        endforeach()
+    endif()
+
+    set(GX_BUILD_COMMIT "$ENV{GITHUB_SHA}")
+    if(GX_BUILD_COMMIT STREQUAL "")
+        set(GX_BUILD_COMMIT "unknown")
+    endif()
+    set(GX_BUILD_RUN "$ENV{GITHUB_RUN_ID}")
+    if(GX_BUILD_RUN STREQUAL "")
+        set(GX_BUILD_RUN "unknown")
+    endif()
+
+    add_library(generalsx_ios_launcher SHARED
+        IOSProfileLauncher.h
+        IOSProfileLauncher.mm
+    )
+    set_target_properties(generalsx_ios_launcher PROPERTIES
+        OUTPUT_NAME "GeneralsXLauncher"
+        MACOSX_RPATH ON
+        BUILD_WITH_INSTALL_RPATH ON
+        INSTALL_NAME_DIR "@rpath"
+    )
+    target_include_directories(generalsx_ios_launcher PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+
+    set_source_files_properties(IOSProfileLauncher.mm PROPERTIES
+        SKIP_PRECOMPILE_HEADERS ON
+        COMPILE_OPTIONS "-fobjc-arc"
+    )
+
+    # The launcher is a standalone Objective-C++ dylib. Unlike the main
+    # executable, it must link its Foundation and Objective-C runtime
+    # dependencies explicitly instead of inheriting them from other targets.
+    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+    find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
+    find_library(OBJC_LIBRARY objc REQUIRED)
+    target_link_libraries(generalsx_ios_launcher PRIVATE
+        ${FOUNDATION_FRAMEWORK}
+        ${UIKIT_FRAMEWORK}
+        ${OBJC_LIBRARY}
+    )
+    target_compile_definitions(generalsx_ios_launcher PRIVATE
+        GX_PROJECT_VERSION=\"${GX_PROJECT_VERSION}\"
+        GX_ENGINE_VERSION=\"${GX_ENGINE_VERSION}\"
+        GX_LAUNCHER_VERSION=\"${GX_LAUNCHER_VERSION}\"
+        GX_LAUNCHER_COMMIT=\"${GX_BUILD_COMMIT}\"
+        GX_ENGINE_COMMIT=\"${GX_BUILD_COMMIT}\"
+        GX_BASE_SHELL_RUN=\"${GX_BUILD_RUN}\"
+        GX_LAUNCHER_RUN=\"${GX_BUILD_RUN}\"
+    )
+    target_link_libraries(z_generals PRIVATE
+        generalsx_ios_launcher
+    )
+endif()
+
 # RC files optional for MinGW builds
 # Icon: LoadIcon() handles missing resource gracefully (uses default system icon)
 # Manifest: DPI awareness metadata (nice to have but not essential)

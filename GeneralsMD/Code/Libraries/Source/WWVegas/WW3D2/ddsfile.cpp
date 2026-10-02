@@ -954,7 +954,32 @@ unsigned DDSFileClass::Get_Pixel(unsigned level,unsigned x,unsigned y) const
 	case WW3D_FORMAT_DXT2:
 		return 0xffffffff;
 	case WW3D_FORMAT_DXT3:
-		return 0xffffffff;
+		{
+			const unsigned char* alpha_block=Get_Memory_Pointer(level)+(x/4)*16+((y/4)*(Get_Width(level)/4))*16;
+			const unsigned char* color_block=alpha_block+8;
+
+			const unsigned pixel_index=(x%4)+4*(y%4);
+			const unsigned alpha_bit_idx=pixel_index*4;
+			unsigned alpha_value=(alpha_block[alpha_bit_idx/8]>>(alpha_bit_idx&7))&0x0f;
+			alpha_value=(alpha_value<<4)|alpha_value;
+			alpha_value<<=24;
+
+			unsigned col0=RGB565_To_ARGB8888(*(unsigned short*)&color_block[0]);
+			unsigned col1=RGB565_To_ARGB8888(*(unsigned short*)&color_block[2]);
+			unsigned char line=color_block[4+(y%4)];
+			line>>=(x%4)*2;
+			line&=3;
+
+			// DXT3 always uses the four-color BC1 interpolation mode; transparency
+			// is carried exclusively by the explicit 4-bit alpha block above.
+			switch (line) {
+			case 0: return col0|alpha_value;
+			case 1: return col1|alpha_value;
+			case 2: return Combine_Colors(col1,col0,85)|alpha_value;
+			case 3: return Combine_Colors(col0,col1,85)|alpha_value;
+			}
+		}
+		break;
 	case WW3D_FORMAT_DXT4:
 		return 0xffffffff;
 	case WW3D_FORMAT_DXT5:
@@ -1132,7 +1157,46 @@ bool DDSFileClass::Get_4x4_Block(
 	case WW3D_FORMAT_DXT2:
 		return false;
 	case WW3D_FORMAT_DXT3:
-		return false;
+		{
+			const unsigned char* alpha_block=Get_Memory_Pointer(level)+(source_x/4)*16+((source_y/4)*(Get_Width(level)/4))*16;
+			const unsigned char* color_block=alpha_block+8;
+
+			unsigned col0=RGB565_To_ARGB8888(*(unsigned short*)&color_block[0]);
+			unsigned col1=RGB565_To_ARGB8888(*(unsigned short*)&color_block[2]);
+			if (has_hsv_shift) {
+				Recolor(col0,hsv_shift);
+				Recolor(col1,hsv_shift);
+			}
+
+			bool contains_alpha=false;
+			unsigned pixel_index=0;
+			for (int y=0;y<4;++y) {
+				unsigned char* tmp_dest_ptr=dest_ptr;
+				dest_ptr+=dest_pitch;
+				unsigned char line=color_block[4+y];
+				for (int x=0;x<4;++x,++pixel_index) {
+					const unsigned alpha_bit_idx=pixel_index*4;
+					unsigned alpha_value=(alpha_block[alpha_bit_idx/8]>>(alpha_bit_idx&7))&0x0f;
+					if (alpha_value!=0x0f) contains_alpha=true;
+					alpha_value=(alpha_value<<4)|alpha_value;
+					alpha_value<<=24;
+
+					unsigned dest_pixel=0;
+					// DXT3 color data is BC1 in four-color mode regardless of endpoint order.
+					switch (line&3) {
+					case 0: dest_pixel=col0|alpha_value; break;
+					case 1: dest_pixel=col1|alpha_value; break;
+					case 2: dest_pixel=Combine_Colors(col1,col0,85)|alpha_value; break;
+					case 3: dest_pixel=Combine_Colors(col0,col1,85)|alpha_value; break;
+					}
+					line>>=2;
+
+					BitmapHandlerClass::Write_B8G8R8A8(tmp_dest_ptr,dest_format,dest_pixel);
+					tmp_dest_ptr+=dest_bpp;
+				}
+			}
+			return contains_alpha;
+		}
 	case WW3D_FORMAT_DXT4:
 		return false;
 	case WW3D_FORMAT_DXT5:

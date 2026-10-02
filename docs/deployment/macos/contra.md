@@ -1,6 +1,6 @@
 # macOS — Contra X
 
-Canonical branch: `ios-clean`.
+Canonical branch: `main`.
 
 Workflow: `Contra X | macOS | Dev Build`.
 

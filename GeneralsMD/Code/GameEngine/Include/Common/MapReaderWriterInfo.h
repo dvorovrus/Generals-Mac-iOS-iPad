@@ -88,7 +88,7 @@ protected:
 public:
 	CachedFileInputStream();
 	~CachedFileInputStream();
-	Bool open(AsciiString path);	///< Returns true if open succeeded.
+	Bool open(AsciiString path, Bool archiveOnly = false);	///< Returns true if open succeeded.
 	void close();  ///< Explict close.  Destructor closes if file is left open.
 	virtual Int read(void *pData, Int numBytes) override;
 	virtual UnsignedInt tell() override;

@@ -31,13 +31,22 @@ if (CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 # Top level project, doesn't really affect anything.
-project(genzh LANGUAGES C CXX)
+# iOS launcher sources are Objective-C++, so enable OBJCXX only for iOS.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    project(genzh LANGUAGES C CXX OBJCXX)
+else()
+    project(genzh LANGUAGES C CXX)
+endif()
 
 # GeneralsX @build BenderAI 10/02/2026
 # Linux port: Make CompatLib headers globally accessible so Core libraries (WWLib, WWMath, etc.)
 # can access platform compatibility types when building for non-Windows platforms
 if(UNIX)
-    include_directories(${CMAKE_SOURCE_DIR}/Generals/Code/CompatLib/Include)
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        include_directories(${CMAKE_SOURCE_DIR}/GeneralsMD/Code/CompatLib/Include)
+    else()
+        include_directories(${CMAKE_SOURCE_DIR}/Generals/Code/CompatLib/Include)
+    endif()
 endif()
 
 # Compiler cache (ccache) – must be included before compilers.cmake so the

@@ -38,6 +38,61 @@
 
 #include "always.h"
 
+#if defined(__APPLE__)
+struct ShareBufferDiagStats
+{
+	unsigned long long GeometryBytes;
+	unsigned long long MaterialBytes;
+	unsigned long long OtherBytes;
+	unsigned GeometryCount;
+	unsigned MaterialCount;
+	unsigned OtherCount;
+};
+
+inline ShareBufferDiagStats &Get_Share_Buffer_Diag_Stats()
+{
+	static ShareBufferDiagStats stats = { 0, 0, 0, 0, 0, 0 };
+	return stats;
+}
+
+inline bool Share_Buffer_Diag_Prefix(const char *value, const char *prefix)
+{
+	if (value == nullptr || prefix == nullptr)
+		return false;
+	while (*prefix != 0)
+	{
+		if (*value++ != *prefix++)
+			return false;
+	}
+	return true;
+}
+
+inline unsigned char Share_Buffer_Diag_Category(const char *msg)
+{
+	if (Share_Buffer_Diag_Prefix(msg, "MeshGeometryClass::"))
+		return 1;
+	if (Share_Buffer_Diag_Prefix(msg, "MeshMatDescClass::"))
+		return 2;
+	return 0;
+}
+
+inline void Share_Buffer_Diag_Add(unsigned char category, unsigned long long bytes)
+{
+	ShareBufferDiagStats &stats = Get_Share_Buffer_Diag_Stats();
+	if (category == 1) { stats.GeometryBytes += bytes; ++stats.GeometryCount; }
+	else if (category == 2) { stats.MaterialBytes += bytes; ++stats.MaterialCount; }
+	else { stats.OtherBytes += bytes; ++stats.OtherCount; }
+}
+
+inline void Share_Buffer_Diag_Remove(unsigned char category, unsigned long long bytes)
+{
+	ShareBufferDiagStats &stats = Get_Share_Buffer_Diag_Stats();
+	if (category == 1) { stats.GeometryBytes = stats.GeometryBytes >= bytes ? stats.GeometryBytes - bytes : 0; if (stats.GeometryCount > 0) --stats.GeometryCount; }
+	else if (category == 2) { stats.MaterialBytes = stats.MaterialBytes >= bytes ? stats.MaterialBytes - bytes : 0; if (stats.MaterialCount > 0) --stats.MaterialCount; }
+	else { stats.OtherBytes = stats.OtherBytes >= bytes ? stats.OtherBytes - bytes : 0; if (stats.OtherCount > 0) --stats.OtherCount; }
+}
+#endif
+
 
 /*
 ** SharedBufferClass - a templatized class for buffers which are shared
@@ -79,6 +134,10 @@ class ShareBufferClass : public RefCountClass
 #endif
 		T *			Array;
 		int			Count;
+#if defined(__APPLE__)
+		unsigned long long DiagBytes;
+		unsigned char DiagCategory;
+#endif
 
 		// not implemented!
 		ShareBufferClass & operator = (const ShareBufferClass &);
@@ -92,6 +151,11 @@ ShareBufferClass<T>::ShareBufferClass(int count, const char* msg) :
 #endif
 {
 	assert(Count > 0);
+#if defined(__APPLE__)
+	DiagBytes = (unsigned long long)Count * (unsigned long long)sizeof(T);
+	DiagCategory = Share_Buffer_Diag_Category(msg);
+	Share_Buffer_Diag_Add(DiagCategory, DiagBytes);
+#endif
 	Array = MSGW3DNEWARRAY(msg) T[Count];
 }
 
@@ -103,6 +167,11 @@ ShareBufferClass<T>::ShareBufferClass(const ShareBufferClass<T> & that) :
 #if defined(RTS_DEBUG)
 	Msg = that.Msg;
 #endif
+#if defined(__APPLE__)
+	DiagBytes = (unsigned long long)Count * (unsigned long long)sizeof(T);
+	DiagCategory = that.DiagCategory;
+	Share_Buffer_Diag_Add(DiagCategory, DiagBytes);
+#endif
 	Array = MSGW3DNEWARRAY(Msg) T[Count];
 	for (int i=0; i<Count; i++) {
 		Array[i] = that.Array[i];
@@ -112,6 +181,9 @@ ShareBufferClass<T>::ShareBufferClass(const ShareBufferClass<T> & that) :
 template <class T>
 ShareBufferClass<T>::~ShareBufferClass()
 {
+#if defined(__APPLE__)
+	Share_Buffer_Diag_Remove(DiagCategory, DiagBytes);
+#endif
 	delete[] Array;
 	Array = nullptr;
 }

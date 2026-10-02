@@ -29,6 +29,8 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+
+#include <cstdio>
 #include "Common/GameMemory.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -66,6 +68,22 @@
 #define SUPPLY_CENTER_CLOSE_DIST (20*PATHFIND_CELL_SIZE_F)
 
 #define USE_DOZER 1
+
+static const char *aiLegalBuildCodeName(LegalBuildCode code)
+{
+	switch (code)
+	{
+		case LBC_OK: return "OK";
+		case LBC_RESTRICTED_TERRAIN: return "RESTRICTED_TERRAIN";
+		case LBC_NOT_FLAT_ENOUGH: return "NOT_FLAT_ENOUGH";
+		case LBC_OBJECTS_IN_THE_WAY: return "OBJECTS_IN_THE_WAY";
+		case LBC_NO_CLEAR_PATH: return "NO_CLEAR_PATH";
+		case LBC_SHROUD: return "SHROUD";
+		case LBC_TOO_CLOSE_TO_SUPPLIES: return "TOO_CLOSE_TO_SUPPLIES";
+		case LBC_GENERIC_FAILURE: return "GENERIC_FAILURE";
+		default: return "UNKNOWN";
+	}
+}
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -631,6 +649,18 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 																						&pos,
 																						angle,
 																						m_player );
+	static Int s_stockBuildResultDiagBudget = 24;
+	if (isSkirmishAI() && s_stockBuildResultDiagBudget > 0)
+	{
+		--s_stockBuildResultDiagBudget;
+		fprintf(stderr,
+		        "[AI-STOCK-BUILD] template='%s' dozer=%u commandSet='%s' result=%s objectID=%u\n",
+		        bldgPlan->getName().str(),
+		        (unsigned)dozer->getID(),
+		        dozer->getCommandSetString().str(),
+		        bldg ? "OK" : "FAILED",
+		        bldg ? (unsigned)bldg->getID() : 0u);
+	}
 
 
 
@@ -676,7 +706,7 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 			Coord3D rallyPoint;
 			Bool gotOffset = false;
 			if (fabs(info->getRallyOffset()->x) > 1.0f || fabs(info->getRallyOffset()->y)>1.0f) {
-				gotOffset;
+				gotOffset = true;
 			}
 			if (!exitInterface->getNaturalRallyPoint(rallyPoint)) {
 				rallyPoint = *info->getLocation();
@@ -696,7 +726,7 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 			bldgName.concat(" - Building started.");
 			TheScriptEngine->AppendDebugMessage(bldgName, false);
 		}
-	}
+	} // bldg built
 	TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
 	return bldg;
 }
@@ -1767,8 +1797,22 @@ void AIPlayer::buildSpecificAIBuilding(const AsciiString &thingName)
 // ------------------------------------------------------------------------------------------------
 void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 {
+	const Bool traceUpgrade = m_player && m_player->isSkirmishAIPlayer();
+	// Full factory scans are useful for initial diagnosis, but grow with every
+	// building and every retry. Keep request/result lines after this budget ends.
+	static Int factoryTraceBudget = 8;
+	const Bool traceFactories = traceUpgrade && factoryTraceBudget > 0;
+	if (traceFactories)
+		--factoryTraceBudget;
+	if (traceUpgrade)
+		fprintf(stderr,
+		        "[AI-UPGRADE] frame=%u playerIndex=%d upgrade='%s' stage=request\n",
+		        (unsigned)TheGameLogic->getFrame(), (int)m_player->getPlayerIndex(), upgrade.str());
+
 	const UpgradeTemplate *curUpgrade = TheUpgradeCenter->findUpgrade(upgrade);
 	if (curUpgrade==nullptr) {
+		if (traceUpgrade)
+			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=missing-template\n", upgrade.str());
 		AsciiString msg = "Upgrade ";
 		msg.concat(upgrade);
 		msg.concat(" does not exist.  Ignoring request.");
@@ -1776,6 +1820,8 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 		return;
 	}
  	if (curUpgrade->getUpgradeType()==UPGRADE_TYPE_OBJECT) {
+		if (traceUpgrade)
+			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=object-upgrade\n", upgrade.str());
 		AsciiString msg = "Player build upgrade: Upgrade ";
 		msg.concat(upgrade);
 		msg.concat(" is an object, not a player upgrade.  Ignoring request.");
@@ -1784,6 +1830,8 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 	}
 	// See if it is in progress.
 	if (m_player->hasUpgradeInProduction(curUpgrade)) {
+		if (traceUpgrade)
+			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=already-queued\n", upgrade.str());
 		AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 		msg.concat(" already has upgrade ");
 		msg.concat(upgrade);
@@ -1793,6 +1841,8 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 	}
 	// See if it is in progress.
 	if (m_player->hasUpgradeComplete(curUpgrade)) {
+		if (traceUpgrade)
+			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=already-complete\n", upgrade.str());
 		AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 		msg.concat(" already has upgrade ");
 		msg.concat(upgrade);
@@ -1804,6 +1854,9 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 
 	// No money.
 	if( TheUpgradeCenter->canAffordUpgrade( m_player, curUpgrade ) == FALSE ) {
+		if (traceUpgrade)
+			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=cannot-afford money=%d\n",
+			        upgrade.str(), (int)m_player->getMoney()->countMoney());
 		AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 		msg.concat(" lacks money to build upgrade ");
 		msg.concat(upgrade);
@@ -1818,12 +1871,29 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 		if( factory )
 		{
 			if( factory->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+			{
+				if (traceFactories)
+					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=under-construction\n",
+					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;
+			}
 			if( factory->getStatusBits().test( OBJECT_STATUS_SOLD ) )
+			{
+				if (traceFactories)
+					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=sold\n",
+					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;
+			}
 			Bool canUpgradeHere = false;
 			const CommandSet *commandSet = TheControlBar->findCommandSet( factory->getCommandSetString() );
-			if( commandSet == nullptr) continue;
+			if( commandSet == nullptr)
+			{
+				if (traceFactories)
+					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' result=missing-command-set\n",
+					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(),
+					        factory->getCommandSetString().str());
+				continue;
+			}
 			for( Int j = 0; j < MAX_COMMANDS_PER_SET; j++ )
 			{
 				//Get the command button.
@@ -1835,12 +1905,28 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 					canUpgradeHere = true;
 				}
 			}
-			if (!canUpgradeHere) continue;
+			if (!canUpgradeHere)
+			{
+				if (traceFactories)
+					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' upgrade='%s' result=no-command\n",
+					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(),
+					        factory->getCommandSetString().str(), upgrade.str());
+				continue;
+			}
 			ProductionUpdateInterface *pu = factory->getProductionUpdateInterface();
 			// If it doesn't produce, continue.
-			if (!pu) continue;
+			if (!pu)
+			{
+				if (traceFactories)
+					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=no-production-update\n",
+					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
+				continue;
+			}
 			// Try to queue it.
 			if (pu->queueUpgrade(curUpgrade)) {
+				if (traceUpgrade)
+					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' upgrade='%s' result=queued\n",
+					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(), upgrade.str());
 				AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 				msg.concat(" queues ");
 				msg.concat(curUpgrade->getUpgradeName());
@@ -1849,8 +1935,13 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 				TheScriptEngine->AppendDebugMessage( msg, false);
 				return;
 			}
+			if (traceUpgrade)
+				fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' upgrade='%s' result=queue-rejected\n",
+				        (unsigned)factory->getID(), factory->getTemplate()->getName().str(), upgrade.str());
 		}
 	}
+	if (traceUpgrade)
+		fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=no-factory\n", upgrade.str());
 
 	AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 	msg.concat(" lacks factory to build upgrade ");

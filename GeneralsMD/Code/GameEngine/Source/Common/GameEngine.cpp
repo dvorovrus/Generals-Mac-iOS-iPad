@@ -30,6 +30,130 @@
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
+#include <mach/mach.h>
+#include <malloc/malloc.h>
+
+struct MallocDiagHistogram
+{
+	unsigned long long count[10];
+	unsigned long long bytes[10];
+	unsigned long long totalCount;
+	unsigned long long totalBytes;
+	unsigned long long maxBytes;
+};
+
+static kern_return_t MallocDiagReader(task_t task, vm_address_t address, vm_size_t size, void **localMemory)
+{
+	(void)task;
+	(void)size;
+	*localMemory = reinterpret_cast<void *>(address);
+	return KERN_SUCCESS;
+}
+
+static unsigned MallocDiagBucket(unsigned long long bytes)
+{
+	if (bytes <= 64ULL) return 0;
+	if (bytes <= 256ULL) return 1;
+	if (bytes <= 1024ULL) return 2;
+	if (bytes <= 4096ULL) return 3;
+	if (bytes <= 16384ULL) return 4;
+	if (bytes <= 65536ULL) return 5;
+	if (bytes <= 262144ULL) return 6;
+	if (bytes <= 1048576ULL) return 7;
+	if (bytes <= 4194304ULL) return 8;
+	return 9;
+}
+
+static void MallocDiagRecorder(task_t task, void *context, unsigned type, vm_range_t *ranges, unsigned count)
+{
+	(void)task;
+	if ((type & MALLOC_PTR_IN_USE_RANGE_TYPE) == 0 || context == nullptr || ranges == nullptr)
+		return;
+
+	MallocDiagHistogram *hist = reinterpret_cast<MallocDiagHistogram *>(context);
+	for (unsigned i = 0; i < count; ++i)
+	{
+		const unsigned long long bytes = (unsigned long long)ranges[i].size;
+		const unsigned bucket = MallocDiagBucket(bytes);
+		++hist->count[bucket];
+		hist->bytes[bucket] += bytes;
+		++hist->totalCount;
+		hist->totalBytes += bytes;
+		if (bytes > hist->maxBytes)
+			hist->maxBytes = bytes;
+	}
+}
+
+static void LogMallocZoneDiagnostics(const char *phase, unsigned int frame)
+{
+	const double mb = 1024.0 * 1024.0;
+	vm_address_t *zoneAddresses = nullptr;
+	unsigned zoneCount = 0;
+	const kern_return_t kr = malloc_get_all_zones(mach_task_self(), nullptr, &zoneAddresses, &zoneCount);
+	if (kr != KERN_SUCCESS || zoneAddresses == nullptr)
+	{
+		fprintf(stderr, "[MALLOC-ZONE] phase=%s frame=%u error=%d zones=0\n",
+		        phase != nullptr ? phase : "unknown", (unsigned)frame, (int)kr);
+		return;
+	}
+
+	MallocDiagHistogram hist = {};
+	for (unsigned i = 0; i < zoneCount; ++i)
+	{
+		malloc_zone_t *zone = reinterpret_cast<malloc_zone_t *>(zoneAddresses[i]);
+		if (zone == nullptr)
+			continue;
+
+		malloc_statistics_t stats = {};
+		malloc_zone_statistics(zone, &stats);
+		const char *zoneName = zone->zone_name != nullptr ? zone->zone_name : "unnamed";
+		fprintf(stderr,
+		        "[MALLOC-ZONE] phase=%s frame=%u index=%u name=%s blocks=%u usedMB=%.2f allocatedMB=%.2f freeMB=%.2f maxUsedMB=%.2f\n",
+		        phase != nullptr ? phase : "unknown",
+		        (unsigned)frame,
+		        i,
+		        zoneName,
+		        (unsigned)stats.blocks_in_use,
+		        (double)stats.size_in_use / mb,
+		        (double)stats.size_allocated / mb,
+		        (double)(stats.size_allocated >= stats.size_in_use ? stats.size_allocated - stats.size_in_use : 0) / mb,
+		        (double)stats.max_size_in_use / mb);
+
+		if (zone->introspect != nullptr && zone->introspect->enumerator != nullptr)
+		{
+			zone->introspect->enumerator(
+				mach_task_self(),
+				&hist,
+				MALLOC_PTR_IN_USE_RANGE_TYPE,
+				zoneAddresses[i],
+				MallocDiagReader,
+				MallocDiagRecorder);
+		}
+	}
+
+	static const char *bucketNames[10] = {
+		"0_64B", "65_256B", "257B_1K", "1K_4K", "4K_16K",
+		"16K_64K", "64K_256K", "256K_1M", "1M_4M", "4MPlus"
+	};
+	fprintf(stderr,
+	        "[MALLOC-HIST] phase=%s frame=%u zones=%u totalCount=%llu totalMB=%.2f maxKB=%.1f\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        zoneCount,
+	        hist.totalCount,
+	        (double)hist.totalBytes / mb,
+	        (double)hist.maxBytes / 1024.0);
+	for (unsigned i = 0; i < 10; ++i)
+	{
+		fprintf(stderr,
+		        "[MALLOC-BUCKET] phase=%s frame=%u bucket=%s count=%llu mb=%.2f\n",
+		        phase != nullptr ? phase : "unknown",
+		        (unsigned)frame,
+		        bucketNames[i],
+		        hist.count[i],
+		        (double)hist.bytes[i] / mb);
+	}
+}
 #endif
 
 #include "Common/ActionManager.h"
@@ -74,6 +198,8 @@
 #include "Common/GameLOD.h"
 #include "Common/Registry.h"
 #include "Common/GameCommon.h"	// FOR THE ALLOW_DEBUG_CHEATS_IN_RELEASE #define
+#include "Common/GameMemory.h"
+#include "FastAllocator.h"
 
 #include "GameLogic/Armor.h"
 #include "GameLogic/AI.h"
@@ -899,9 +1025,41 @@ void GameEngine::resetSubsystems()
 {
 	// TheSuperHackers @fix xezon 09/06/2025 Reset GameLogic first to purge all world objects early.
 	// This avoids potentially catastrophic issues when objects and subsystems have cross dependencies.
+#if defined(__APPLE__)
+	malloc_statistics_t gameLogicBeforeStats = {};
+	malloc_zone_statistics(nullptr, &gameLogicBeforeStats);
+	const double gameLogicBeforeMB = (double)gameLogicBeforeStats.size_in_use / (1024.0 * 1024.0);
+#endif
+
 	TheGameLogic->reset();
 
+#if defined(__APPLE__)
+	malloc_statistics_t gameLogicAfterStats = {};
+	malloc_zone_statistics(nullptr, &gameLogicAfterStats);
+	const double gameLogicAfterMB = (double)gameLogicAfterStats.size_in_use / (1024.0 * 1024.0);
+	fprintf(stderr,
+	        "[RESET-MEM] stage=game-logic-pre beforeMB=%.1f afterMB=%.1f deltaMB=%+.1f\n",
+	        gameLogicBeforeMB, gameLogicAfterMB, gameLogicAfterMB - gameLogicBeforeMB);
+#endif
+
 	TheSubsystemList->resetAll();
+
+#if defined(__APPLE__)
+	malloc_statistics_t trimBeforeStats = {};
+	malloc_zone_statistics(nullptr, &trimBeforeStats);
+	Int poolBytes = 0;
+	if (TheMemoryPoolFactory != nullptr)
+		poolBytes = TheMemoryPoolFactory->releaseEmpties();
+	const size_t mallocBytes = malloc_zone_pressure_relief(nullptr, 0);
+	malloc_statistics_t trimAfterStats = {};
+	malloc_zone_statistics(nullptr, &trimAfterStats);
+	fprintf(stderr,
+	        "[MEMORY-GC] phase=post-reset beforeMB=%.1f afterMB=%.1f poolReleasedMB=%.1f mallocReliefMB=%.1f\n",
+	        (double)trimBeforeStats.size_in_use / (1024.0 * 1024.0),
+	        (double)trimAfterStats.size_in_use / (1024.0 * 1024.0),
+	        (double)poolBytes / (1024.0 * 1024.0),
+	        (double)mallocBytes / (1024.0 * 1024.0));
+#endif
 }
 
 /// -----------------------------------------------------------------------------------------------
@@ -1017,6 +1175,160 @@ void GameEngine::update()
 			// for scripted camera movements while the time is frozen.
 			TheScriptEngine->UPDATE();
 		}
+
+#if defined(__APPLE__)
+		// Long iOS matches can be terminated by memory pressure without a useful
+		// in-process crash stack. Keep a lightweight footprint trail in stderr so
+		// retained session logs show whether memory is climbing before an exit.
+		if (TheGameLogic != nullptr)
+		{
+			static UnsignedInt nextMemoryDiagFrame = 0;
+			static UnsignedInt lastMemoryDiagFrame = 0;
+			static UnsignedInt memoryDiagSession = 0;
+			static Int lastMemoryDiagState = -1;
+			const Int state = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() ? 1 : 0;
+			const UnsignedInt frame = TheGameLogic->getFrame();
+			const Bool transition = state != lastMemoryDiagState;
+			const Bool frameReset = frame < lastMemoryDiagFrame;
+			if (transition || frameReset)
+			{
+				nextMemoryDiagFrame = 0;
+				if (state == 1)
+					++memoryDiagSession;
+			}
+			if (transition || frameReset || (state == 1 && frame >= nextMemoryDiagFrame))
+			{
+				task_vm_info_data_t vmInfo = {};
+				mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+				const kern_return_t kr = task_info(
+					mach_task_self(),
+					TASK_VM_INFO,
+					reinterpret_cast<task_info_t>(&vmInfo),
+					&count);
+
+				if (kr == KERN_SUCCESS)
+				{
+					const double mb = 1024.0 * 1024.0;
+					malloc_statistics_t heap = {};
+					malloc_zone_statistics(nullptr, &heap);
+					FastAllocatorGeneral *fastAllocator = FastAllocatorGeneral::Peek_Allocator();
+					const unsigned long long fastHeapBytes = fastAllocator ? fastAllocator->Get_Total_Heap_Size64() : 0;
+					const unsigned long long fastAllocatedBytes = fastAllocator ? fastAllocator->Get_Total_Allocated_Size64() : 0;
+					const unsigned long long fastRetainedBytes = fastHeapBytes >= fastAllocatedBytes ? fastHeapBytes - fastAllocatedBytes : 0;
+					const unsigned fastActualBytes = fastAllocator ? fastAllocator->Get_Total_Actual_Memory_Usage() : 0;
+					const unsigned fastAllocCount = fastAllocator ? fastAllocator->Get_Total_Allocation_Count() : 0;
+					const unsigned fastMallocBytes = fastAllocator ? fastAllocator->Get_Malloc_Allocated_Size() : 0;
+					const unsigned fastMallocCount = fastAllocator ? fastAllocator->Get_Malloc_Allocation_Count() : 0;
+					const size_t mallocFreeBytes = heap.size_allocated >= heap.size_in_use ? heap.size_allocated - heap.size_in_use : 0;
+					const Bool detailedMemoryDiag = transition || frameReset || (state == 1 && (frame % 1800) == 0);
+
+					fprintf(stderr,
+					        "[MEMORY-DIAG] frame=%u footprintMB=%.1f residentMB=%.1f virtualMB=%.1f session=%u phase=%s reason=%s heapUsedMB=%.1f heapReservedMB=%.1f heapFreeMB=%.1f heapMaxUsedMB=%.1f mallocBlocks=%u compressedMB=%.1f internalMB=%.1f externalMB=%.1f reusableMB=%.1f fastInit=%d fastHeapMB=%.2f fastAllocatedMB=%.2f fastRetainedMB=%.2f fastActualMB=%.2f fastAllocCount=%u fastMallocMB=%.2f fastMallocCount=%u objects=%u\n",
+					        (unsigned)frame,
+					        (double)vmInfo.phys_footprint / mb,
+					        (double)vmInfo.resident_size / mb,
+					        (double)vmInfo.virtual_size / mb,
+					        (unsigned)memoryDiagSession, state == 1 ? "match" : "menu",
+					        transition ? "transition" : (frameReset ? "frame-reset" : "periodic"),
+					        (double)heap.size_in_use / mb,
+					        (double)heap.size_allocated / mb,
+					        (double)mallocFreeBytes / mb,
+					        (double)heap.max_size_in_use / mb,
+					        (unsigned)heap.blocks_in_use,
+					        (double)vmInfo.compressed / mb,
+					        (double)vmInfo.internal / mb,
+					        (double)vmInfo.external / mb,
+					        (double)vmInfo.reusable / mb,
+					        fastAllocator != nullptr ? 1 : 0,
+					        (double)fastHeapBytes / mb,
+					        (double)fastAllocatedBytes / mb,
+					        (double)fastRetainedBytes / mb,
+					        (double)fastActualBytes / mb,
+					        fastAllocCount,
+					        (double)fastMallocBytes / mb,
+					        fastMallocCount,
+					        (unsigned)TheGameLogic->getObjectCount());
+
+					if (TheMemoryPoolFactory != nullptr)
+						TheMemoryPoolFactory->logDiagnostics(state == 1 ? "match" : "menu", frame, detailedMemoryDiag);
+
+					unsigned long long alignedLiveBytes = 0;
+					unsigned long long alignedPeakBytes = 0;
+					unsigned long long alignedTotalBytes = 0;
+					unsigned long long alignedLiveCount = 0;
+					unsigned long long alignedTotalCount = 0;
+					getAlignedAllocationDiagnostics(&alignedLiveBytes, &alignedPeakBytes, &alignedTotalBytes, &alignedLiveCount, &alignedTotalCount);
+					fprintf(stderr,
+					        "[ALIGNED-DIAG] phase=%s frame=%u liveCount=%llu liveMB=%.2f peakMB=%.2f totalCount=%llu totalAllocatedMB=%.2f\n",
+					        state == 1 ? "match" : "menu",
+					        (unsigned)frame,
+					        alignedLiveCount,
+					        (double)alignedLiveBytes / mb,
+					        (double)alignedPeakBytes / mb,
+					        alignedTotalCount,
+					        (double)alignedTotalBytes / mb);
+					if (detailedMemoryDiag)
+					{
+						logAlignedAllocationCallers(state == 1 ? "match" : "menu", frame);
+						LogMallocZoneDiagnostics(state == 1 ? "match" : "menu", frame);
+					}
+
+					if (fastAllocator != nullptr && detailedMemoryDiag)
+					{
+						struct FastBucketDiag
+						{
+							unsigned index;
+							unsigned long long retainedBytes;
+						};
+						FastBucketDiag top[8];
+						for (unsigned i = 0; i < 8; ++i)
+						{
+							top[i].index = (unsigned)-1;
+							top[i].retainedBytes = 0;
+						}
+
+						for (unsigned bucket = 0; bucket < fastAllocator->Get_Bucket_Count(); ++bucket)
+						{
+							const unsigned long long bucketHeap = fastAllocator->Get_Bucket_Heap_Size(bucket);
+							const unsigned long long bucketAllocated = fastAllocator->Get_Bucket_Allocated_Size(bucket);
+							const unsigned long long retained = bucketHeap >= bucketAllocated ? bucketHeap - bucketAllocated : 0;
+							if (retained == 0)
+								continue;
+							for (unsigned rank = 0; rank < 8; ++rank)
+							{
+								if (top[rank].index == (unsigned)-1 || retained > top[rank].retainedBytes)
+								{
+									for (unsigned move = 7; move > rank; --move)
+										top[move] = top[move - 1];
+									top[rank].index = bucket;
+									top[rank].retainedBytes = retained;
+									break;
+								}
+							}
+						}
+
+						for (unsigned rank = 0; rank < 8 && top[rank].index != (unsigned)-1; ++rank)
+						{
+							const unsigned bucket = top[rank].index;
+							fprintf(stderr,
+							        "[FAST-BUCKET] phase=%s frame=%u rank=%u blockBytes=%u heapKB=%.1f allocatedKB=%.1f retainedKB=%.1f allocCount=%u\n",
+							        state == 1 ? "match" : "menu",
+							        (unsigned)frame,
+							        rank + 1,
+							        fastAllocator->Get_Bucket_Block_Size(bucket),
+							        (double)fastAllocator->Get_Bucket_Heap_Size(bucket) / 1024.0,
+							        (double)fastAllocator->Get_Bucket_Allocated_Size(bucket) / 1024.0,
+							        (double)top[rank].retainedBytes / 1024.0,
+							        fastAllocator->Get_Bucket_Allocation_Count(bucket));
+						}
+					}
+				}
+				nextMemoryDiagFrame = frame + 300;
+			}
+			lastMemoryDiagFrame = frame;
+			lastMemoryDiagState = state;
+		}
+#endif
 	}
 }
 

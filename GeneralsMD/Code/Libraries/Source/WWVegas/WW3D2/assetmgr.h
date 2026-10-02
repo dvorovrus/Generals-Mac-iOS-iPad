@@ -259,6 +259,7 @@ public:
 	HashTemplateClass<StringClass,TextureClass*>& Texture_Hash() { return TextureHash; }
 
 	static void Log_Texture_Statistics();
+	void Log_Resource_Summary(const char *phase);
 
 	virtual TextureClass *			Get_Texture
 	(

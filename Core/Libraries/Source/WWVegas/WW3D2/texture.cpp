@@ -57,6 +57,7 @@
 #include "meshmatdesc.h"
 #include "texturethumbnail.h"
 #include "wwprofile.h"
+#include <cstdio>
 
 const unsigned DEFAULT_INACTIVATION_TIME=20000;
 
@@ -886,6 +887,7 @@ void TextureClass::Apply_New_Surface
 	bool disable_auto_invalidation
 )
 {
+	const bool wasInitialized = Initialized;
 	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
 
 	if (d3d_tex) d3d_tex->Release();
@@ -907,6 +909,21 @@ void TextureClass::Apply_New_Surface
 		TextureFormat=D3DFormat_To_WW3DFormat(d3d_desc.Format);
 		Width=d3d_desc.Width;
 		Height=d3d_desc.Height;
+
+		if (!wasInitialized)
+		{
+			fprintf(stderr,
+			        "[TEXTURE-DIAG] applied id=%u name='%s' path='%s' size=%ux%u d3dFormat=%d ww3dFormat=%d mipLevels=%u compression=%d\n",
+			        Get_ID(),
+			        Get_Texture_Name().str(),
+			        Get_Full_Path().str(),
+			        (unsigned)d3d_desc.Width,
+			        (unsigned)d3d_desc.Height,
+			        (int)d3d_desc.Format,
+			        (int)TextureFormat,
+			        (unsigned)Peek_D3D_Texture()->GetLevelCount(),
+			        Is_Compression_Allowed() ? 1 : 0);
+		}
 	}
 	surface->Release();
 

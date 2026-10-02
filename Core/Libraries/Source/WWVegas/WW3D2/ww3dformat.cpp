@@ -44,6 +44,10 @@
 #include "dx8wrapper.h"
 #include "dx8caps.h"
 #include <d3d8.h>
+#include <cstdio>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
  /*
 	WW3D_FORMAT_UNKNOWN=0,
@@ -342,6 +346,44 @@ WW3DFormat Get_Valid_Texture_Format(WW3DFormat format, bool is_compression_allow
 	if (format==WW3D_FORMAT_R8G8B8) {
 		format=WW3D_FORMAT_X8R8G8B8;
 	}
+
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+	// GeneralsX @bugfix dvorovrus 27/09/2026
+	// DXVK/MoltenVK can expose a legacy 16-bit D3D8 display mode even though
+	// the actual Metal-backed swapchain is 32-bit. The legacy WW3D fallback
+	// then quantizes ordinary textures to R5G6B5/A4R4G4B4, causing severe
+	// banding and incorrect/dark mod textures. Texture creation itself works
+	// on iOS, while CheckDeviceFormat currently reports false for all legacy
+	// formats, so keep regular color textures in 32-bit formats here.
+	switch (format)
+	{
+	case WW3D_FORMAT_A4R4G4B4:
+	case WW3D_FORMAT_A1R5G5B5:
+		format = WW3D_FORMAT_A8R8G8B8;
+		break;
+
+	case WW3D_FORMAT_R5G6B5:
+	case WW3D_FORMAT_X1R5G5B5:
+		format = WW3D_FORMAT_X8R8G8B8;
+		break;
+
+	default:
+		break;
+	}
+
+	if (format == WW3D_FORMAT_A8R8G8B8 ||
+		format == WW3D_FORMAT_X8R8G8B8)
+	{
+		static bool loggedIOS32BitTexturePath = false;
+		if (!loggedIOS32BitTexturePath)
+		{
+			fprintf(stderr,
+			        "[TEXTURE-DIAG] iOS 32-bit texture path enabled despite legacy display/caps reporting\n");
+			loggedIOS32BitTexturePath = true;
+		}
+		return format;
+	}
+#endif
 
 	WW3D::Get_Device_Resolution(w,h,bits,windowed);
 	if (WW3D::Get_Texture_Bitdepth()==16) bits=16;

@@ -31,10 +31,13 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include <cstdio>
+
 #include "Common/BuildAssistant.h"
 #include "Common/GlobalData.h"
 #include "Common/Player.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "Common/GameAudio.h"
 #include "Common/ThingFactory.h"
 #include "Common/Team.h"
@@ -340,7 +343,9 @@ Object *BuildAssistant::buildObjectNow( Object *constructorObject, const ThingTe
 	// Need to validate that we can make this in case someone fakes their CommandSet
 	// A nullptr constructor Object means a script built building so let it slide.
 	if( (constructorObject != nullptr) && !isPossibleToMakeUnit(constructorObject, what) )
+	{
 		return nullptr;
+	}
 
 	// clear out any objects from the building area that are "auto-clearable" when building
 	clearRemovableForConstruction( what, pos, angle );
@@ -1282,18 +1287,48 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 		// get this button
 		commandButton = commandSet->getCommandButton(i);
 		if( commandButton &&
-				(commandButton->getCommandType() == GUI_COMMAND_UNIT_BUILD || commandButton->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT) &&
+				(commandButton->getCommandType() == GUI_COMMAND_UNIT_BUILD ||
+				 commandButton->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT ||
+				 commandButton->getCommandType() == GUI_COMMAND_SPECIAL_POWER_CONSTRUCT ||
+				 commandButton->getCommandType() == GUI_COMMAND_SPECIAL_POWER_CONSTRUCT_FROM_SHORTCUT) &&
 				commandButton->getThingTemplate() && commandButton->getThingTemplate()->isEquivalentTo(whatToBuild) )
 			foundCommand = commandButton;
 
 	}
 	if( foundCommand == nullptr )
+	{
+		static Int s_commandSetMissDiagBudget = 24;
+		Player *diagPlayer = builder->getControllingPlayer();
+		if( s_commandSetMissDiagBudget > 0 && diagPlayer && diagPlayer->isSkirmishAIPlayer() )
+		{
+			--s_commandSetMissDiagBudget;
+			fprintf(stderr,
+			        "[AI-COMMANDSET] result=missing builder=%u builderTemplate='%s' commandSet='%s' target='%s'\n",
+			        (unsigned)builder->getID(),
+			        builder->getTemplate()->getName().str(),
+			        builder->getCommandSetString().str(),
+			        whatToBuild->getName().str());
+		}
 		return FALSE;
+	}
 
 	// make sure that the player can actually make this unit by checking prereqs and such
 	Player *player = builder->getControllingPlayer();
 	if( player->canBuild( foundCommand->getThingTemplate() ) == FALSE )
+	{
+		static Int s_commandSetPrereqDiagBudget = 24;
+		if( s_commandSetPrereqDiagBudget > 0 && player && player->isSkirmishAIPlayer() )
+		{
+			--s_commandSetPrereqDiagBudget;
+			fprintf(stderr,
+			        "[AI-COMMANDSET] result=prereq builder=%u commandSet='%s' target='%s' matched='%s'\n",
+			        (unsigned)builder->getID(),
+			        builder->getCommandSetString().str(),
+			        whatToBuild->getName().str(),
+			        foundCommand->getThingTemplate()->getName().str());
+		}
 		return FALSE;
+	}
 
 	// all is well
 	return TRUE;

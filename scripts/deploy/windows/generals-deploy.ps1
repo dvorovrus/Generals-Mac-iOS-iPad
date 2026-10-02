@@ -45,7 +45,7 @@ Usage:
 
 Notes:
   - Cloud builds use GitHub CLI (gh).
-  - Enhanced/All-in-One use the existing local ios-clean packagers.
+  - Enhanced/All-in-One use the existing local main packagers.
   - iPad signing remains in Sideloadly; this tool prepares the exact IPA and opens it.
   - macOS installation is performed on the Mac with scripts/deploy/macos/generals-deploy.sh.
 "@

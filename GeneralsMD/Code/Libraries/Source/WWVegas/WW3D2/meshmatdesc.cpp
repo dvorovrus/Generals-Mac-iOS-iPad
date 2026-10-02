@@ -174,6 +174,7 @@ void UVBufferClass::Update_CRC()
 **
 **************************************************************************************************/
 ShaderClass MeshMatDescClass::NullShader(0);	// Used to mark no shader data
+static unsigned _MeshMatDescCount = 0;
 
 MeshMatDescClass::MeshMatDescClass() :
 	PassCount(1),
@@ -202,6 +203,7 @@ MeshMatDescClass::MeshMatDescClass() :
 		ShaderArray[pass] = nullptr;
 		MaterialArray[pass] = nullptr;
 	}
+	++_MeshMatDescCount;
 }
 
 MeshMatDescClass::MeshMatDescClass(const MeshMatDescClass & that) :
@@ -237,6 +239,7 @@ MeshMatDescClass::MeshMatDescClass(const MeshMatDescClass & that) :
 	}
 
 	*this = that;
+	++_MeshMatDescCount;
 }
 
 MeshMatDescClass &
@@ -295,6 +298,13 @@ MeshMatDescClass::operator = (const MeshMatDescClass & that)
 MeshMatDescClass::~MeshMatDescClass()
 {
 	Reset(0,0,0);
+	if (_MeshMatDescCount > 0)
+		--_MeshMatDescCount;
+}
+
+unsigned MeshMatDescClass::Get_Total_Desc_Count()
+{
+	return _MeshMatDescCount;
 }
 
 TextureClass * MeshMatDescClass::Get_Single_Texture(int pass,int stage) const

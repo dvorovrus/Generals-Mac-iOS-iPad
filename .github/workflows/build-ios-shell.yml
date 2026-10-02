@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - ios-clean
+      - main
     paths:
       - 'GeneralsMD/**'
       - '!GeneralsMD/Code/Main/IOSProfileLauncher.mm'

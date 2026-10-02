@@ -73,6 +73,7 @@ public:
 	MeshMatDescClass();
 	MeshMatDescClass(const MeshMatDescClass & that);
 	~MeshMatDescClass();
+	static unsigned Get_Total_Desc_Count();
 	void							Reset(int polycount,int vertcount,int passcount);
 	MeshMatDescClass &		operator = (const MeshMatDescClass & that);
 

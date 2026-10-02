@@ -61,6 +61,7 @@ struct OpenAudioFile
 	ALuint m_buffer = 0;
 	FFmpegFile* m_ffmpegFile = NULL;
 	UnsignedInt m_openCount = 0;
+	// Decoded PCM bytes stored by OpenAL. This is intentionally not the compressed file size.
 	UnsignedInt m_fileSize = 0;
 	UnsignedInt m_channels = 0;
 	UnsignedInt m_bitsPerSample = 0;

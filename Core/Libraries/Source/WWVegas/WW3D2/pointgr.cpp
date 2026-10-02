@@ -78,6 +78,7 @@
 #include "simplevec.h"
 #include "texture.h"
 #include "Vector.h"
+#include <cstring>
 #include "vp.h"
 #include "matrix4.h"
 #include "dx8wrapper.h"
@@ -925,6 +926,39 @@ void PointGroupClass::Render(RenderInfoClass &rinfo)
 	DX8Wrapper::Set_Material(PointMaterial);
 	DX8Wrapper::Set_Shader(Shader);
 	DX8Wrapper::Set_Texture(0,Texture);
+
+	// Verify the actual D3D blend state for the malformed fire/flame particles.
+	// PointGroup uses deferred WW3D state, so flush it before reading the device.
+	static int s_fireBlendDiagBudget = 24;
+	if (s_fireBlendDiagBudget > 0 && Texture != nullptr)
+	{
+		const char *textureName = Texture->Get_Full_Path().str();
+		if (textureName != nullptr &&
+		    (strstr(textureName, "fire") != nullptr || strstr(textureName, "Fire") != nullptr ||
+		     strstr(textureName, "flame") != nullptr || strstr(textureName, "Flame") != nullptr))
+		{
+			--s_fireBlendDiagBudget;
+			DX8Wrapper::Apply_Render_State_Changes();
+
+			DWORD alphaBlend = 0, srcBlend = 0, dstBlend = 0;
+			DWORD zWrite = 0, alphaTest = 0, colorOp = 0, alphaOp = 0;
+			DX8Wrapper::_Get_D3D_Device8()->GetRenderState(D3DRS_ALPHABLENDENABLE, &alphaBlend);
+			DX8Wrapper::_Get_D3D_Device8()->GetRenderState(D3DRS_SRCBLEND, &srcBlend);
+			DX8Wrapper::_Get_D3D_Device8()->GetRenderState(D3DRS_DESTBLEND, &dstBlend);
+			DX8Wrapper::_Get_D3D_Device8()->GetRenderState(D3DRS_ZWRITEENABLE, &zWrite);
+			DX8Wrapper::_Get_D3D_Device8()->GetRenderState(D3DRS_ALPHATESTENABLE, &alphaTest);
+			DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(0, D3DTSS_COLOROP, &colorOp);
+			DX8Wrapper::_Get_D3D_Device8()->GetTextureStageState(0, D3DTSS_ALPHAOP, &alphaOp);
+
+			fprintf(stderr,
+			        "[PARTICLE-BLEND] texture='%s' alphaBlend=%u src=%u dst=%u zWrite=%u alphaTest=%u colorOp=%u alphaOp=%u shaderSrc=%d shaderDst=%d\n",
+			        textureName,
+			        (unsigned)alphaBlend, (unsigned)srcBlend, (unsigned)dstBlend,
+			        (unsigned)zWrite, (unsigned)alphaTest,
+			        (unsigned)colorOp, (unsigned)alphaOp,
+			        (int)Shader.Get_Src_Blend_Func(), (int)Shader.Get_Dst_Blend_Func());
+		}
+	}
 
 	// Enable sorting if the primitives are translucent and alpha testing is not enabled.
 	const bool sort = (Shader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ZERO) && (Shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_DISABLE) && (WW3D::Is_Sorting_Enabled());

@@ -13,7 +13,7 @@ on:
     types:
       - completed
     branches:
-      - ios-clean
+      - main
 
 permissions:
   contents: write
@@ -42,7 +42,7 @@ jobs:
       - name: Checkout iOS packaging code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'ios-clean' }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
           fetch-depth: 1
           submodules: false
 
@@ -63,7 +63,7 @@ jobs:
             RUN_ID="$(gh run list \
               --repo "${GITHUB_REPOSITORY}" \
               --workflow build-ios-shell.yml \
-              --branch ios-clean \
+              --branch main \
               --status success \
               --limit 1 \
               --json databaseId \

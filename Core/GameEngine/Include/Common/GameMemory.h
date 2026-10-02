@@ -472,6 +472,7 @@ public:
 
 	Int getDmaMemoryPoolCount() const { return m_numPools; }
 	MemoryPool* getNthDmaMemoryPool(Int i) const { return m_pools[i]; }
+	void getRawDiagnostics(Int *count, unsigned long long *logicalBytes, unsigned long long *actualBytes, Int *maxLogical, Int buckets[8]) const;
 
 	#ifdef MEMORYPOOL_DEBUG
 
@@ -552,6 +553,12 @@ public:
 
 	/// destroy the contents of all pools and dmas. (the pools and dma's are not destroyed, just reset)
 	void reset();
+
+	/// Release completely empty pool blobs back to the operating system without touching live allocations.
+	Int releaseEmpties();
+
+	/// Emit aggregate pool usage and, when requested, the pools retaining the most free capacity.
+	void logDiagnostics(const char *phase, UnsignedInt frame, Bool detailed);
 
 	void memoryPoolUsageReport( const char* filename, FILE *appendToFileInstead = nullptr );
 
@@ -826,6 +833,11 @@ extern Bool isMemoryManagerOfficiallyInited();
 extern void shutdownMemoryManager();
 
 extern MemoryPoolFactory *TheMemoryPoolFactory;
+
+#if defined(__APPLE__)
+void getAlignedAllocationDiagnostics(unsigned long long *liveBytes, unsigned long long *peakBytes, unsigned long long *totalBytes, unsigned long long *liveCount, unsigned long long *totalCount);
+void logAlignedAllocationCallers(const char *phase, UnsignedInt frame);
+#endif
 extern DynamicMemoryAllocator *TheDynamicMemoryAllocator;
 
 /**

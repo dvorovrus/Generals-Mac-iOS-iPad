@@ -52,6 +52,11 @@
 #include "Common/Errors.h"
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
+#if defined(__APPLE__)
+#include <atomic>
+#include <malloc/malloc.h>
+#include <dlfcn.h>
+#endif
 #ifdef MEMORYPOOL_DEBUG
 #include "GameClient/ClientRandomValue.h"
 #endif
@@ -399,6 +404,9 @@ private:
 
 	MemoryPoolBlob				*m_owningBlob;			///< will be null if the single block was allocated via sysAllocate()
 	MemoryPoolSingleBlock	*m_nextBlock;				///< if m_owningBlob is nonnull, this points to next free (unallocated) block in the blob; if m_owningBlob is null, this points to the next used (allocated) raw block in the pool.
+#if defined(__APPLE__)
+	Int										m_diagLogicalSize;	///< diagnostic-only logical size for DMA raw-block accounting
+#endif
 #ifdef MPSB_DLINK
 	MemoryPoolSingleBlock	*m_prevBlock;				///< if m_owningBlob is nonnull, this points to prev free (unallocated) block in the blob; if m_owningBlob is null, this points to the prev used (allocated) raw block in the pool.
 #endif
@@ -440,6 +448,9 @@ public:
 	MemoryPoolSingleBlock *getNextFreeBlock();
 	void setNextFreeBlock(MemoryPoolSingleBlock *b);
 	MemoryPoolSingleBlock *getNextRawBlock();
+#if defined(__APPLE__)
+	Int getDiagLogicalSize() const { return m_diagLogicalSize; }
+#endif
 	void setNextRawBlock(MemoryPoolSingleBlock *b);
 
 #ifdef MEMORYPOOL_DEBUG
@@ -865,6 +876,9 @@ void MemoryPoolSingleBlock::initBlock(Int logicalSize, MemoryPoolBlob *owningBlo
 	// Note that while it is OK for owningBlob to be null, it is NEVER ok
 	// for owningFactory to be null.
 	DEBUG_ASSERTCRASH(owningFactory, ("null factory"));
+#if defined(__APPLE__)
+	m_diagLogicalSize = logicalSize;
+#endif
 
 #ifdef MEMORYPOOL_DEBUG
 {
@@ -2407,6 +2421,41 @@ void DynamicMemoryAllocator::reset()
 	m_usedBlocksInDma = 0;
 }
 
+void DynamicMemoryAllocator::getRawDiagnostics(Int *count, unsigned long long *logicalBytes, unsigned long long *actualBytes, Int *maxLogical, Int buckets[8]) const
+{
+	if (count) *count = 0;
+	if (logicalBytes) *logicalBytes = 0;
+	if (actualBytes) *actualBytes = 0;
+	if (maxLogical) *maxLogical = 0;
+	if (buckets)
+		for (Int i = 0; i < 8; ++i) buckets[i] = 0;
+
+	for (MemoryPoolSingleBlock *block = m_rawBlocks; block; block = block->getNextRawBlock())
+	{
+#if defined(__APPLE__)
+		const Int logical = block->getDiagLogicalSize();
+#else
+		const Int logical = 0;
+#endif
+		if (count) ++(*count);
+		if (logicalBytes) *logicalBytes += (unsigned long long)logical;
+		if (actualBytes) *actualBytes += (unsigned long long)MemoryPoolSingleBlock::calcRawBlockSize(logical);
+		if (maxLogical && logical > *maxLogical) *maxLogical = logical;
+		if (buckets)
+		{
+			Int bucket = 0;
+			if (logical > 1024) bucket = 1;
+			if (logical > 4096) bucket = 2;
+			if (logical > 16384) bucket = 3;
+			if (logical > 65536) bucket = 4;
+			if (logical > 262144) bucket = 5;
+			if (logical > 1048576) bucket = 6;
+			if (logical > 4194304) bucket = 7;
+			++buckets[bucket];
+		}
+	}
+}
+
 //-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_DEBUG
 /**
@@ -2796,6 +2845,138 @@ void MemoryPoolFactory::reset()
 	calcFillerValue(GameClientRandomValue(0, MAX_INIT_FILLER_COUNT-1));
 	#endif
 #endif
+}
+
+//-----------------------------------------------------------------------------
+/** Release fully unused backing blobs while preserving every live allocation. */
+Int MemoryPoolFactory::releaseEmpties()
+{
+	Int released = 0;
+	for (MemoryPool *pool = m_firstPoolInFactory; pool; pool = pool->getNextPoolInList())
+	{
+		released += pool->releaseEmpties();
+	}
+	return released;
+}
+
+void MemoryPoolFactory::logDiagnostics(const char *phase, UnsignedInt frame, Bool detailed)
+{
+	const double mb = 1024.0 * 1024.0;
+	long long usedBytes = 0;
+	long long capacityBytes = 0;
+	long long peakUsedBytes = 0;
+	long long usedBlocks = 0;
+	long long totalBlocks = 0;
+	long long peakBlocks = 0;
+	Int poolCount = 0;
+	Int blobCount = 0;
+
+	struct TopPool
+	{
+		MemoryPool *pool;
+		long long slackBytes;
+	};
+	TopPool top[8] = {};
+
+	for (MemoryPool *pool = m_firstPoolInFactory; pool; pool = pool->getNextPoolInList())
+	{
+		const long long allocSize = pool->getAllocationSize();
+		const long long used = pool->getUsedBlockCount();
+		const long long total = pool->getTotalBlockCount();
+		const long long peak = pool->getPeakBlockCount();
+		const long long slack = (total - used) * allocSize;
+		++poolCount;
+		blobCount += pool->countBlobsInPool();
+		usedBlocks += used;
+		totalBlocks += total;
+		peakBlocks += peak;
+		usedBytes += used * allocSize;
+		capacityBytes += total * allocSize;
+		peakUsedBytes += peak * allocSize;
+
+		if (detailed && slack > 0)
+		{
+			for (Int i = 0; i < 8; ++i)
+			{
+				if (top[i].pool == nullptr || slack > top[i].slackBytes)
+				{
+					for (Int j = 7; j > i; --j)
+						top[j] = top[j - 1];
+					top[i].pool = pool;
+					top[i].slackBytes = slack;
+					break;
+				}
+			}
+		}
+	}
+
+	Int rawCount = 0;
+	unsigned long long rawLogicalBytes = 0;
+	unsigned long long rawActualBytes = 0;
+	Int rawMaxLogical = 0;
+	Int rawBuckets[8] = { 0 };
+	for (DynamicMemoryAllocator *dma = m_firstDmaInFactory; dma; dma = dma->getNextDmaInList())
+	{
+		Int count = 0;
+		unsigned long long logical = 0;
+		unsigned long long actual = 0;
+		Int maxLogical = 0;
+		Int buckets[8] = { 0 };
+		dma->getRawDiagnostics(&count, &logical, &actual, &maxLogical, buckets);
+		rawCount += count;
+		rawLogicalBytes += logical;
+		rawActualBytes += actual;
+		if (maxLogical > rawMaxLogical) rawMaxLogical = maxLogical;
+		for (Int i = 0; i < 8; ++i) rawBuckets[i] += buckets[i];
+	}
+
+	fprintf(stderr,
+	        "[POOL-DIAG] phase=%s frame=%u pools=%d blobs=%d usedBlocks=%lld freeBlocks=%lld totalBlocks=%lld peakBlocks=%lld usedMB=%.2f capacityMB=%.2f slackMB=%.2f peakUsedMB=%.2f\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        poolCount,
+	        blobCount,
+	        usedBlocks,
+	        totalBlocks - usedBlocks,
+	        totalBlocks,
+	        peakBlocks,
+	        (double)usedBytes / mb,
+	        (double)capacityBytes / mb,
+	        (double)(capacityBytes - usedBytes) / mb,
+	        (double)peakUsedBytes / mb);
+
+	fprintf(stderr,
+	        "[DMA-RAW] phase=%s frame=%u count=%d logicalMB=%.2f actualMB=%.2f maxKB=%.1f b0_1K=%d b1_4K=%d b4_16K=%d b16_64K=%d b64_256K=%d b256K_1M=%d b1_4M=%d b4MPlus=%d\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        rawCount,
+	        (double)rawLogicalBytes / mb,
+	        (double)rawActualBytes / mb,
+	        (double)rawMaxLogical / 1024.0,
+	        rawBuckets[0], rawBuckets[1], rawBuckets[2], rawBuckets[3],
+	        rawBuckets[4], rawBuckets[5], rawBuckets[6], rawBuckets[7]);
+
+	if (detailed)
+	{
+		for (Int i = 0; i < 8 && top[i].pool != nullptr; ++i)
+		{
+			MemoryPool *pool = top[i].pool;
+			fprintf(stderr,
+			        "[POOL-TOP] phase=%s frame=%u rank=%d name=%s blockBytes=%d used=%d free=%d total=%d peak=%d blobs=%d slackMB=%.2f capacityMB=%.2f\n",
+			        phase != nullptr ? phase : "unknown",
+			        (unsigned)frame,
+			        i + 1,
+			        pool->getPoolName() != nullptr ? pool->getPoolName() : "unknown",
+			        pool->getAllocationSize(),
+			        pool->getUsedBlockCount(),
+			        pool->getFreeBlockCount(),
+			        pool->getTotalBlockCount(),
+			        pool->getPeakBlockCount(),
+			        pool->countBlobsInPool(),
+			        (double)top[i].slackBytes / mb,
+			        (double)pool->getTotalBlockCount() * (double)pool->getAllocationSize() / mb);
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -3387,11 +3568,413 @@ void operator delete[](void * p, const char *, int)
 #include <new>
 #include <cstdlib>
 
+#if defined(__APPLE__)
+static std::atomic<unsigned long long> s_alignedLiveBytes{0};
+static std::atomic<unsigned long long> s_alignedPeakBytes{0};
+static std::atomic<unsigned long long> s_alignedTotalBytes{0};
+static std::atomic<unsigned long long> s_alignedLiveCount{0};
+static std::atomic<unsigned long long> s_alignedTotalCount{0};
+
+static constexpr unsigned ALIGNED_DIAG_POINTER_CAPACITY = 32768;
+static constexpr unsigned ALIGNED_DIAG_CALLER_CAPACITY = 2048;
+static constexpr unsigned ALIGNED_DIAG_TOP_CALLERS = 12;
+static constexpr unsigned ALIGNED_DIAG_SIZE_BUCKETS = 10;
+static constexpr unsigned ALIGNED_DIAG_ALIGN_BUCKETS = 8;
+
+struct AlignedPointerDiagRecord
+{
+	void *pointer;
+	unsigned callerIndex;
+	unsigned alignment;
+	unsigned char state;
+	unsigned char kind;
+	unsigned short reserved;
+	unsigned long long requestedBytes;
+	unsigned long long actualBytes;
+};
+
+struct AlignedCallerDiagRecord
+{
+	void *caller;
+	unsigned char used;
+	unsigned char reserved[7];
+	unsigned long long liveActualBytes;
+	unsigned long long liveRequestedBytes;
+	unsigned long long peakActualBytes;
+	unsigned long long totalActualBytes;
+	unsigned long long totalRequestedBytes;
+	unsigned long long liveCount;
+	unsigned long long totalCount;
+	unsigned long long liveNewCount;
+	unsigned long long liveArrayCount;
+	unsigned long long totalNewCount;
+	unsigned long long totalArrayCount;
+	unsigned long long maxRequestedBytes;
+	unsigned long long maxActualBytes;
+	unsigned maxAlignment;
+	unsigned long long sizeCount[ALIGNED_DIAG_SIZE_BUCKETS];
+	unsigned long long sizeBytes[ALIGNED_DIAG_SIZE_BUCKETS];
+	unsigned long long alignCount[ALIGNED_DIAG_ALIGN_BUCKETS];
+	unsigned long long alignBytes[ALIGNED_DIAG_ALIGN_BUCKETS];
+};
+
+static AlignedPointerDiagRecord s_alignedPointers[ALIGNED_DIAG_POINTER_CAPACITY] = {};
+static AlignedCallerDiagRecord s_alignedCallers[ALIGNED_DIAG_CALLER_CAPACITY] = {};
+static std::atomic_flag s_alignedDiagLock = ATOMIC_FLAG_INIT;
+static unsigned long long s_alignedTrackedPointerCount = 0;
+static unsigned long long s_alignedTrackedCallerCount = 0;
+static unsigned long long s_alignedPointerOverflowCount = 0;
+static unsigned long long s_alignedPointerOverflowBytes = 0;
+static unsigned long long s_alignedCallerOverflowCount = 0;
+static unsigned long long s_alignedDeleteMissCount = 0;
+static unsigned long long s_alignedDeleteKindMismatchCount = 0;
+
+static void AlignedDiagLock()
+{
+	while (s_alignedDiagLock.test_and_set(std::memory_order_acquire)) {}
+}
+
+static void AlignedDiagUnlock()
+{
+	s_alignedDiagLock.clear(std::memory_order_release);
+}
+
+static unsigned AlignedDiagHash(const void *p, unsigned mask)
+{
+	unsigned long long value = (unsigned long long)(size_t)p;
+	value ^= value >> 33;
+	value *= 0xff51afd7ed558ccdULL;
+	value ^= value >> 33;
+	return (unsigned)value & mask;
+}
+
+static unsigned AlignedDiagSizeBucket(unsigned long long bytes)
+{
+	if (bytes <= 64ULL) return 0;
+	if (bytes <= 256ULL) return 1;
+	if (bytes <= 1024ULL) return 2;
+	if (bytes <= 4096ULL) return 3;
+	if (bytes <= 16384ULL) return 4;
+	if (bytes <= 65536ULL) return 5;
+	if (bytes <= 262144ULL) return 6;
+	if (bytes <= 1048576ULL) return 7;
+	if (bytes <= 4194304ULL) return 8;
+	return 9;
+}
+
+static unsigned AlignedDiagAlignBucket(unsigned alignment)
+{
+	if (alignment <= 16U) return 0;
+	if (alignment <= 32U) return 1;
+	if (alignment <= 64U) return 2;
+	if (alignment <= 128U) return 3;
+	if (alignment <= 256U) return 4;
+	if (alignment <= 512U) return 5;
+	if (alignment <= 4096U) return 6;
+	return 7;
+}
+
+static unsigned AlignedDiagFindOrCreateCaller(void *caller)
+{
+	const unsigned mask = ALIGNED_DIAG_CALLER_CAPACITY - 1;
+	unsigned slot = AlignedDiagHash(caller, mask);
+	for (unsigned probe = 0; probe < ALIGNED_DIAG_CALLER_CAPACITY; ++probe)
+	{
+		AlignedCallerDiagRecord &record = s_alignedCallers[slot];
+		if (!record.used)
+		{
+			record.used = 1;
+			record.caller = caller;
+			++s_alignedTrackedCallerCount;
+			return slot;
+		}
+		if (record.caller == caller)
+			return slot;
+		slot = (slot + 1) & mask;
+	}
+	++s_alignedCallerOverflowCount;
+	return (unsigned)-1;
+}
+
+static bool AlignedDiagInsertPointer(void *p, unsigned callerIndex, unsigned alignment, unsigned kind, unsigned long long requestedBytes, unsigned long long actualBytes)
+{
+	const unsigned mask = ALIGNED_DIAG_POINTER_CAPACITY - 1;
+	unsigned slot = AlignedDiagHash(p, mask);
+	unsigned firstTombstone = (unsigned)-1;
+	for (unsigned probe = 0; probe < ALIGNED_DIAG_POINTER_CAPACITY; ++probe)
+	{
+		AlignedPointerDiagRecord &record = s_alignedPointers[slot];
+		if (record.state == 1 && record.pointer == p)
+			return true;
+		if (record.state == 2 && firstTombstone == (unsigned)-1)
+			firstTombstone = slot;
+		if (record.state == 0)
+		{
+			if (firstTombstone != (unsigned)-1)
+				slot = firstTombstone;
+			AlignedPointerDiagRecord &target = s_alignedPointers[slot];
+			target.pointer = p;
+			target.callerIndex = callerIndex;
+			target.alignment = alignment;
+			target.state = 1;
+			target.kind = (unsigned char)kind;
+			target.requestedBytes = requestedBytes;
+			target.actualBytes = actualBytes;
+			++s_alignedTrackedPointerCount;
+			return true;
+		}
+		slot = (slot + 1) & mask;
+	}
+	if (firstTombstone != (unsigned)-1)
+	{
+		AlignedPointerDiagRecord &target = s_alignedPointers[firstTombstone];
+		target.pointer = p;
+		target.callerIndex = callerIndex;
+		target.alignment = alignment;
+		target.state = 1;
+		target.kind = (unsigned char)kind;
+		target.requestedBytes = requestedBytes;
+		target.actualBytes = actualBytes;
+		++s_alignedTrackedPointerCount;
+		return true;
+	}
+	++s_alignedPointerOverflowCount;
+	s_alignedPointerOverflowBytes += actualBytes;
+	return false;
+}
+
+static void AlignedDiagAdd(void *p, size_t requestedSize, size_t alignment, unsigned kind, void *caller)
+{
+	const unsigned long long actualBytes = p ? (unsigned long long)::malloc_size(p) : 0;
+	const unsigned long long requestedBytes = (unsigned long long)requestedSize;
+	const unsigned long long live = s_alignedLiveBytes.fetch_add(actualBytes, std::memory_order_relaxed) + actualBytes;
+	s_alignedTotalBytes.fetch_add(actualBytes, std::memory_order_relaxed);
+	s_alignedLiveCount.fetch_add(1, std::memory_order_relaxed);
+	s_alignedTotalCount.fetch_add(1, std::memory_order_relaxed);
+	unsigned long long peak = s_alignedPeakBytes.load(std::memory_order_relaxed);
+	while (live > peak && !s_alignedPeakBytes.compare_exchange_weak(peak, live, std::memory_order_relaxed)) {}
+
+	AlignedDiagLock();
+	const unsigned callerIndex = AlignedDiagFindOrCreateCaller(caller);
+	if (callerIndex != (unsigned)-1)
+	{
+		AlignedCallerDiagRecord &record = s_alignedCallers[callerIndex];
+		record.liveActualBytes += actualBytes;
+		record.liveRequestedBytes += requestedBytes;
+		record.totalActualBytes += actualBytes;
+		record.totalRequestedBytes += requestedBytes;
+		++record.liveCount;
+		++record.totalCount;
+		if (kind == 0) { ++record.liveNewCount; ++record.totalNewCount; }
+		else { ++record.liveArrayCount; ++record.totalArrayCount; }
+		if (record.liveActualBytes > record.peakActualBytes) record.peakActualBytes = record.liveActualBytes;
+		if (requestedBytes > record.maxRequestedBytes) record.maxRequestedBytes = requestedBytes;
+		if (actualBytes > record.maxActualBytes) record.maxActualBytes = actualBytes;
+		if ((unsigned)alignment > record.maxAlignment) record.maxAlignment = (unsigned)alignment;
+		const unsigned sizeBucket = AlignedDiagSizeBucket(actualBytes);
+		const unsigned alignBucket = AlignedDiagAlignBucket((unsigned)alignment);
+		++record.sizeCount[sizeBucket];
+		record.sizeBytes[sizeBucket] += actualBytes;
+		++record.alignCount[alignBucket];
+		record.alignBytes[alignBucket] += actualBytes;
+	}
+	AlignedDiagInsertPointer(p, callerIndex, (unsigned)alignment, kind, requestedBytes, actualBytes);
+	AlignedDiagUnlock();
+}
+
+static void AlignedDiagRemove(void *p, unsigned deleteKind)
+{
+	if (!p) return;
+	const unsigned long long bytes = (unsigned long long)::malloc_size(p);
+	s_alignedLiveBytes.fetch_sub(bytes, std::memory_order_relaxed);
+	s_alignedLiveCount.fetch_sub(1, std::memory_order_relaxed);
+
+	AlignedDiagLock();
+	const unsigned mask = ALIGNED_DIAG_POINTER_CAPACITY - 1;
+	unsigned slot = AlignedDiagHash(p, mask);
+	for (unsigned probe = 0; probe < ALIGNED_DIAG_POINTER_CAPACITY; ++probe)
+	{
+		AlignedPointerDiagRecord &pointerRecord = s_alignedPointers[slot];
+		if (pointerRecord.state == 0)
+			break;
+		if (pointerRecord.state == 1 && pointerRecord.pointer == p)
+		{
+			if ((unsigned)pointerRecord.kind != deleteKind)
+				++s_alignedDeleteKindMismatchCount;
+			if (pointerRecord.callerIndex != (unsigned)-1 && pointerRecord.callerIndex < ALIGNED_DIAG_CALLER_CAPACITY)
+			{
+				AlignedCallerDiagRecord &record = s_alignedCallers[pointerRecord.callerIndex];
+				const unsigned sizeBucket = AlignedDiagSizeBucket(pointerRecord.actualBytes);
+				const unsigned alignBucket = AlignedDiagAlignBucket(pointerRecord.alignment);
+				record.liveActualBytes = record.liveActualBytes >= pointerRecord.actualBytes ? record.liveActualBytes - pointerRecord.actualBytes : 0;
+				record.liveRequestedBytes = record.liveRequestedBytes >= pointerRecord.requestedBytes ? record.liveRequestedBytes - pointerRecord.requestedBytes : 0;
+				if (record.liveCount > 0) --record.liveCount;
+				if (pointerRecord.kind == 0) { if (record.liveNewCount > 0) --record.liveNewCount; }
+				else { if (record.liveArrayCount > 0) --record.liveArrayCount; }
+				if (record.sizeCount[sizeBucket] > 0) --record.sizeCount[sizeBucket];
+				record.sizeBytes[sizeBucket] = record.sizeBytes[sizeBucket] >= pointerRecord.actualBytes ? record.sizeBytes[sizeBucket] - pointerRecord.actualBytes : 0;
+				if (record.alignCount[alignBucket] > 0) --record.alignCount[alignBucket];
+				record.alignBytes[alignBucket] = record.alignBytes[alignBucket] >= pointerRecord.actualBytes ? record.alignBytes[alignBucket] - pointerRecord.actualBytes : 0;
+			}
+			pointerRecord.pointer = nullptr;
+			pointerRecord.state = 2;
+			if (s_alignedTrackedPointerCount > 0) --s_alignedTrackedPointerCount;
+			AlignedDiagUnlock();
+			return;
+		}
+		slot = (slot + 1) & mask;
+	}
+	++s_alignedDeleteMissCount;
+	AlignedDiagUnlock();
+}
+
+void getAlignedAllocationDiagnostics(unsigned long long *liveBytes, unsigned long long *peakBytes, unsigned long long *totalBytes, unsigned long long *liveCount, unsigned long long *totalCount)
+{
+	if (liveBytes) *liveBytes = s_alignedLiveBytes.load(std::memory_order_relaxed);
+	if (peakBytes) *peakBytes = s_alignedPeakBytes.load(std::memory_order_relaxed);
+	if (totalBytes) *totalBytes = s_alignedTotalBytes.load(std::memory_order_relaxed);
+	if (liveCount) *liveCount = s_alignedLiveCount.load(std::memory_order_relaxed);
+	if (totalCount) *totalCount = s_alignedTotalCount.load(std::memory_order_relaxed);
+}
+
+static const char *AlignedDiagBasename(const char *path)
+{
+	if (path == nullptr) return "unknown";
+	const char *base = path;
+	for (const char *p = path; *p != 0; ++p)
+		if (*p == '/') base = p + 1;
+	return base;
+}
+
+void logAlignedAllocationCallers(const char *phase, UnsignedInt frame)
+{
+	const double mb = 1024.0 * 1024.0;
+	AlignedCallerDiagRecord top[ALIGNED_DIAG_TOP_CALLERS] = {};
+	unsigned long long trackedPointers = 0;
+	unsigned long long trackedCallers = 0;
+	unsigned long long pointerOverflowCount = 0;
+	unsigned long long pointerOverflowBytes = 0;
+	unsigned long long callerOverflowCount = 0;
+	unsigned long long deleteMissCount = 0;
+	unsigned long long deleteKindMismatchCount = 0;
+
+	AlignedDiagLock();
+	trackedPointers = s_alignedTrackedPointerCount;
+	trackedCallers = s_alignedTrackedCallerCount;
+	pointerOverflowCount = s_alignedPointerOverflowCount;
+	pointerOverflowBytes = s_alignedPointerOverflowBytes;
+	callerOverflowCount = s_alignedCallerOverflowCount;
+	deleteMissCount = s_alignedDeleteMissCount;
+	deleteKindMismatchCount = s_alignedDeleteKindMismatchCount;
+	for (unsigned i = 0; i < ALIGNED_DIAG_CALLER_CAPACITY; ++i)
+	{
+		const AlignedCallerDiagRecord &candidate = s_alignedCallers[i];
+		if (!candidate.used || candidate.liveActualBytes == 0)
+			continue;
+		for (unsigned rank = 0; rank < ALIGNED_DIAG_TOP_CALLERS; ++rank)
+		{
+			if (!top[rank].used || candidate.liveActualBytes > top[rank].liveActualBytes)
+			{
+				for (unsigned move = ALIGNED_DIAG_TOP_CALLERS - 1; move > rank; --move)
+					top[move] = top[move - 1];
+				top[rank] = candidate;
+				break;
+			}
+		}
+	}
+	AlignedDiagUnlock();
+
+	fprintf(stderr,
+	        "[ALIGNED-TRACKER] phase=%s frame=%u trackedPointers=%llu trackedCallers=%llu pointerOverflowCount=%llu pointerOverflowMB=%.2f callerOverflowCount=%llu deleteMisses=%llu deleteKindMismatch=%llu\n",
+	        phase != nullptr ? phase : "unknown",
+	        (unsigned)frame,
+	        trackedPointers,
+	        trackedCallers,
+	        pointerOverflowCount,
+	        (double)pointerOverflowBytes / mb,
+	        callerOverflowCount,
+	        deleteMissCount,
+	        deleteKindMismatchCount);
+
+	static const char *sizeNames[ALIGNED_DIAG_SIZE_BUCKETS] = {
+		"0_64B", "65_256B", "257B_1K", "1K_4K", "4K_16K",
+		"16K_64K", "64K_256K", "256K_1M", "1M_4M", "4MPlus"
+	};
+	static const char *alignNames[ALIGNED_DIAG_ALIGN_BUCKETS] = {
+		"le16", "32", "64", "128", "256", "512", "4K", "gt4K"
+	};
+
+	for (unsigned rank = 0; rank < ALIGNED_DIAG_TOP_CALLERS && top[rank].used; ++rank)
+	{
+		const AlignedCallerDiagRecord &record = top[rank];
+		Dl_info info = {};
+		const int resolved = record.caller != nullptr ? dladdr(record.caller, &info) : 0;
+		const char *module = resolved && info.dli_fname ? AlignedDiagBasename(info.dli_fname) : "unknown";
+		const char *symbol = resolved && info.dli_sname ? info.dli_sname : "unknown";
+		const unsigned long long imageOffset = resolved && info.dli_fbase ? (unsigned long long)((const char *)record.caller - (const char *)info.dli_fbase) : 0;
+		const unsigned long long symbolOffset = resolved && info.dli_saddr ? (unsigned long long)((const char *)record.caller - (const char *)info.dli_saddr) : 0;
+		fprintf(stderr,
+		        "[ALIGNED-CALLER] phase=%s frame=%u rank=%u caller=%p module=%s symbol=%s imageOffset=0x%llx symbolOffset=0x%llx liveCount=%llu liveMB=%.2f liveRequestedMB=%.2f peakMB=%.2f totalCount=%llu totalMB=%.2f totalRequestedMB=%.2f liveNew=%llu liveArray=%llu totalNew=%llu totalArray=%llu maxReqKB=%.1f maxActualKB=%.1f maxAlign=%u\n",
+		        phase != nullptr ? phase : "unknown",
+		        (unsigned)frame,
+		        rank + 1,
+		        record.caller,
+		        module,
+		        symbol,
+		        imageOffset,
+		        symbolOffset,
+		        record.liveCount,
+		        (double)record.liveActualBytes / mb,
+		        (double)record.liveRequestedBytes / mb,
+		        (double)record.peakActualBytes / mb,
+		        record.totalCount,
+		        (double)record.totalActualBytes / mb,
+		        (double)record.totalRequestedBytes / mb,
+		        record.liveNewCount,
+		        record.liveArrayCount,
+		        record.totalNewCount,
+		        record.totalArrayCount,
+		        (double)record.maxRequestedBytes / 1024.0,
+		        (double)record.maxActualBytes / 1024.0,
+		        record.maxAlignment);
+
+		for (unsigned bucket = 0; bucket < ALIGNED_DIAG_SIZE_BUCKETS; ++bucket)
+		{
+			if (record.sizeCount[bucket] == 0) continue;
+			fprintf(stderr,
+			        "[ALIGNED-CALLER-SIZE] phase=%s frame=%u rank=%u bucket=%s count=%llu mb=%.2f\n",
+			        phase != nullptr ? phase : "unknown",
+			        (unsigned)frame,
+			        rank + 1,
+			        sizeNames[bucket],
+			        record.sizeCount[bucket],
+			        (double)record.sizeBytes[bucket] / mb);
+		}
+		for (unsigned bucket = 0; bucket < ALIGNED_DIAG_ALIGN_BUCKETS; ++bucket)
+		{
+			if (record.alignCount[bucket] == 0) continue;
+			fprintf(stderr,
+			        "[ALIGNED-CALLER-ALIGN] phase=%s frame=%u rank=%u bucket=%s count=%llu mb=%.2f\n",
+			        phase != nullptr ? phase : "unknown",
+			        (unsigned)frame,
+			        rank + 1,
+			        alignNames[bucket],
+			        record.alignCount[bucket],
+			        (double)record.alignBytes[bucket] / mb);
+		}
+	}
+}
+#endif
+
 void *operator new(size_t size, std::align_val_t alignment)
 {
 	void *p = nullptr;
 	if (::posix_memalign(&p, static_cast<size_t>(alignment), size) != 0)
 		throw std::bad_alloc();
+#if defined(__APPLE__)
+	void *caller = __builtin_extract_return_addr(__builtin_return_address(0));
+	AlignedDiagAdd(p, size, static_cast<size_t>(alignment), 0, caller);
+#endif
 	return p;
 }
 
@@ -3400,26 +3983,42 @@ void *operator new[](size_t size, std::align_val_t alignment)
 	void *p = nullptr;
 	if (::posix_memalign(&p, static_cast<size_t>(alignment), size) != 0)
 		throw std::bad_alloc();
+#if defined(__APPLE__)
+	void *caller = __builtin_extract_return_addr(__builtin_return_address(0));
+	AlignedDiagAdd(p, size, static_cast<size_t>(alignment), 1, caller);
+#endif
 	return p;
 }
 
 void operator delete(void *p, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p, 0);
+#endif
 	::free(p);
 }
 
 void operator delete[](void *p, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p, 1);
+#endif
 	::free(p);
 }
 
 void operator delete(void *p, size_t, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p, 0);
+#endif
 	::free(p);
 }
 
 void operator delete[](void *p, size_t, std::align_val_t) noexcept
 {
+#if defined(__APPLE__)
+	AlignedDiagRemove(p, 1);
+#endif
 	::free(p);
 }
 #endif // !_WIN32

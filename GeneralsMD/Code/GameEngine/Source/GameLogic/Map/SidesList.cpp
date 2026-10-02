@@ -45,8 +45,11 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+#include "Common/ArchiveFile.h"
+#include "Common/ArchiveFileSystem.h"
 #include "Common/DataChunk.h"
 #include "Common/GameState.h"
+#include "Common/GlobalData.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/WellKnownKeys.h"
 #include "Common/Xfer.h"
@@ -516,6 +519,8 @@ void SidesList::prepareForMP_or_Skirmish()
 			gotScripts = true;
 		}
 	}
+	fprintf(stderr, "[AI-SCRIPT-SOURCE] embeddedScripts=%d skirmishSides=%d\n",
+	        (int)gotScripts, m_numSkirmishSides);
 	if (!gotScripts) {
 		// GeneralsX @bugfix Copilot 22/03/2026 Load default skirmish scripts relative to the configured asset root.
 		AsciiString path = "Data\\Scripts\\SkirmishScripts.scb";
@@ -527,7 +532,26 @@ void SidesList::prepareForMP_or_Skirmish()
 		DEBUG_LOG(("Skirmish map using standard scripts"));
 		m_skirmishTeamrec.clear();
 		CachedFileInputStream theInputStream;
-		if (theInputStream.open(path)) {
+		// Loose retail scripts must not shadow the active mod's AI. Keep normal
+		// filesystem precedence unless the winning archive belongs to that mod.
+		ArchiveFile *archive = TheArchiveFileSystem ? TheArchiveFileSystem->getArchiveFile(path, 0) : nullptr;
+		Bool modArchive = false;
+		if (archive && TheGlobalData && TheGlobalData->m_modDir.isNotEmpty())
+		{
+			const AsciiString archiveName = archive->getName();
+			const AsciiString &modDir = TheGlobalData->m_modDir;
+			if (archiveName.startsWithNoCase(modDir))
+			{
+				const Int length = modDir.getLength();
+				const Char boundary = archiveName.str()[length];
+				modArchive = boundary == 0 || boundary == '/' || boundary == '\\'
+					|| modDir.str()[length - 1] == '/' || modDir.str()[length - 1] == '\\';
+			}
+		}
+		fprintf(stderr, "[AI-SCRIPT-SOURCE] source=%s archive='%s'\n",
+		        modArchive ? "mod-archive" : "default-filesystem",
+		        archive ? archive->getName().str() : "<none>");
+		if (theInputStream.open(path, modArchive)) {
 #ifdef ALLOW_DEBUG_UTILS
 				fprintf(stderr, "[SKIRMISH_DIAG] Opened SkirmishScripts.scb successfully\n");
 				fflush(stderr);
@@ -538,6 +562,7 @@ void SidesList::prepareForMP_or_Skirmish()
 				file.registerParser( "ScriptsPlayers", AsciiString::TheEmptyString, ParsePlayersDataChunk );
 				file.registerParser( "ScriptTeams", AsciiString::TheEmptyString, ParseTeamsDataChunk );
 				if (!file.parse(this)) {
+					fprintf(stderr, "[AI-SCRIPT-SOURCE] result=parse-failed\n");
 #ifdef ALLOW_DEBUG_UTILS
 					fprintf(stderr, "[SKIRMISH_DIAG] ERROR parsing SkirmishScripts.scb\n");
 					fflush(stderr);
@@ -547,6 +572,7 @@ void SidesList::prepareForMP_or_Skirmish()
 				}
 				ScriptList *scripts[MAX_PLAYER_COUNT];
 				Int count = ScriptList::getReadScripts(scripts);
+				fprintf(stderr, "[AI-SCRIPT-SOURCE] result=parsed scriptLists=%d\n", count);
 #ifdef ALLOW_DEBUG_UTILS
 				fprintf(stderr, "[SKIRMISH_DIAG] Parsed SkirmishScripts.scb scriptCount=%d\n", count);
 				fflush(stderr);
@@ -564,11 +590,13 @@ void SidesList::prepareForMP_or_Skirmish()
 					}
 					if (curSide == -1)
 					{
+						fprintf(stderr, "[AI-SCRIPT-SOURCE] player='%s' result=unmatched\n", static_readPlayerNames[i].str());
 						deleteInstance(scripts[i]);
 						scripts[i] = nullptr;
 						continue;
 					}
 
+					fprintf(stderr, "[AI-SCRIPT-SOURCE] player='%s' side=%d result=attached\n", static_readPlayerNames[i].str(), curSide);
 					deleteInstance(getSkirmishSideInfo(curSide)->getScriptList());
 					getSkirmishSideInfo(curSide)->setScriptList(scripts[i]);
 					scripts[i] = nullptr;
@@ -577,6 +605,7 @@ void SidesList::prepareForMP_or_Skirmish()
 					static_readPlayerNames[i].clear();
 				}
 		} else {
+			fprintf(stderr, "[AI-SCRIPT-SOURCE] result=open-failed path='%s'\n", path.str());
 #ifdef ALLOW_DEBUG_UTILS
 			fprintf(stderr, "[SKIRMISH_DIAG] FAILED to open SkirmishScripts.scb path='%s'\n", path.str());
 			fflush(stderr);

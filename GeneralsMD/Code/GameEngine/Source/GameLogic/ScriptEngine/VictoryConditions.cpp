@@ -53,6 +53,8 @@
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/NetworkDefs.h"
 
+#include <cstdio>
+
 
 //-------------------------------------------------------------------------------------------------
 #define ISSET(x) (m_victoryConditions & VICTORY_##x)
@@ -188,10 +190,64 @@ void VictoryConditions::update()
 			m_singleAllianceRemaining = true; // don't check again
 			m_endFrame = TheGameLogic->getFrame();
 
+			KindOfMaskType victoryBuildingMask;
+			victoryBuildingMask.set(KINDOF_MP_COUNT_FOR_VICTORY);
+			fprintf(stderr,
+			        "[VICTORY-DIAG] single-alliance-trigger frame=%u localSlot=%d observer=%d conditions=0x%x\n",
+			        (unsigned)m_endFrame,
+			        (int)m_localSlotNum,
+			        m_isObserver ? 1 : 0,
+			        (unsigned)m_victoryConditions);
+
+			for (Int diag = 0; diag < MAX_PLAYER_COUNT; ++diag)
+			{
+				Player *diagPlayer = m_players[diag];
+				if (!diagPlayer)
+					continue;
+
+				fprintf(stderr,
+				        "[VICTORY-DIAG] slot=%d playerIndex=%d local=%d objects=%d units=%d buildings=%d defeated=%d\n",
+				        (int)diag,
+				        (int)diagPlayer->getPlayerIndex(),
+				        diagPlayer->isLocalPlayer() ? 1 : 0,
+				        diagPlayer->hasAnyObjects() ? 1 : 0,
+				        diagPlayer->hasAnyUnits() ? 1 : 0,
+				        diagPlayer->hasAnyBuildings(victoryBuildingMask) ? 1 : 0,
+				        hasSinglePlayerBeenDefeated(diagPlayer) ? 1 : 0);
+			}
+
+			for (Int left = 0; left < MAX_PLAYER_COUNT; ++left)
+			{
+				if (!m_players[left])
+					continue;
+				for (Int right = left + 1; right < MAX_PLAYER_COUNT; ++right)
+				{
+					if (!m_players[right])
+						continue;
+					fprintf(stderr,
+					        "[VICTORY-DIAG] relation slot%d-slot%d allies=%d\n",
+					        (int)left,
+					        (int)right,
+					        areAllies(m_players[left], m_players[right]) ? 1 : 0);
+				}
+			}
+
 			Player* victoriousPlayer = findFirstUndefeatedPlayer();
 
 			if (victoriousPlayer)
+			{
+				fprintf(stderr,
+				        "[VICTORY-DIAG] winner playerIndex=%d frame=%u\n",
+				        (int)victoriousPlayer->getPlayerIndex(),
+				        (unsigned)m_endFrame);
 				markAllianceVictorious(victoriousPlayer);
+			}
+			else
+			{
+				fprintf(stderr,
+				        "[VICTORY-DIAG] no-undefeated-player frame=%u\n",
+				        (unsigned)m_endFrame);
+			}
 		}
 	}
 
@@ -201,6 +257,16 @@ void VictoryConditions::update()
 		Player *p = m_players[i];
 		if (p && !m_isDefeated[i] && hasSinglePlayerBeenDefeated(p))
 		{
+			KindOfMaskType victoryBuildingMask;
+			victoryBuildingMask.set(KINDOF_MP_COUNT_FOR_VICTORY);
+			fprintf(stderr,
+			        "[VICTORY-DIAG] player-defeated frame=%u slot=%d playerIndex=%d objects=%d units=%d buildings=%d\n",
+			        (unsigned)TheGameLogic->getFrame(),
+			        (int)i,
+			        (int)p->getPlayerIndex(),
+			        p->hasAnyObjects() ? 1 : 0,
+			        p->hasAnyUnits() ? 1 : 0,
+			        p->hasAnyBuildings(victoryBuildingMask) ? 1 : 0);
 			m_isDefeated[i] = true;
 			if (TheGameLogic->getFrame() > 1)
 			{
@@ -376,6 +442,18 @@ void VictoryConditions::cachePlayerPtrs()
 			m_players[playerCount] = player;
 			if (m_players[playerCount]->isLocalPlayer())
 				m_localSlotNum = playerCount;
+
+			KindOfMaskType victoryBuildingMask;
+			victoryBuildingMask.set(KINDOF_MP_COUNT_FOR_VICTORY);
+			fprintf(stderr,
+			        "[VICTORY-DIAG] cache slot=%d sourceIndex=%d playerIndex=%d local=%d objects=%d units=%d buildings=%d\n",
+			        (int)playerCount,
+			        (int)i,
+			        (int)player->getPlayerIndex(),
+			        player->isLocalPlayer() ? 1 : 0,
+			        player->hasAnyObjects() ? 1 : 0,
+			        player->hasAnyUnits() ? 1 : 0,
+			        player->hasAnyBuildings(victoryBuildingMask) ? 1 : 0);
 			++playerCount;
 		}
 	}
@@ -389,6 +467,12 @@ void VictoryConditions::cachePlayerPtrs()
 		m_localPlayerDefeated = true;	// if we have no local player, don't check for defeat
 		m_isObserver = true;
 	}
+
+	fprintf(stderr,
+	        "[VICTORY-DIAG] cache-complete players=%d localSlot=%d observer=%d\n",
+	        (int)playerCount,
+	        (int)m_localSlotNum,
+	        m_isObserver ? 1 : 0);
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -1,11 +1,11 @@
 # iPad — All-in-One
 
-All-in-One contains the shared Original GameData plus the packaged Enhanced and Contra profiles. It is currently a local Windows packaging variant on `ios-clean`.
+All-in-One contains the shared Original GameData plus the packaged Enhanced and Contra profiles. It is currently a local Windows packaging variant on `main`.
 
 ## Full flow
 
 ```powershell
-git switch ios-clean
+git switch main
 git pull --ff-only
 .\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant all
 ```
