@@ -48,6 +48,11 @@
 #include "Common/OptionPreferences.h"
 #include "Common/version.h"
 
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NGMPGame.h"
+extern NGMPGame* TheNGMPGame;
+#endif
+
 // TheSuperHackers @build fighter19 11/02/2026 POSIX CopyFile implementation for Linux
 #ifndef _WIN32
 #include <fstream>
@@ -604,8 +609,25 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 		}
 		else
 		{
+#if defined(GENERALS_ONLINE)
+			// Generals Online does not initialize the legacy GameSpy game singleton.
+			// Use the NGMP game state for replay metadata, matching the current
+			// GeneralsOnline GameClient path and avoiding a null dereference at match start.
+			if (TheNGMPGame != nullptr)
+			{
+				theSlotList = GameInfoToAsciiString(TheNGMPGame);
+				localIndex = TheNGMPGame->getLocalSlotNum();
+			}
+			else
+			{
+				DEBUG_LOG(("RecorderClass::startRecording() - TheNGMPGame is null; using empty replay slot list"));
+				m_gameInfo.setCRCInterval(REPLAY_CRC_INTERVAL);
+				theSlotList = GameInfoToAsciiString(&m_gameInfo);
+			}
+#else
 			theSlotList = GameInfoToAsciiString(TheGameSpyGame);
 			localIndex = TheGameSpyGame->getLocalSlotNum();
+#endif
 		}
 	}
 	else
@@ -1706,8 +1728,13 @@ AsciiString RecorderClass::getLastReplayFileName()
 		GameInfo *game = nullptr;
 		if (TheLAN)
 			game = TheLAN->GetMyGame();
+#if defined(GENERALS_ONLINE)
+		else if (TheNGMPGame != nullptr)
+			game = TheNGMPGame;
+#else
 		else if (TheGameSpyInfo)
 			game = TheGameSpyGame;
+#endif
 		if (game)
 		{
 			AsciiString players;
