@@ -1,4 +1,4 @@
-name: Build macOS
+name: Original | macOS | Build
 
 permissions:
   contents: read

@@ -1,4 +1,4 @@
-name: Build Zero Hour for iPad
+name: Original | iPad | Full Build
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Replay Tests
+name: Project | Replay Tests
 
 # GeneralsX @build BenderAI 07/05/2026 Deterministic headless replay test per platform.
 # Downloads the built binary artifact, game assets (encrypted 7z), and platform replay

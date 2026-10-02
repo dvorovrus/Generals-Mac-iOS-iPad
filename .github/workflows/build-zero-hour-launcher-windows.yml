@@ -1,4 +1,4 @@
-name: Build Zero Hour Launcher (Windows)
+name: Legacy | Launcher | Windows
 
 on:
   workflow_dispatch:
