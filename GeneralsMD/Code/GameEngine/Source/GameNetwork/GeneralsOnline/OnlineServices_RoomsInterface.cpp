@@ -1066,8 +1066,8 @@ void WebSocket::Tick()
 									case EWebSocketMessageID::SOCIAL_FRIENDS_LIST_DIRTY:
 									{
                                         // nothing to parse here, it's just an event only
-                                        extern void updateBuddyInfo(bool bIsAutoRefresh = false, bool bUseCache = false);
-										updateBuddyInfo(true);
+                                        extern void updateBuddyInfo();
+										updateBuddyInfo();
 									}
 									break;
 
