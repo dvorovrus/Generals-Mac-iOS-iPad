@@ -1665,7 +1665,10 @@ void OpenALAudioManager::notifyOfAudioCompletion(UnsignedInt audioCompleted, Uns
 	playing->m_audioEventRTS->advanceNextPlayPortion();
 	if (playing->m_audioEventRTS->getNextPlayPortion() != PP_Done) {
 		if (playing->m_type == PAT_Sample) {
-			closeBuffer(playing->m_bufferHandle);	// close it so as not to leak it.
+			if (playing->m_source && playing->m_bufferHandle) {
+				alSourcei(playing->m_source, AL_BUFFER, 0);
+			}
+			closeBuffer(playing->m_bufferHandle);
 			playing->m_bufferHandle = playSample(playing->m_audioEventRTS, playing);
 
 			// If we don't have a file now, then we should drop to the stopped status so that 
@@ -1675,7 +1678,10 @@ void OpenALAudioManager::notifyOfAudioCompletion(UnsignedInt audioCompleted, Uns
 			}
 		}
 		else if (playing->m_type == PAT_3DSample) {
-			closeBuffer(playing->m_bufferHandle);	// close it so as not to leak it.
+			if (playing->m_source && playing->m_bufferHandle) {
+				alSourcei(playing->m_source, AL_BUFFER, 0);
+			}
+			closeBuffer(playing->m_bufferHandle);
 			playing->m_bufferHandle = playSample3D(playing->m_audioEventRTS, playing);
 
 			// If we don't have a file now, then we should drop to the stopped status so that 
@@ -2893,6 +2899,10 @@ Real OpenALAudioManager::getEffectiveVolume(AudioEventRTS* event) const
 //-------------------------------------------------------------------------------------------------
 Bool OpenALAudioManager::startNextLoop(PlayingAudio* looping)
 {
+	if ((looping->m_type == PAT_Sample || looping->m_type == PAT_3DSample) &&
+		looping->m_source && looping->m_bufferHandle) {
+		alSourcei(looping->m_source, AL_BUFFER, 0);
+	}
 	closeBuffer(looping->m_bufferHandle);
 	looping->m_bufferHandle = 0;
 
