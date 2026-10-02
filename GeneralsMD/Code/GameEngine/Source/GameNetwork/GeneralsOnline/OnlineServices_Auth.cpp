@@ -14,8 +14,14 @@
 #include <wincred.h>
 #include <shellapi.h>
 #pragma comment(lib, "Crypt32.lib")
-#elif defined(SAGE_USE_SDL3)
+#endif
+
+#if defined(SAGE_USE_SDL3)
 #include <SDL3/SDL.h>
+#endif
+
+#if defined(__APPLE__)
+#include <Security/Security.h>
 #endif
 
 #if defined(USE_TEST_ENV)
@@ -58,6 +64,86 @@ struct AuthResponse
 
 namespace
 {
+#if defined(__APPLE__)
+	CFMutableDictionaryRef CreateAppleCredentialQuery()
+	{
+		CFMutableDictionaryRef query = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
+			&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+		CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword);
+		CFDictionarySetValue(query, kSecAttrService, CFSTR("GeneralsXZH.Online"));
+		CFDictionarySetValue(query, kSecAttrAccount, CFSTR("refresh_token"));
+		return query;
+	}
+
+	bool SaveAppleRefreshToken(const std::string& token)
+	{
+		if (token.empty())
+			return false;
+
+		CFDataRef tokenData = CFDataCreate(kCFAllocatorDefault,
+			reinterpret_cast<const UInt8*>(token.data()), static_cast<CFIndex>(token.size()));
+		if (tokenData == nullptr)
+			return false;
+
+		CFMutableDictionaryRef query = CreateAppleCredentialQuery();
+		CFMutableDictionaryRef update = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
+			&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+		CFDictionarySetValue(update, kSecValueData, tokenData);
+
+		OSStatus status = SecItemUpdate(query, update);
+		if (status == errSecItemNotFound)
+		{
+			CFDictionarySetValue(query, kSecValueData, tokenData);
+			status = SecItemAdd(query, nullptr);
+		}
+
+		CFRelease(update);
+		CFRelease(query);
+		CFRelease(tokenData);
+		return status == errSecSuccess;
+	}
+
+	bool LoadAppleRefreshToken(std::string& token)
+	{
+		token.clear();
+		CFMutableDictionaryRef query = CreateAppleCredentialQuery();
+		CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue);
+		CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne);
+
+		CFTypeRef result = nullptr;
+		const OSStatus status = SecItemCopyMatching(query, &result);
+		CFRelease(query);
+		if (status != errSecSuccess || result == nullptr)
+		{
+			if (result != nullptr)
+				CFRelease(result);
+			return false;
+		}
+
+		bool loaded = false;
+		if (CFGetTypeID(result) == CFDataGetTypeID())
+		{
+			CFDataRef data = static_cast<CFDataRef>(result);
+			const UInt8* bytes = CFDataGetBytePtr(data);
+			const CFIndex length = CFDataGetLength(data);
+			if (bytes != nullptr && length > 0)
+			{
+				token.assign(reinterpret_cast<const char*>(bytes), static_cast<size_t>(length));
+				loaded = !token.empty();
+			}
+		}
+		CFRelease(result);
+		return loaded;
+	}
+
+	void DeleteAppleRefreshToken()
+	{
+		CFMutableDictionaryRef query = CreateAppleCredentialQuery();
+		SecItemDelete(query);
+		CFRelease(query);
+	}
+#endif
+
 	std::string GetBanReason(const std::string& responseBody)
 	{
 		nlohmann::json jsonObject = nlohmann::json::parse(responseBody, nullptr, false, true);
@@ -617,6 +703,9 @@ void NGMP_OnlineServices_AuthInterface::LogoutOfMyAccount()
 	NGMP_OnlineServicesManager::GetInstance()->GetHTTPManager()->SendDELETERequest(strURI.c_str(), EIPProtocolVersion::DONT_CARE, mapHeaders, "", nullptr);
 
 	// delete local credentials cache
+#if defined(__APPLE__)
+	DeleteAppleRefreshToken();
+#else
 	std::string strCredentialsCachePath = GetCredentialsFilePath();
 
 	std::error_code ec;
@@ -624,6 +713,10 @@ void NGMP_OnlineServices_AuthInterface::LogoutOfMyAccount()
 	{
 		std::filesystem::remove(strCredentialsCachePath, ec);
 	}
+#endif
+	m_strRefreshToken.clear();
+	m_strToken.clear();
+	m_tokenCreationTime = -1;
 }
 
 void NGMP_OnlineServices_AuthInterface::LoginAsSecondaryDevAccount()
@@ -637,10 +730,14 @@ void NGMP_OnlineServices_AuthInterface::SaveCredentials(const char* szRefreshTok
 	m_tokenCreationTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
 #if defined(__APPLE__)
-	// Phase 1: keep the refresh token only in memory. The iOS shell exposes its
-	// Documents area through File Sharing, so writing plaintext credentials to
-	// the user-data directory would expose the token. Persistent Apple login can
-	// move to Keychain in a later milestone.
+	if (!SaveAppleRefreshToken(m_strRefreshToken))
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[AUTH] Failed to save Apple refresh token to Keychain");
+	}
+	else
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[AUTH] Saved Apple refresh token to Keychain");
+	}
 	return;
 #endif
 
@@ -710,7 +807,13 @@ void NGMP_OnlineServices_AuthInterface::SaveCredentials(const char* szRefreshTok
 bool NGMP_OnlineServices_AuthInterface::GetCredentials()
 {
 #if defined(__APPLE__)
+	if (LoadAppleRefreshToken(m_strRefreshToken))
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[AUTH] Loaded Apple refresh token from Keychain");
+		return true;
+	}
 	m_strRefreshToken.clear();
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[AUTH] No Apple refresh token found in Keychain");
 	return false;
 #endif
 #if defined(_DEBUG) && !defined(USE_TEST_ENV) && !defined(USE_DEBUG_ON_LIVE_SERVER)
