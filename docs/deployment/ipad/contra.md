@@ -12,7 +12,7 @@ The workflow uses the current shared iOS engine, Zero Hour GameData and Contra X
 
 Expected IPA: `GeneralsZH-ContraX-unsigned.ipa`.
 
-Local fallback on `ios-clean`:
+Local fallback on `main`:
 
 ```powershell
 .\scripts\build\ios\windows\build-contra.ps1

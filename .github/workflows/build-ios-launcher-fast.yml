@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - ios-clean
+      - main
     paths:
       - 'GeneralsMD/Code/Main/IOSProfileLauncher.mm'
       - 'GeneralsMD/Code/Main/IOSProfileLauncher.h'
@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BASE_RUN_ID="$(gh run list             --repo "${GITHUB_REPOSITORY}"             --workflow build-ios-shell.yml             --branch ios-clean             --status success             --limit 1             --json databaseId             --jq '.[0].databaseId')"
+          BASE_RUN_ID="$(gh run list             --repo "${GITHUB_REPOSITORY}"             --workflow build-ios-shell.yml             --branch main             --status success             --limit 1             --json databaseId             --jq '.[0].databaseId')"
 
           test -n "${BASE_RUN_ID}" || {
             echo "ERROR: no successful Build iOS Shell run found"

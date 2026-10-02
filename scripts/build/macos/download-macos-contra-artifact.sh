@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 REPO="${GX_GITHUB_REPO:-dvorovrus/Generals-Mac-iOS-iPad}"
-BRANCH="${GX_GITHUB_BRANCH:-ios-clean}"
+BRANCH="${GX_GITHUB_BRANCH:-main}"
 WORKFLOW="build-macos-contra-dev.yml"
 ARTIFACT="GeneralsZH-ContraX-macos-arm64"
 DEST="${1:-${ROOT}/build/macos-stable}"

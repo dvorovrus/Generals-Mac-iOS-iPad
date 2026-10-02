@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoName = "dvorovrus/Generals-Mac-iOS-iPad"
-$Branch = "ios-clean"
+$Branch = "main"
 $FastWorkflow = "build-ios-launcher-fast.yml"
 $FullWorkflow = "build-ios-shell.yml"
 $Artifact = "GeneralsXZH-launcher-unsigned"
