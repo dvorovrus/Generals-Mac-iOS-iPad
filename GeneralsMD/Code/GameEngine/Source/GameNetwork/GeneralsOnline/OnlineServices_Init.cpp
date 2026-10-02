@@ -955,14 +955,19 @@ void NGMP_OnlineServicesManager::Init()
 	g_MainThreadID = std::this_thread::get_id();
 
 	// initialize child classes, these need the platform handle
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Init: auth");
 	m_pAuthInterface = new NGMP_OnlineServices_AuthInterface();
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Init: lobby");
 	m_pLobbyInterface = new NGMP_OnlineServices_LobbyInterface();
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Init: rooms");
 	m_pRoomInterface = new NGMP_OnlineServices_RoomsInterface();
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Init: stats");
 	m_pStatsInterface = new NGMP_OnlineServices_StatsInterface();
 	m_pMatchmakingInterface = new NGMP_OnlineServices_MatchmakingInterface();
 	m_pSocialInterface = new NGMP_OnlineServices_SocialInterface();
 
 	m_pHTTPManager = new HTTPManager();
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Init: HTTP");
 	m_pHTTPManager->Initialize();
 
     std::string strPlugin = NGMP_OnlineServicesManager::Settings.GetAnticheatPlugin();
@@ -988,6 +993,7 @@ void NGMP_OnlineServicesManager::Init()
 
 		moneyVal += 50000;
 	}
+	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] Init: complete");
 
 #if 0
 	std::map<AsciiString, RGBColor> mapColors;

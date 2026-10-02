@@ -252,7 +252,8 @@ LadderList::LadderList()
 {
 	//Int profile = TheGameSpyInfo->getLocalProfileID();
 
-	AsciiString rawMotd = TheGameSpyConfig->getLeftoverConfig();
+	// GO does not bootstrap the legacy GameSpy configuration service.
+	AsciiString rawMotd = TheGameSpyConfig ? TheGameSpyConfig->getLeftoverConfig() : AsciiString::TheEmptyString;
 	AsciiString line;
 	Bool inLadders = FALSE;
 	Bool inSpecialLadders = FALSE;

@@ -254,8 +254,12 @@ NSDictionary<NSString *, NSString *> *DefaultContraSettings()
     };
 }
 
+bool ProfileDirectoryExists(NSString *profileDirectory);
+
 void EnsureDefaultContraSettings()
 {
+    if (!ProfileDirectoryExists(@"contra-x"))
+        return;
     NSString *path = ContraSettingsPath();
     if ([[NSFileManager defaultManager] fileExistsAtPath:path])
         return;
@@ -616,10 +620,13 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self.settingsView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-18.0],
     ]];
 
-    UILabel *title = MakeLabel(@"Contra X settings", 26.0, UIFontWeightBold);
+    BOOL contraInstalled = ProfileDirectoryExists(@"contra-x");
+    UILabel *title = MakeLabel(contraInstalled ? @"Contra X settings" : @"Game settings", 26.0, UIFontWeightBold);
     title.textAlignment = NSTextAlignmentLeft;
 
-    UILabel *note = MakeLabel(@"iPad equivalents of the official Contra X launcher options. Changes apply on the next game launch.", 13.0, UIFontWeightRegular);
+    UILabel *note = MakeLabel(contraInstalled
+        ? @"iPad equivalents of the official Contra X launcher options. Changes apply on the next game launch."
+        : @"Graphics, camera and performance settings. Changes apply on the next game launch.", 13.0, UIFontWeightRegular);
     note.textAlignment = NSTextAlignmentLeft;
     note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
@@ -710,6 +717,12 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self sliderRow:@"Frames per second" slider:self.fpsSlider value:self.fpsValue],
     ]];
     controls.translatesAutoresizingMaskIntoConstraints = NO;
+    // The first eleven rows are specific to the optional Contra profile.
+    if (!contraInstalled)
+    {
+        for (NSUInteger index = 0; index < 11; ++index)
+            controls.arrangedSubviews[index].hidden = YES;
+    }
     controls.axis = UILayoutConstraintAxisVertical;
     controls.alignment = UIStackViewAlignmentFill;
     controls.spacing = 9.0;
@@ -1397,7 +1410,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     contra[@"AnisotropyLevel"] = anisotropy;
     contra[@"AntiAliasing"] = antiAliasing;
 
-    if (!WriteKeyValueFile(ContraSettingsPath(), contra, error))
+    if (ProfileDirectoryExists(@"contra-x") && !WriteKeyValueFile(ContraSettingsPath(), contra, error))
         return NO;
 
     NSMutableDictionary<NSString *, NSString *> *options = ReadKeyValueFile(EngineOptionsPath());

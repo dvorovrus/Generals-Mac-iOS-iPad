@@ -246,6 +246,12 @@ void GetAdditionalDisconnectsFromUserFile(PSPlayerStats *stats)
 // default values
 RankPoints::RankPoints()
 {
+#if defined(GENERALS_ONLINE)
+	// GO initializes ranks without the legacy GameSpy configuration service.
+	const Int defaults[MAX_RANKS] = {0, 5, 10, 20, 50, 100, 200, 500, 1000, 2000};
+	for (Int rank = 0; rank < MAX_RANKS; ++rank)
+		m_ranks[rank] = defaults[rank];
+#else
 	m_ranks[RANK_PRIVATE]							= 0;
 	m_ranks[RANK_CORPORAL]						= TheGameSpyConfig->getPointsForRank(RANK_CORPORAL); // 5
 	m_ranks[RANK_SERGEANT]						= TheGameSpyConfig->getPointsForRank(RANK_SERGEANT); // 10
@@ -256,6 +262,7 @@ RankPoints::RankPoints()
 	m_ranks[RANK_BRIGADIER_GENERAL]		= TheGameSpyConfig->getPointsForRank(RANK_BRIGADIER_GENERAL); // 500
 	m_ranks[RANK_GENERAL]							= TheGameSpyConfig->getPointsForRank(RANK_GENERAL); // 1000
 	m_ranks[RANK_COMMANDER_IN_CHIEF]	= TheGameSpyConfig->getPointsForRank(RANK_COMMANDER_IN_CHIEF); // 2000
+#endif
 
 	m_winMultiplier = 3.0f;
 	m_lostMultiplier = 0.0f;
