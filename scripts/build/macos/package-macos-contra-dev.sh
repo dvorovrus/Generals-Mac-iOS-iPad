@@ -6,6 +6,12 @@ ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 BUILD="${ROOT}/build/macos-vulkan"
 OUT="${ROOT}/build/macos-package"
 APP_NAME="GeneralsZH-ContraX-Dev.app"
+ONLINE="${GX_MAC_ONLINE:-0}"
+if [[ "${ONLINE}" == "1" ]]; then
+  BUILD="${ROOT}/build/macos-vulkan-online"
+  OUT="${ROOT}/build/macos-online-package"
+  APP_NAME="GeneralsZH-Online-Dev.app"
+fi
 APP="${OUT}/${APP_NAME}"
 CONTENTS="${APP}/Contents"
 MACOS="${CONTENTS}/MacOS"
@@ -29,7 +35,7 @@ printf 'commit=%s\n' "${BUILD_COMMIT}" > "${RES}/build-info.txt"
 
 MAC_LAUNCHER_SRC="${ROOT}/scripts/build/macos/MacLauncher.swift"
 MAC_LAUNCHER_BIN="${BIN}/GeneralsXMacLauncher"
-if [[ -f "${MAC_LAUNCHER_SRC}" ]]; then
+if [[ "${ONLINE}" != "1" && -f "${MAC_LAUNCHER_SRC}" ]]; then
   command -v xcrun >/dev/null 2>&1 || { echo "ERROR: xcrun is required to build the macOS launcher"; exit 1; }
   echo "==> Building native macOS launcher"
   xcrun swiftc -parse-as-library -O -framework SwiftUI -framework AppKit "${MAC_LAUNCHER_SRC}" -o "${MAC_LAUNCHER_BIN}"
@@ -51,6 +57,11 @@ cat > "${CONTENTS}/Info.plist" <<'PLIST'
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
+if [[ "${ONLINE}" == "1" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleName GeneralsZH Online Dev" "${CONTENTS}/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName GeneralsZH Online Dev" "${CONTENTS}/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.dvorov.generalszh.online.dev" "${CONTENTS}/Info.plist"
+fi
 
 copy_first() {
   local dst="$1"; shift
@@ -311,10 +322,20 @@ Environment overrides:
   GX_MAC_FULLSCREEN=1
 README
 
+INSTALLER_NAME="Install Contra Data.command"
+TAR="${ROOT}/GeneralsZH-ContraX-macos-arm64.tar"
+if [[ "${ONLINE}" == "1" ]]; then
+  cp "${SCRIPT_DIR}/run-macos-online.sh" "${MACOS}/run.sh"
+  rm -f "${OUT}/Install Contra Data.command"
+  INSTALLER_NAME="Install Online Data.command"
+  cp "${SCRIPT_DIR}/install-macos-online-data.sh" "${OUT}/${INSTALLER_NAME}"
+  cp "${SCRIPT_DIR}/README-Online-Mac.txt" "${OUT}/README-Mac.txt"
+  chmod +x "${MACOS}/run.sh" "${OUT}/${INSTALLER_NAME}"
+  TAR="${ROOT}/GeneralsZH-Online-macos-arm64.tar"
+fi
 codesign --force --deep --sign - "${APP}"
 
-TAR="${ROOT}/GeneralsZH-ContraX-macos-arm64.tar"
 rm -f "${TAR}"
-tar -C "${OUT}" -cf "${TAR}" "${APP_NAME}" "Install Contra Data.command" "README-Mac.txt"
+tar -C "${OUT}" -cf "${TAR}" "${APP_NAME}" "${INSTALLER_NAME}" "README-Mac.txt"
 echo "READY: ${TAR}"
 du -h "${TAR}"

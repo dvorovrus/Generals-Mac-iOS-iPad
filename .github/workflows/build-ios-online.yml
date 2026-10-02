@@ -25,6 +25,7 @@ on:
       - 'scripts/build/ios/fetch-moltenvk.sh'
       - 'scripts/build/ios/stage-fonts.sh'
       - '.github/workflows/build-ios-online.yml'
+      - '.github/workflows/build-macos-online.yml'
 
 permissions:
   contents: read

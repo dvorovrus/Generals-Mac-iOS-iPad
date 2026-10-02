@@ -52,6 +52,9 @@ GX_BUNDLE_ID=com.dvorov.generalszh.launcher ./scripts/build/ios/package-shell.sh
 
 ## Architecture And Release Routing
 
+- Online changes on `feature/generals-online-apple` run independent iOS and macOS workflows: `build-ios-online.yml` and `build-macos-online.yml`. Each platform has separate dependency/compiler caches and concurrency groups.
+- macOS Online uses the `macos-vulkan-online` preset. Package it with `GX_MAC_ONLINE=1 bash scripts/build/macos/package-macos-contra-dev.sh`; the shared packager emits `GeneralsZH-Online-macos-arm64.tar` containing the app and `Install Online Data.command`. Retail data is imported locally from an Original/Online IPA into `~/GeneralsX/Online/GeneralsZH`. Runtime log: `~/Library/Logs/GeneralsXZH/online-dev.log`.
+
 - `Core/` contains shared engine/libraries; `GeneralsMD/` is the Zero Hour implementation. The main target is `z_generals`, emitted as `GeneralsXZH`; non-Windows startup is `GeneralsMD/Code/Main/SDL3Main.cpp`.
 - The native UIKit launcher is `GeneralsMD/Code/Main/IOSProfileLauncher.mm`, built as `libGeneralsXLauncher.dylib`. It is not React, Vite, WebKit, or remote content.
 - Launcher selection becomes `-mod <app>/Profiles/enhanced` or `-mod <app>/Profiles/contra-x`; an explicit caller-supplied `-mod` takes precedence. Shared retail data is under `GameData/`; optional mods are isolated under `Profiles/`.
