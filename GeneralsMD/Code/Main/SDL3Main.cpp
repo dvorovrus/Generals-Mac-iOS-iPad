@@ -62,6 +62,10 @@
 #include "Common/version.h"  // GeneralsX @bugfix BenderAI 14/02/2026 Version class + TheVersion extern
 #include "SDL3GameEngine.h"
 
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+#include "IOSProfileLauncher.h"
+#endif
+
 // DXVK WSI
 #define DXVK_WSI_SDL3 1
 #include <wsi/native_wsi.h>
@@ -245,6 +249,78 @@ GameEngine *CreateGameEngine(void)
  * @param argv Command line arguments
  * @return Exit code (0 = success)
  */
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+// GeneralsX @feature dvorovrus 25/09/2026 Convert the launcher's profile choice
+// into the engine's existing -mod directory mechanism. Base assets remain in
+// GameData; mod-only overlays live outside it in <bundle>/Profiles so vanilla
+// never sees Enhanced/Contra archives unless explicitly selected.
+static void InjectIOSProfileModArgument(const char *profileId)
+{
+    if (profileId == nullptr || strcmp(profileId, "vanilla") == 0)
+        return;
+
+    for (int i = 1; i < __argc; ++i)
+    {
+        if (__argv[i] != nullptr &&
+            (strcmp(__argv[i], "-mod") == 0 || strcmp(__argv[i], "--mod") == 0))
+        {
+            fprintf(stderr, "INFO: iOS launcher: explicit -mod already present, keeping caller override\n");
+            return;
+        }
+    }
+
+    const char *profileDir = nullptr;
+    if (strcmp(profileId, "enhanced") == 0)
+        profileDir = "enhanced";
+    else if (strcmp(profileId, "contra-x") == 0)
+        profileDir = "contra-x";
+    else
+        return;
+
+    if (__argc <= 0 || __argv[0] == nullptr)
+        return;
+
+    const char *slash = strrchr(__argv[0], '/');
+    if (slash == nullptr)
+        return;
+
+    const size_t appDirLength = (size_t)(slash - __argv[0]);
+    static char modPath[1024];
+    if (appDirLength + strlen(profileDir) + 12 >= sizeof(modPath))
+    {
+        fprintf(stderr, "ERROR: iOS launcher: profile path is too long\n");
+        return;
+    }
+
+    memcpy(modPath, __argv[0], appDirLength);
+    modPath[appDirLength] = '\0';
+    strncat(modPath, "/Profiles/", sizeof(modPath) - strlen(modPath) - 1);
+    strncat(modPath, profileDir, sizeof(modPath) - strlen(modPath) - 1);
+
+    if (access(modPath, R_OK) != 0)
+    {
+        fprintf(stderr, "ERROR: iOS launcher: selected profile '%s' is missing at %s\n",
+                profileId, modPath);
+        return;
+    }
+
+    static char modFlag[] = "-mod";
+    static char *profileArgv[64];
+    int count = 0;
+    for (int i = 0; i < __argc && count < 61; ++i)
+        profileArgv[count++] = __argv[i];
+
+    profileArgv[count++] = modFlag;
+    profileArgv[count++] = modPath;
+    profileArgv[count] = nullptr;
+
+    __argv = profileArgv;
+    __argc = count;
+
+    fprintf(stderr, "INFO: iOS launcher: profile '%s' -> -mod %s\n", profileId, modPath);
+}
+#endif
+
 int main(int argc, char* argv[])
 {
 	int exitcode = 1;
@@ -491,6 +567,15 @@ int main(int argc, char* argv[])
 		// TheSuperHackers @build felipebraz 10/02/2026 Phase 1.5
 		// Store argc/argv for CommandLine parser to access via _NSGetArgc/_NSGetArgv or /proc/self/cmdline
 		// For now, let CommandLine::parseCommandLineForStartup() handle this
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+		// GeneralsX @feature dvorovrus 25/09/2026 Show the bundled Vite launcher
+		// before command-line parsing, then inject the selected profile through
+		// the engine's native -mod directory support.
+		const char *selectedProfile = GeneralsXRunIOSProfileLauncher();
+		fprintf(stderr, "INFO: iOS launcher selected profile: %s\n",
+		        selectedProfile != nullptr ? selectedProfile : "vanilla");
+		InjectIOSProfileModArgument(selectedProfile);
+#endif
 		CommandLine::parseCommandLineForStartup();
 
 		// GeneralsX @bugfix Copilot 17/05/2026 Skip SDL3 window bootstrap for CLI/headless replay execution.

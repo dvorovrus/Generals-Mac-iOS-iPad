@@ -31,7 +31,14 @@ if (CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 # Top level project, doesn't really affect anything.
-project(genzh LANGUAGES C CXX)
+# GeneralsX @build dvorovrus 26/09/2026 Enable Objective-C++ from the
+# top-level project on iOS so native WKWebView launcher sources get a complete
+# compiler rule set before subdirectories are generated.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    project(genzh LANGUAGES C CXX OBJCXX)
+else()
+    project(genzh LANGUAGES C CXX)
+endif()
 
 # GeneralsX @build BenderAI 10/02/2026
 # Linux port: Make CompatLib headers globally accessible so Core libraries (WWLib, WWMath, etc.)
