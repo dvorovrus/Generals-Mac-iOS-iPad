@@ -154,12 +154,13 @@ jobs:
         run: |
           mkdir -p logs
           NPROC=$(sysctl -n hw.ncpu)
-          cmake --build build/ios-vulkan-online --target z_generals -j "${NPROC}" 2>&1 | tee logs/build_ios_online.log
+          # Keep compiling independent objects after errors to expose all current blockers.
+          cmake --build build/ios-vulkan-online --target z_generals -j "${NPROC}" -- -k 0 2>&1 | tee logs/build_ios_online.log
           test ${PIPESTATUS[0]} -eq 0
 
       - name: Compiler cache statistics
         if: ${{ !cancelled() && (steps.engine-build.outcome == 'success' || steps.engine-build.outcome == 'failure') }}
-        run: ccache --show-stats
+        run: ccache --show-stats --verbose
 
       - name: Save compiler cache
         if: ${{ !cancelled() && (steps.engine-build.outcome == 'success' || steps.engine-build.outcome == 'failure') }}

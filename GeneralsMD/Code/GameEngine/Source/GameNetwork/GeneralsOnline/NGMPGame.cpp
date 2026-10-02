@@ -62,7 +62,7 @@ NGMPGame::~NGMPGame()
 	// Force camera to update from config
     TheTacticalView->setDefaultView(DEG_TO_RADF(TheGlobalData->m_cameraPitch),
         DEG_TO_RADF(TheGlobalData->m_cameraYaw),
-        1.0f, true);
+        1.0f);
 }
 
 void NGMPGame::SyncWithLobby(LobbyEntry& lobby)
@@ -513,8 +513,7 @@ void NGMPGame::launchGame(void)
 	// Force camera to update from config
     TheTacticalView->setDefaultView(DEG_TO_RADF(TheGlobalData->m_cameraPitch),
         DEG_TO_RADF(TheGlobalData->m_cameraYaw),
-        1.0f,
-		false);
+        1.0f);
 
 
 	// shutdown the top, but do not pop it off the stack
@@ -584,6 +583,7 @@ void NGMPGame::reset(void)
 	m_isQM = FALSE;
 }
 
+#if defined(GENERALS_ONLINE_ENABLE_MATCH_START_COUNTDOWN)
 void NGMPGame::StartCountdown()
 {
 	m_bCountdownStarted = true;
@@ -596,6 +596,7 @@ void NGMPGame::StartCountdown()
 		pWS->SendData_CountdownStarted();
 	}
 }
+#endif
 
 Bool NGMPGame::canKickOnObserversDisabled()
 {

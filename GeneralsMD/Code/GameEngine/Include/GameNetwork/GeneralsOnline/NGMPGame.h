@@ -1,5 +1,6 @@
 #pragma once
 #include "GameNetwork/GameInfo.h"
+#include "GameNetwork/GeneralsOnline/NextGenMP_defines.h"
 #include <chrono>
 
 class LobbyEntry;
