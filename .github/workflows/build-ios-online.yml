@@ -1,5 +1,5 @@
 # iOS-only build with persistent dependency and compiler caches
-name: Build iOS Generals Online
+name: Online | iPad | Build
 
 on:
   workflow_dispatch:

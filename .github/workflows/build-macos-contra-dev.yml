@@ -1,4 +1,4 @@
-name: Build macOS Contra Dev
+name: Contra X | macOS | Dev Build
 
 on:
   workflow_dispatch:

@@ -1,5 +1,5 @@
 # iOS-only clean build
-name: Build iOS Shell
+name: Shared | iPad | Engine Shell
 
 on:
   workflow_dispatch:
