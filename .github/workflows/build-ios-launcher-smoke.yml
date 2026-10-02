@@ -1,4 +1,4 @@
-name: Build iOS Native Launcher Smoke
+name: Legacy | iPad | Launcher Smoke
 
 on:
   workflow_dispatch:

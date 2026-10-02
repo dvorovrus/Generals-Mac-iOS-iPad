@@ -1,4 +1,4 @@
-name: Build Zero Hour Launcher (Vite)
+name: Legacy | Launcher | Vite
 
 on:
   workflow_dispatch:

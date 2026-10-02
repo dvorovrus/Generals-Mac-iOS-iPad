@@ -1,4 +1,4 @@
-name: Build iOS Launcher Shell
+name: Legacy | iPad | Launcher Shell
 
 on:
   workflow_dispatch:
