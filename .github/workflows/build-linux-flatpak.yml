@@ -1,4 +1,4 @@
-name: Build Linux Flatpak
+name: Original | Linux | Flatpak
 
 permissions:
   contents: read
