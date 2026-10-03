@@ -27,7 +27,7 @@
         "title": "Contra X Beta 2 + Patch 1",
         "status": "stable",
         "branch": "main",
-        "buildMode": "github",
+        "buildMode": "hybrid",
         "workflow": "build-ios-contra.yml",
         "artifact": "GeneralsZH-ContraX-iPad-unsigned",
         "artifactFile": "GeneralsZH-ContraX-unsigned.ipa",
@@ -35,12 +35,14 @@
         "installMode": "sideloadly",
         "localFallbackScript": "scripts/build/ios/windows/build-contra.ps1",
         "localOutput": "GeneralsZH-ContraX-unsigned.ipa"
+,
+        "note": "Windows default: download the shared iPad engine shell from GitHub and package the full Contra X IPA locally. The full GitHub workflow remains available as a manual backup/release build."
       },
       "enhanced": {
         "title": "Enhanced",
         "status": "stable",
         "branch": "main",
-        "buildMode": "github",
+        "buildMode": "hybrid",
         "workflow": "build-ios-enhanced.yml",
         "artifact": "GeneralsZH-Enhanced-iPad-unsigned",
         "artifactFile": "GeneralsZH-Enhanced-unsigned.ipa",
@@ -48,6 +50,8 @@
         "installMode": "sideloadly",
         "localFallbackScript": "scripts/build/ios/windows/build-enhanced.ps1",
         "localOutput": "GeneralsZH-Enhanced-unsigned.ipa"
+,
+        "note": "Windows default: download the shared iPad engine shell from GitHub and package the full Enhanced IPA locally. The full GitHub workflow remains available as a manual backup/release build."
       },
       "all": {
         "title": "All-in-One: Original + Enhanced + Contra X",

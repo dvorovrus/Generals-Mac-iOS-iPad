@@ -10,6 +10,7 @@ param(
 
     [string]$Variant,
     [string]$RunId,
+    [string]$ShellRunId,
     [string]$File,
     [switch]$Wait,
     [switch]$NoLaunch
@@ -45,7 +46,9 @@ Usage:
 
 Notes:
   - Cloud builds use GitHub CLI (gh).
-  - Enhanced/All-in-One use the existing local main packagers.
+  - Enhanced and Contra X use hybrid mode on Windows: shared GitHub engine shell + local full IPA packaging.
+  - Use -ShellRunId with build/full only when you need a specific Shared iPad Engine Shell run.
+  - Full GitHub Enhanced/Contra artifacts remain available through the explicit download command / -RunId.
   - iPad signing remains in Sideloadly; this tool prepares the exact IPA and opens it.
   - macOS installation is performed on the Mac with scripts/deploy/macos/generals-deploy.sh.
 "@
@@ -99,21 +102,24 @@ function Invoke-Update {
     }
 
     Write-Host "==> Fetching origin/$branch" -ForegroundColor Cyan
-    & git -C $RepoRoot fetch origin $branch
+    & git -C $RepoRoot fetch origin "+refs/heads/$branch`:refs/remotes/origin/$branch"
     if ($LASTEXITCODE -ne 0) { throw "git fetch failed" }
 
     $current = Get-CurrentBranch
     if ($current -eq $branch) {
-        $dirty = & git -C $RepoRoot status --porcelain
-        if ($dirty) {
-            Write-Host "Working tree has local changes; fetched only, did not pull." -ForegroundColor Yellow
+        & git -C $RepoRoot diff --quiet
+        $worktreeDirty = $LASTEXITCODE -ne 0
+        & git -C $RepoRoot diff --cached --quiet
+        $indexDirty = $LASTEXITCODE -ne 0
+        if ($worktreeDirty -or $indexDirty) {
+            Write-Host "Working tree has tracked local changes; fetched only, did not fast-forward." -ForegroundColor Yellow
         } else {
-            & git -C $RepoRoot pull --ff-only origin $branch
-            if ($LASTEXITCODE -ne 0) { throw "git pull --ff-only failed" }
+            & git -C $RepoRoot merge --ff-only "refs/remotes/origin/$branch"
+            if ($LASTEXITCODE -ne 0) { throw "git merge --ff-only origin/$branch failed" }
         }
     } else {
         Write-Host "Current branch: $current" -ForegroundColor DarkGray
-        Write-Host "Variant branch: $branch (fetched; no automatic branch switch)" -ForegroundColor DarkGray
+        Write-Host "Variant branch: $branch (fetched; no automatic branch switch in update-only mode)" -ForegroundColor DarkGray
     }
 }
 
@@ -168,6 +174,118 @@ function Invoke-CloudBuild {
     return $id
 }
 
+function Ensure-VariantBranch {
+    param($Config)
+    $branch = [string]$Config.branch
+    if (-not $branch) { return }
+
+    $current = Get-CurrentBranch
+    if ($current -eq $branch) { return }
+
+    & git -C $RepoRoot diff --quiet
+    $worktreeDirty = $LASTEXITCODE -ne 0
+    & git -C $RepoRoot diff --cached --quiet
+    $indexDirty = $LASTEXITCODE -ne 0
+    if ($worktreeDirty -or $indexDirty) {
+        throw "Cannot switch from '$current' to '$branch': tracked local changes are present. Commit or stash them first."
+    }
+
+    & git -C $RepoRoot show-ref --verify --quiet "refs/heads/$branch"
+    if ($LASTEXITCODE -eq 0) {
+        & git -C $RepoRoot switch $branch
+    } else {
+        & git -C $RepoRoot show-ref --verify --quiet "refs/remotes/origin/$branch"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Remote branch origin/$branch is not available. Run update first."
+        }
+        & git -C $RepoRoot switch -c $branch --track "origin/$branch"
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to switch repository to '$branch'."
+    }
+}
+
+function Sync-IpadEngineShell {
+    param([string]$SpecificRunId)
+    Assert-Gh
+
+    $shellConfig = $Catalog.internal.ipadEngineShell
+    $workflow = [string]$shellConfig.workflow
+    $branch = [string]$shellConfig.branch
+    $artifact = [string]$shellConfig.artifact
+
+    $id = $SpecificRunId
+    if (-not $id) {
+        $json = Invoke-Gh -GhArgs @(
+            "run", "list",
+            "--repo", $GitHubRepo,
+            "--workflow", $workflow,
+            "--branch", $branch,
+            "--status", "success",
+            "--limit", "1",
+            "--json", "databaseId"
+        ) | Out-String
+        $rows = $json | ConvertFrom-Json
+        if (-not $rows -or $rows.Count -eq 0) {
+            throw "No successful Shared iPad Engine Shell run found on '$branch'."
+        }
+        $id = [string]$rows[0].databaseId
+    }
+
+    $run = (Invoke-Gh -GhArgs @(
+        "run", "view", [string]$id,
+        "--repo", $GitHubRepo,
+        "--json", "conclusion,headBranch,headSha,workflowName"
+    ) | Out-String) | ConvertFrom-Json
+    if ([string]$run.conclusion -ne "success") {
+        throw "Shared shell run $id is not successful (conclusion: $($run.conclusion))."
+    }
+
+    $shellDir = Join-Path $Workspace "shell"
+    New-Item -ItemType Directory -Force -Path $shellDir | Out-Null
+    $target = Join-Path $shellDir "GeneralsXZH-launcher-unsigned.ipa"
+    $stamp = Join-Path $shellDir "GeneralsXZH-launcher-unsigned.run-id"
+    $cachedRunId = if (Test-Path -LiteralPath $stamp) { (Get-Content -LiteralPath $stamp -Raw).Trim() } else { "" }
+
+    if ((Test-Path -LiteralPath $target) -and $cachedRunId -eq [string]$id) {
+        Write-Host "==> Reusing cached Shared iPad Engine Shell run $id" -ForegroundColor DarkGray
+        return $target
+    }
+
+    $tmp = Join-Path $env:TEMP "generals-ipad-shared-shell-$id"
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+
+    Write-Host "==> Downloading Shared iPad Engine Shell (~20 MB) from run $id" -ForegroundColor Cyan
+    Invoke-Gh -GhArgs @(
+        "run", "download", [string]$id,
+        "--repo", $GitHubRepo,
+        "--name", $artifact,
+        "--dir", $tmp
+    ) | Out-Null
+
+    $ipa = Get-ChildItem -LiteralPath $tmp -Recurse -File -Filter "*.ipa" | Select-Object -First 1
+    if (-not $ipa) {
+        throw "Shared shell artifact from run $id contains no IPA."
+    }
+
+    Copy-Item -LiteralPath $ipa.FullName -Destination $target -Force
+    Set-Content -LiteralPath $stamp -Value ([string]$id) -NoNewline
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+
+    $size = [math]::Round((Get-Item -LiteralPath $target).Length / 1MB, 1)
+    Write-Host "SHELL READY: $target ($size MB, run $id, $($run.headSha))" -ForegroundColor Green
+    return $target
+}
+
+function Invoke-HybridBuild {
+    param($Config)
+    Ensure-VariantBranch $Config
+    Invoke-Update $Config
+    $null = Sync-IpadEngineShell $ShellRunId
+    return Invoke-LocalBuild $Config
+}
+
 function Invoke-LocalBuild {
     param($Config)
     $branch = [string]$Config.branch
@@ -200,7 +318,12 @@ function Invoke-Build {
     if ([string]$Config.buildMode -eq "github") {
         return Invoke-CloudBuild $Config $ShouldWait
     }
+    if ([string]$Config.buildMode -eq "hybrid") {
+        return Invoke-HybridBuild $Config
+    }
     if ([string]$Config.buildMode -eq "local") {
+        Ensure-VariantBranch $Config
+        Invoke-Update $Config
         return Invoke-LocalBuild $Config
     }
     throw "This variant has no build path. $($Config.note)"
@@ -235,8 +358,8 @@ function Invoke-Download {
         return $local
     }
 
-    if ([string]$Config.buildMode -ne "github") {
-        throw "This variant has no downloadable artifact."
+    if ([string]$Config.buildMode -notin @("github", "hybrid")) {
+        throw "This variant has no downloadable GitHub artifact."
     }
 
     Assert-Gh
@@ -282,7 +405,15 @@ function Invoke-IpadInstall {
     }
 
     if (-not $InstallFile) {
-        $InstallFile = Invoke-Download $Config $RunId
+        if ([string]$Config.buildMode -eq "hybrid" -and -not $RunId) {
+            $local = Join-Path $LocalOutputRoot ([string]$Config.localOutput)
+            if (-not (Test-Path -LiteralPath $local)) {
+                throw "Local IPA not found: $local. Run 'full' or 'build' first, or pass -RunId to install a full GitHub backup artifact."
+            }
+            $InstallFile = $local
+        } else {
+            $InstallFile = Invoke-Download $Config $RunId
+        }
     }
     $InstallFile = (Resolve-Path -LiteralPath $InstallFile).Path
     if ([IO.Path]::GetExtension($InstallFile).ToLowerInvariant() -ne ".ipa") {
@@ -326,12 +457,21 @@ function Show-Status {
             "--branch", [string]$Config.branch,
             "--limit", "5"
         )
-    } elseif ([string]$Config.buildMode -eq "local") {
+    } elseif ([string]$Config.buildMode -in @("local", "hybrid")) {
         $path = Join-Path $LocalOutputRoot ([string]$Config.localOutput)
         if (Test-Path -LiteralPath $path) {
             Get-Item -LiteralPath $path | Select-Object FullName, Length, LastWriteTime
         } else {
             Write-Host "No local output yet: $path" -ForegroundColor Yellow
+        }
+        if ([string]$Config.buildMode -eq "hybrid") {
+            $shell = Join-Path (Join-Path $Workspace "shell") "GeneralsXZH-launcher-unsigned.ipa"
+            if (Test-Path -LiteralPath $shell) {
+                Get-Item -LiteralPath $shell | Select-Object FullName, Length, LastWriteTime
+            } else {
+                Write-Host "No cached shared iPad engine shell yet." -ForegroundColor Yellow
+            }
+            Write-Host "Cloud backup workflow: $($Config.workflow)" -ForegroundColor DarkGray
         }
     } else {
         Write-Host $Config.note -ForegroundColor Yellow

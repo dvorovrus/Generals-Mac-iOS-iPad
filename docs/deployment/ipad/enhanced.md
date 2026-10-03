@@ -1,8 +1,8 @@
 # iPad — Enhanced
 
-Canonical source: workflow `Enhanced | iPad | Full Build`.
+Default Windows flow: hybrid packaging. GitHub supplies only the shared iPad engine shell (~20 MB); Zero Hour 1.04 GameData and the local Enhanced profile are packaged on Windows.
 
-Enhanced follows the same lifecycle as Contra X: the shared iPad engine shell is combined with Zero Hour 1.04 GameData and the isolated Enhanced profile, verified, and published as a full unsigned IPA.
+The workflow `Enhanced | iPad | Full Build` remains available as a manual backup/release build that publishes a complete cloud IPA.
 
 ## One-time CI input seed
 
@@ -18,7 +18,13 @@ Private build inputs live in draft release `enhanced-ipad-inputs-v1`. To refresh
 .\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant enhanced
 ```
 
-Published artifact:
+Default local output:
+
+```text
+../output/GeneralsZH-Enhanced-unsigned.ipa
+```
+
+Manual cloud backup artifact:
 
 ```text
 GeneralsZH-Enhanced-iPad-unsigned
