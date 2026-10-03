@@ -7,14 +7,6 @@ on:
         description: "Optional successful Shared iPad Engine Shell run ID; blank uses latest"
         required: false
         type: string
-  workflow_run:
-    workflows:
-      - Shared | iPad | Engine Shell
-    types:
-      - completed
-    branches:
-      - main
-
 permissions:
   contents: write
   actions: read
@@ -34,7 +26,6 @@ env:
 jobs:
   package:
     name: Package Contra X for iPad
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -42,7 +33,7 @@ jobs:
       - name: Checkout iOS packaging code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
+          ref: main
           fetch-depth: 1
           submodules: false
 
@@ -50,14 +41,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MANUAL_RUN_ID: ${{ inputs.shell_run_id }}
-          AUTO_RUN_ID: ${{ github.event.workflow_run.id }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
-            RUN_ID="${AUTO_RUN_ID}"
-          elif [[ -n "${MANUAL_RUN_ID:-}" ]]; then
+          if [[ -n "${MANUAL_RUN_ID:-}" ]]; then
             RUN_ID="${MANUAL_RUN_ID}"
           else
             RUN_ID="$(gh run list \

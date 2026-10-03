@@ -16,7 +16,8 @@ on:
       - 'vcpkg.json'
       - 'vcpkg-lock.json'
       - 'references/fbraz3-dxvk'
-      - 'scripts/build/macos/**'
+      - 'scripts/build/macos/EnhancedMacLauncher.swift'
+      - 'scripts/build/macos/package-macos-enhanced-dev.sh'
       - '.github/workflows/build-macos-enhanced-dev.yml'
 
 permissions:

@@ -16,7 +16,8 @@ on:
       - 'vcpkg.json'
       - 'vcpkg-lock.json'
       - 'references/fbraz3-dxvk'
-      - 'scripts/build/macos/**'
+      - 'scripts/build/macos/MacLauncher.swift'
+      - 'scripts/build/macos/package-macos-contra-dev.sh'
       - '.github/workflows/build-macos-contra-dev.yml'
 
 permissions:
