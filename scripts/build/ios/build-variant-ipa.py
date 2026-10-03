@@ -46,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--enhanced-patch", type=Path)
     parser.add_argument("--contra-beta2", type=Path)
     parser.add_argument("--contra-patch1", type=Path)
+    parser.add_argument("--online-data", type=Path, help="Optional Generals Online data root containing GeneralsOnlineGameData/")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--skip-md5", action="store_true")
     return parser.parse_args()
@@ -65,6 +66,11 @@ def validate(args: argparse.Namespace) -> None:
         b.die(f"shell is not a valid IPA/ZIP: {args.shell}")
     if not zipfile.is_zipfile(args.base_ipa):
         b.die(f"base IPA is not a valid IPA/ZIP: {args.base_ipa}")
+
+    if args.online_data is not None:
+        require(args.online_data, "Generals Online data root")
+        patch = args.online_data / "GeneralsOnlineGameData" / "500_900_CommunityPatch_CoreINI.big"
+        require(patch, "Generals Online community patch")
 
     if args.variant in ("enhanced", "all"):
         enhanced = require(args.enhanced, "Zero Hour Enhanced source")
@@ -113,6 +119,8 @@ def main() -> None:
     if want_contra:
         print(f"Contra B2:  {args.contra_beta2}")
         print(f"Contra P1:  {args.contra_patch1}")
+    if args.online_data is not None:
+        print(f"Online data: {args.online_data}")
     print(f"Output:     {args.output}")
     print()
 
@@ -164,6 +172,15 @@ def main() -> None:
                 continue
             shell_bytes += b.zip_copy(shell, info, out, name)
 
+        online_sources: list[tuple[Path, str]] = []
+        online_rel_lower: set[str] = set()
+        if args.online_data is not None:
+            online_sources = [
+                (source, source.relative_to(args.online_data).as_posix())
+                for source in sorted(path for path in args.online_data.rglob("*") if path.is_file())
+            ]
+            online_rel_lower = {rel.lower() for _, rel in online_sources}
+
         # Shared retail Zero Hour 1.04 data.
         base_prefix = base_app + "GameData/"
         base_bytes = 0
@@ -175,10 +192,21 @@ def main() -> None:
             rel = name[len(base_prefix):]
             if not rel:
                 continue
+            if rel.replace("\\", "/").lower() in online_rel_lower:
+                continue
             base_bytes += b.zip_copy(base, info, out, shell_app + "GameData/" + rel)
             base_files += 1
         if base_files == 0:
             b.die("base IPA contains no GameData files")
+
+        online_bytes = 0
+        online_count = 0
+        if args.online_data is not None:
+            for source, rel in online_sources:
+                payload = source.read_bytes()
+                out.writestr(shell_app + "GameData/" + rel, payload)
+                online_bytes += len(payload)
+                online_count += 1
 
         enhanced_bytes = 0
         enhanced_count = 0
@@ -220,6 +248,8 @@ def main() -> None:
     print("DONE")
     print(f"Shell/runtime: {shell_bytes / 1024 / 1024:.1f} MB raw")
     print(f"GameData:      {base_bytes / 1024 / 1024:.1f} MB raw ({base_files} files)")
+    if args.online_data is not None:
+        print(f"Online data:   {online_bytes / 1024 / 1024:.1f} MB raw ({online_count} files)")
     if want_enhanced:
         print(f"Enhanced:      {enhanced_bytes / 1024 / 1024:.1f} MB raw ({enhanced_count} files)")
     if want_contra:

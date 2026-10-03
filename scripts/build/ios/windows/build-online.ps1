@@ -56,10 +56,14 @@ if (-not $Output) { $Output = Join-Path $Workspace "output\GeneralsZH-Online-FUL
 
 $Builder = Join-Path $RepoRoot "scripts\build\ios\build-variant-ipa.py"
 $Verifier = Join-Path $RepoRoot "scripts\build\ios\verify-variant-ipa.py"
+$SyncOnlineData = Join-Path $RepoRoot "scripts\build\common\sync-generals-online-data.py"
+$OnlineDataStage = Join-Path $Workspace "artifacts\gamedata\online\official"
+$OnlineDataCache = Join-Path $Workspace "cache\generals-online-official"
 
 Require-Path $BaseIpa "Zero Hour full base IPA"
 Require-Path $Builder "IPA builder"
 Require-Path $Verifier "IPA verifier"
+Require-Path $SyncOnlineData "Generals Online data sync helper"
 Assert-GitHubCli
 $Python = Resolve-Python
 
@@ -113,16 +117,20 @@ if (-not (Test-Path -LiteralPath $Shell)) {
 Require-Path $Shell "Downloaded Online shell"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Output) | Out-Null
 
+Write-Host "Syncing official Generals Online data patch and Windows 60 Hz parity seed..." -ForegroundColor Cyan
+& $Python $SyncOnlineData --dest $OnlineDataStage --cache-dir $OnlineDataCache --expected-version 100126_QFE6 --expected-seed 0x808CB29E
+if ($LASTEXITCODE -ne 0) { throw "Generals Online data sync/parity verification failed." }
+
 Write-Host "Packaging retail GameData into the Online shell..." -ForegroundColor Cyan
-& $Python $Builder --variant original --shell $Shell --base-ipa $BaseIpa --output $Output
+& $Python $Builder --variant original --shell $Shell --base-ipa $BaseIpa --online-data $OnlineDataStage --output $Output
 if ($LASTEXITCODE -ne 0) { throw "Online IPA packaging failed." }
 
 Write-Host "Verifying final IPA..." -ForegroundColor Cyan
-& $Python $Verifier --variant original $Output
+& $Python $Verifier --variant original --require-online-data $Output
 if ($LASTEXITCODE -ne 0) { throw "Online IPA verification failed." }
 
 $sizeMb = [math]::Round((Get-Item -LiteralPath $Output).Length / 1MB, 1)
-$SourceInfo = "Run: $RunId`nCommit: $($run.headSha)`nURL: $($run.url)`nShell: $Shell`nBase IPA: $BaseIpa`n"
+$SourceInfo = "Run: $RunId`nCommit: $($run.headSha)`nURL: $($run.url)`nShell: $Shell`nBase IPA: $BaseIpa`nOnline data: $OnlineDataStage`nOfficial GO: 100126_QFE6`nWindows 60Hz shift/add seed: 0x808CB29E`n"
 [System.IO.File]::WriteAllText("$Output.source.txt", $SourceInfo)
 
 Write-Host ""

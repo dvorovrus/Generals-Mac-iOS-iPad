@@ -183,9 +183,12 @@ struct VersionManifestResponse
 
 namespace
 {
-// Phase 1 uses the service-supported 30 Hz client on Apple because this branch
-// does not yet contain the full 60 Hz gameplay simulation patch set.
-constexpr UnsignedInt APPLE_GO_30HZ_SHARED_SHIFT_ADD_SEED = 0xEC7A1D2Du;
+// Current official Generals Online 60 Hz portable client (100126_QFE6).
+// This is the custom Generals shift/add CRC of GeneralsOnlineZH_60.exe before
+// appending version + shared SCB files. Packaging verifies this seed against
+// the official CDN so stale Apple builds fail loudly instead of spoofing parity.
+constexpr UnsignedInt APPLE_GO_60HZ_SHARED_SHIFT_ADD_SEED = 0x808CB29Eu;
+constexpr UnsignedInt APPLE_GO_60HZ_EXPECTED_NETWORK_CRC = 0x216B3EEAu;
 }
 #endif
 
@@ -408,21 +411,23 @@ void NGMP_OnlineServicesManager::PrepareAppleNetworkCRC(std::function<void(void)
 				}
 				catch (...)
 				{
-					NetworkLog(ELogVerbosity::LOG_RELEASE, "Apple GO: failed to parse VersionManifest; continuing with Apple 30Hz shared CRC seed.");
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "Apple GO: failed to parse VersionManifest; continuing with bundled 60Hz parity seed.");
 				}
 			}
 			else
 			{
-				NetworkLog(ELogVerbosity::LOG_RELEASE, "Apple GO: VersionManifest request failed (%d); continuing with Apple 30Hz shared CRC seed.", statusCode);
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "Apple GO: VersionManifest request failed (%d); continuing with bundled 60Hz parity seed.", statusCode);
 			}
 
-			// This seed intentionally provides Mac<->iPad parity for the first
-			// 30 Hz milestone. It does NOT claim Windows CRC parity. Windows
-			// cross-play will use the exact Windows 30 Hz shift-add seed once the
-			// deterministic/cross-platform simulation work is validated.
 			TheWritableGlobalData->m_exeCRC =
-				GlobalData::generateExeCRCForApple(APPLE_GO_30HZ_SHARED_SHIFT_ADD_SEED);
-			NetworkLog(ELogVerbosity::LOG_RELEASE, "Apple 30Hz network CRC prepared: 0x%08X", TheWritableGlobalData->m_exeCRC);
+				GlobalData::generateExeCRCForApple(APPLE_GO_60HZ_SHARED_SHIFT_ADD_SEED);
+			NetworkLog(ELogVerbosity::LOG_RELEASE, "Apple 60Hz Windows-parity network CRC prepared: 0x%08X", TheWritableGlobalData->m_exeCRC);
+			if (TheWritableGlobalData->m_exeCRC != APPLE_GO_60HZ_EXPECTED_NETWORK_CRC)
+			{
+				NetworkLog(ELogVerbosity::LOG_RELEASE,
+					"Apple GO parity warning: expected 0x%08X for official 100126_QFE6 but generated 0x%08X",
+					APPLE_GO_60HZ_EXPECTED_NETWORK_CRC, TheWritableGlobalData->m_exeCRC);
+			}
 
 			if (fnCallback)
 				fnCallback();

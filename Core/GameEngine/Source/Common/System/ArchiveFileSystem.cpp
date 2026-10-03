@@ -49,7 +49,12 @@
 #include "Common/ArchiveFile.h"
 #include "Common/ArchiveFileSystem.h"
 #include "Common/AsciiString.h"
+#include "Common/LocalFileSystem.h"
 #include "Common/PerfTimer.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NGMP_include.h"
+#include "GameNetwork/GeneralsOnline/OnlineServices_Init.h"
+#endif
 
 
 //----------------------------------------------------------------------------
@@ -212,6 +217,46 @@ void ArchiveFileSystem::loadIntoDirectoryTree(ArchiveFile *archiveFile, Bool ove
 
 void ArchiveFileSystem::loadMods()
 {
+#if defined(GENERALS_ONLINE) && defined(GENERALS_ONLINE_COMMUNITY_PATCH_CHANGES)
+	// The official Windows client loads this data patch from user data. Apple
+	// full builds additionally carry it below the configured asset root so the
+	// same deterministic INI set is available on iPad/macOS.
+	if (NGMP_OnlineServicesManager::Settings.DataPacks_UseCommunityPatch())
+	{
+		AsciiString userPatch;
+		userPatch.format("%sGeneralsOnlineGameData/500_900_CommunityPatch_CoreINI.big",
+			TheGlobalData->getPath_UserData().str());
+		const AsciiString portablePatch("GeneralsOnlineGameData/500_900_CommunityPatch_CoreINI.big");
+		const AsciiString candidates[] = { userPatch, portablePatch };
+		Bool loaded = FALSE;
+
+		for (const AsciiString &patchPath : candidates)
+		{
+			if (!TheLocalFileSystem->doesFileExist(patchPath.str()))
+				continue;
+
+			ArchiveFile *archiveFile = openArchiveFile(patchPath.str());
+			if (archiveFile == nullptr)
+				continue;
+
+			// Insert at the front so patched INIs override retail archives. A later
+			// explicit -mod BIG/dir still gets the final say.
+			loadIntoDirectoryTree(archiveFile, TRUE);
+			m_archiveFileMap[patchPath] = archiveFile;
+			NetworkLog(ELogVerbosity::LOG_RELEASE,
+				"Loaded Generals Online community patch (%s)", patchPath.str());
+			loaded = TRUE;
+			break;
+		}
+
+		if (!loaded)
+		{
+			NetworkLog(ELogVerbosity::LOG_RELEASE,
+				"Generals Online community patch missing; Windows lobby INI parity will be unavailable");
+		}
+	}
+#endif
+
 	if (TheGlobalData->m_modBIG.isNotEmpty())
 	{
 		ArchiveFile *archiveFile = openArchiveFile(TheGlobalData->m_modBIG.str());

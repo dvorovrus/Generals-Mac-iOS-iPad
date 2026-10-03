@@ -11,7 +11,7 @@
 //#define USE_MAULLER_ONEDRIVE_FIX 1
 //#define USE_STUBBJAX_TRANSPORT_CONTAIN_FIX 1
 
-#define GENERALS_ONLINE_VERSION_STRING "092826" // NOTE: Format is critical here for Sentry to work
+#define GENERALS_ONLINE_VERSION_STRING "100126_QFE6" // Keep Apple parity aligned with the current official portable client.
 
 #define GENERALS_ONLINE_DISABLE_TEXTURE_FILTERING_AND_AA 1
 
@@ -68,9 +68,7 @@ void showNotificationBox(AsciiString nick, UnicodeString message, bool bPlaySoun
 #define GENERALS_ONLINE_MIN_LOBBY_CAMERA_ZOOM 210
 #define GENERALS_ONLINE_MAX_LOBBY_CAMERA_ZOOM 1000
 
-#if !defined(__APPLE__)
 #define GENERALS_ONLINE_HIGH_FPS_SERVER 1
-#endif
 
 #if defined(GENERALS_ONLINE_HIGH_FPS_SERVER)
 #define GENERALS_ONLINE_CLIENT_ID "gen_online_60hz"

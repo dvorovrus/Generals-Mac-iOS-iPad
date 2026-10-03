@@ -8,6 +8,8 @@ PACKAGE_DIR="${ROOT}/build/macos-online-package"
 APP="${PACKAGE_DIR}/GeneralsZH-Online-Dev.app"
 GAME_BIN="${BUILD}/GeneralsMD/GeneralsXZH"
 GAME_ROOT="${GX_GAME_ROOT:-${HOME}/GeneralsX/Online/GeneralsZH}"
+GO_DATA_SYNC="${ROOT}/scripts/build/common/sync-generals-online-data.py"
+GO_DATA_CACHE="${ROOT}/build/generals-online-official-cache"
 RUN_APP=0
 FORCE_CONFIGURE=0
 CLEAN=0
@@ -90,6 +92,13 @@ if [[ ! -d "${GAME_ROOT}" || -z "$(find "${GAME_ROOT}" -maxdepth 1 -type f -inam
   exit 3
 fi
 
+echo "==> Syncing official Generals Online data patch / Windows 60 Hz parity"
+python3 "${GO_DATA_SYNC}" \
+  --dest "${GAME_ROOT}" \
+  --cache-dir "${GO_DATA_CACHE}" \
+  --expected-version 100126_QFE6 \
+  --expected-seed 0x808CB29E
+
 if [[ "${CLEAN}" == "1" ]]; then
   echo "==> Cleaning local macOS Online build"
   rm -rf "${BUILD}" "${PACKAGE_DIR}"
@@ -145,7 +154,7 @@ echo "READY"
 echo "App: ${APP}"
 echo "GameData: ${GAME_ROOT}"
 echo "Log: ${HOME}/Library/Logs/GeneralsXZH/online-dev.log"
-echo "Retail GameData stays in ~/GeneralsX/Online and is not recopied on incremental builds."
+echo "Retail GameData stays in ~/GeneralsX/Online; the official GO community patch is kept in sync separately."
 
 if [[ "${RUN_APP}" == "1" ]]; then
   echo
