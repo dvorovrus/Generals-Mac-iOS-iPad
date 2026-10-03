@@ -37,12 +37,12 @@
         "localOutput": "GeneralsZH-ContraX-unsigned.ipa"
       },
       "enhanced": {
-        "title": "Zero Hour Enhanced",
-        "status": "stable-local",
+        "title": "Enhanced",
+        "status": "stable",
         "branch": "main",
-        "buildMode": "local",
-        "workflow": null,
-        "artifact": null,
+        "buildMode": "github",
+        "workflow": "build-ios-enhanced.yml",
+        "artifact": "GeneralsZH-Enhanced-iPad-unsigned",
         "artifactFile": "GeneralsZH-Enhanced-unsigned.ipa",
         "installReady": true,
         "installMode": "sideloadly",
@@ -124,12 +124,21 @@
         "logPath": "~/Library/Logs/GeneralsXZH/online-dev.log"
       },
       "enhanced": {
-        "title": "Zero Hour Enhanced",
-        "status": "not-supported",
-        "branch": null,
-        "buildMode": "none",
-        "installReady": false,
-        "note": "No maintained macOS Enhanced build exists yet."
+        "title": "Enhanced",
+        "status": "stable",
+        "branch": "main",
+        "buildMode": "github",
+        "workflow": "build-macos-enhanced-dev.yml",
+        "artifact": "GeneralsZH-Enhanced-macos-arm64",
+        "artifactFile": "GeneralsZH-Enhanced-macos-arm64.tar",
+        "appName": "GeneralsZH-Enhanced-Dev.app",
+        "installReady": true,
+        "installMode": "app-bundle",
+        "dataMode": "gamedata+profile",
+        "dataRoot": "~/GeneralsX/GeneralsZH",
+        "profile": "enhanced",
+        "profileRoot": "~/GeneralsX/Enhanced",
+        "logPath": "~/Library/Logs/GeneralsXZH/enhanced-dev.log"
       },
       "all": {
         "title": "All-in-One",

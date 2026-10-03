@@ -1,4 +1,4 @@
-name: Zero Hour Enhanced | iPad | Full Build
+name: Enhanced | iPad | Full Build
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
     types:
       - completed
     branches:
-      - ios-clean
+      - main
 
 permissions:
   contents: write
@@ -31,7 +31,7 @@ env:
 
 jobs:
   package:
-    name: Package Zero Hour Enhanced for iPad
+    name: Package Enhanced for iPad
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -40,7 +40,7 @@ jobs:
       - name: Checkout iOS packaging code
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'ios-clean' }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
           fetch-depth: 1
           submodules: false
 
@@ -58,7 +58,7 @@ jobs:
           elif [[ -n "${MANUAL_RUN_ID:-}" ]]; then
             RUN_ID="${MANUAL_RUN_ID}"
           else
-            RUN_ID="$(gh run list               --repo "${GITHUB_REPOSITORY}"               --workflow build-ios-shell.yml               --branch ios-clean               --status success               --limit 1               --json databaseId               --jq '.[0].databaseId')"
+            RUN_ID="$(gh run list               --repo "${GITHUB_REPOSITORY}"               --workflow build-ios-shell.yml               --branch main               --status success               --limit 1               --json databaseId               --jq '.[0].databaseId')"
           fi
 
           test -n "${RUN_ID}" || {
@@ -148,7 +148,7 @@ jobs:
           test -f build-input/enhanced/ZHE/!!ZHE8Patch_99.big
           df -h .
 
-      - name: Package Zero Hour Enhanced IPA
+      - name: Package Enhanced IPA
         shell: bash
         run: |
           set -euo pipefail
@@ -156,7 +156,7 @@ jobs:
 
           python3 scripts/build/ios/build-variant-ipa.py             --variant enhanced             --shell "${SHELL_IPA}"             --base-ipa build-input/assets/GeneralsZH-FULL-unsigned.ipa             --enhanced build-input/enhanced/ZHE             --output "${OUTPUT_IPA}"
 
-      - name: Verify Zero Hour Enhanced IPA
+      - name: Verify Enhanced IPA
         shell: bash
         run: |
           set -euo pipefail
@@ -177,7 +177,7 @@ jobs:
           echo "ENHANCED_SHA256=${SHA256}" >> "${GITHUB_ENV}"
           echo "ENHANCED_SIZE_GIB=${SIZE_GIB}" >> "${GITHUB_ENV}"
 
-      - name: Upload Zero Hour Enhanced iPad IPA
+      - name: Upload Enhanced iPad IPA
         uses: actions/upload-artifact@v7
         with:
           name: GeneralsZH-Enhanced-iPad-unsigned
@@ -193,7 +193,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Zero Hour Enhanced | iPad | Full Build"
+            echo "## Enhanced | iPad | Full Build"
             echo "- Engine shell run: ${SHELL_RUN_ID}"
             echo "- Profile: enhanced (dedicated launcher)"
             echo "- Enhanced: v1.0 + patch 28/03/2024"

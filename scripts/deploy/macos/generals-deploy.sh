@@ -30,7 +30,7 @@ Usage:
 
 Options:
   --ipa PATH       Full iPad IPA used as the user's local source of retail GameData.
-                   Contra requires a Contra full IPA so Profiles/contra-x is present.
+                   Profile variants require a matching full IPA (Contra or Enhanced).
   --run-id ID      Download a specific successful GitHub Actions run.
   --run            Open the installed app after install.
   --no-build       For 'full', use the latest successful artifact instead of triggering a build.

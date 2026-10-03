@@ -209,12 +209,15 @@ def main() -> None:
                     out,
                 )
 
-        # A dedicated Contra-only IPA should behave like a standalone game:
-        # skip the profile picker and boot Contra directly. The native launcher
-        # reads this marker before presenting any UI. All-in-one intentionally
-        # has no marker and keeps the normal profile chooser.
-        if args.variant == "contra":
-            out.writestr(shell_app + "AutoLaunchProfile.txt", "contra-x\n")
+        # Dedicated single-profile IPAs behave like standalone games while
+        # keeping the native settings/diagnostics launcher available. All-in-one
+        # intentionally has no marker and keeps the normal profile chooser.
+        dedicated_profile = {
+            "enhanced": "enhanced",
+            "contra": "contra-x",
+        }.get(args.variant)
+        if dedicated_profile is not None:
+            out.writestr(shell_app + "AutoLaunchProfile.txt", dedicated_profile + "\n")
 
     print()
     print("DONE")

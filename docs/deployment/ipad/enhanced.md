@@ -1,27 +1,30 @@
-# iPad — Zero Hour Enhanced
+# iPad — Enhanced
 
-Enhanced currently uses the local Windows packaging path on branch `main`.
+Canonical source: workflow `Enhanced | iPad | Full Build`.
 
-Required local inputs are the existing base full IPA and `input/ZHE`.
+Enhanced follows the same lifecycle as Contra X: the shared iPad engine shell is combined with Zero Hour 1.04 GameData and the isolated Enhanced profile, verified, and published as a full unsigned IPA.
+
+## One-time CI input seed
+
+Private build inputs live in draft release `enhanced-ipad-inputs-v1`. To refresh them from the Windows workspace:
+
+```powershell
+.\repo\scripts\build\ios\windows\seed-enhanced-ci-inputs.ps1 -Replace
+```
 
 ## Full flow
 
 ```powershell
-git switch main
-git pull --ff-only
 .\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant enhanced
 ```
 
-The deployment CLI delegates to:
+Published artifact:
 
 ```text
-scripts/build/ios/windows/build-enhanced.ps1
+GeneralsZH-Enhanced-iPad-unsigned
+└─ GeneralsZH-Enhanced-unsigned.ipa
 ```
 
-Expected output:
+The standalone IPA uses `AutoLaunchProfile.txt=enhanced`, so it opens the dedicated Enhanced launcher with Play, Settings, and Diagnostics.
 
-```text
-../output/GeneralsZH-Enhanced-unsigned.ipa
-```
-
-Installation is the same Sideloadly flow as Original and Contra.
+Installation uses the same Sideloadly flow as Original and Contra. Runtime/device logs belong in `../output/logs/`.

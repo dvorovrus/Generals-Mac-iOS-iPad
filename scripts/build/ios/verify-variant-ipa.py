@@ -60,15 +60,22 @@ def main() -> None:
         contra = [n for n in lower if n.startswith(app_l + "profiles/contra-x/")]
         auto_launch_marker = app_l + "autolaunchprofile.txt"
 
-        if args.variant == "contra":
+        expected_auto_profile = {
+            "enhanced": "enhanced",
+            "contra": "contra-x",
+        }.get(args.variant)
+        if expected_auto_profile is not None:
             if auto_launch_marker not in lower:
-                fail("Contra-only IPA is missing AutoLaunchProfile.txt")
+                fail(f"{args.variant}-only IPA is missing AutoLaunchProfile.txt")
             marker_name = next(n for n in names if n.lower() == auto_launch_marker)
             marker_value = z.read(marker_name).decode("utf-8", errors="replace").strip()
-            if marker_value != "contra-x":
-                fail(f"invalid Contra auto-launch profile: {marker_value!r}")
+            if marker_value != expected_auto_profile:
+                fail(
+                    f"invalid {args.variant} auto-launch profile: "
+                    f"{marker_value!r}, expected {expected_auto_profile!r}"
+                )
         elif auto_launch_marker in lower:
-            fail("unexpected AutoLaunchProfile.txt outside Contra-only variant")
+            fail("unexpected AutoLaunchProfile.txt outside a dedicated single-profile variant")
 
         if len(game) < 10 or not any(n.endswith(".big") for n in game):
             fail("GameData looks incomplete")

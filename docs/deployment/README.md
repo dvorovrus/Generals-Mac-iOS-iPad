@@ -21,13 +21,13 @@ The single source of truth is `scripts/deploy/catalog.json`.
 |---|---|---|---|
 | iPad | Original | GitHub Actions | Ready |
 | iPad | Contra X | GitHub Actions | Ready |
-| iPad | Enhanced | Local Windows packager | Ready |
+| iPad | Enhanced | GitHub Actions | Ready |
 | iPad | All-in-One | Local Windows packager | Ready |
 | iPad | Online | GitHub Actions | Experimental; shell has no retail GameData |
 | macOS | Original | GitHub Actions | Ready |
 | macOS | Contra X | GitHub Actions | Ready |
 | macOS | Online | GitHub Actions | Experimental but installable |
-| macOS | Enhanced | — | Not supported |
+| macOS | Enhanced | GitHub Actions | Ready |
 | macOS | All-in-One | — | Not supported |
 
 ## One-time workspace initialization
@@ -65,6 +65,9 @@ This creates the canonical folders without moving or deleting existing user file
 
 # Full update -> build -> download -> install preparation
 .\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant contra
+
+# Enhanced uses the same GitHub Actions lifecycle
+.\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant enhanced
 ```
 
 ### macOS
@@ -76,6 +79,10 @@ This creates the canonical folders without moving or deleting existing user file
 # Full Contra flow. The IPA supplies retail GameData + Contra profile.
 ./scripts/deploy/macos/generals-deploy.sh full macos contra \
   --ipa ~/Downloads/GeneralsZH-ContraX-unsigned.ipa
+
+# Enhanced. The IPA supplies retail GameData + Enhanced profile.
+./scripts/deploy/macos/generals-deploy.sh full macos enhanced \
+  --ipa ~/Downloads/GeneralsZH-Enhanced-unsigned.ipa
 
 # Original
 ./scripts/deploy/macos/generals-deploy.sh full macos original \
@@ -107,6 +114,7 @@ Generals-iPad/
    └─ macos/
       ├─ original/
       ├─ contra/
+      ├─ enhanced/
       └─ online/
 ```
 
@@ -124,6 +132,7 @@ iPad:
 macOS:
 - `docs/deployment/macos/original.md`
 - `docs/deployment/macos/contra.md`
+- `docs/deployment/macos/enhanced.md`
 - `docs/deployment/macos/online.md`
 
 Troubleshooting:

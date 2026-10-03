@@ -437,16 +437,18 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 - (void)buildMenu
 {
     NSString *bundledProfile = BundledAutoLaunchProfile();
+    BOOL dedicatedEnhanced = [bundledProfile isEqualToString:@"enhanced"];
     BOOL dedicatedContra = [bundledProfile isEqualToString:@"contra-x"];
 
-    UILabel *title = MakeLabel(dedicatedContra ? @"CONTRA X" : @"ZERO HOUR",
-                               34.0,
-                               UIFontWeightBold);
-    UILabel *subtitle = MakeLabel(dedicatedContra
-                                      ? @"Beta 2 + Patch 1 · iPad"
-                                      : @"iPad launcher",
-                                  14.0,
-                                  UIFontWeightRegular);
+    NSString *titleText = dedicatedEnhanced
+        ? @"ZERO HOUR ENHANCED"
+        : (dedicatedContra ? @"CONTRA X" : @"ZERO HOUR");
+    NSString *subtitleText = dedicatedEnhanced
+        ? @"v1.0 + 28/03/2024 patch · iPad"
+        : (dedicatedContra ? @"Beta 2 + Patch 1 · iPad" : @"iPad launcher");
+
+    UILabel *title = MakeLabel(titleText, 34.0, UIFontWeightBold);
+    UILabel *subtitle = MakeLabel(subtitleText, 14.0, UIFontWeightRegular);
     subtitle.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
     UIButton *settings = MakeButton(@"Settings", self, @selector(showSettings));
@@ -457,7 +459,14 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSMutableArray<UIView *> *views = [NSMutableArray arrayWithObjects:title, subtitle, nil];
     NSMutableArray<UIButton *> *buttons = [NSMutableArray array];
 
-    if (dedicatedContra)
+    if (dedicatedEnhanced)
+    {
+        UIButton *enhanced = MakeButton(@"Play Zero Hour Enhanced", self, @selector(launchEnhanced));
+        [views addObject:enhanced];
+        [buttons addObject:enhanced];
+        fprintf(stderr, "INFO: iOS launcher running in dedicated Enhanced mode\n");
+    }
+    else if (dedicatedContra)
     {
         UIButton *contra = MakeButton(@"Play Contra X", self, @selector(launchContra));
         [views addObject:contra];
@@ -1492,15 +1501,22 @@ const char *GeneralsXRunIOSProfileLauncher()
         const char *utf8 = [autoProfile UTF8String];
         strlcpy(gSelectedProfile, utf8, sizeof(gSelectedProfile));
 
-        if (![autoProfile isEqualToString:@"contra-x"])
+        if ([autoProfile isEqualToString:@"enhanced"])
+        {
+            fprintf(stderr,
+                    "INFO: dedicated Enhanced launcher shown for settings access\n");
+        }
+        else if ([autoProfile isEqualToString:@"contra-x"])
+        {
+            fprintf(stderr,
+                    "[CONTRA-SETTINGS] dedicated Contra launcher shown for settings access\n");
+        }
+        else
         {
             fprintf(stderr, "INFO: iOS launcher auto-selected bundled profile: %s\n",
                     gSelectedProfile);
             return gSelectedProfile;
         }
-
-        fprintf(stderr,
-                "[CONTRA-SETTINGS] dedicated Contra launcher shown for settings access\n");
     }
 
     gLauncherFinished.store(false, std::memory_order_release);
