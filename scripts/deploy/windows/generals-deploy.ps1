@@ -102,7 +102,7 @@ function Invoke-Update {
     }
 
     Write-Host "==> Fetching origin/$branch" -ForegroundColor Cyan
-    & git -C $RepoRoot fetch origin "+refs/heads/$branch`:refs/remotes/origin/$branch"
+    & git -C $RepoRoot fetch origin "+refs/heads/$branch`:refs/remotes/origin/$branch" | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "git fetch failed" }
 
     $current = Get-CurrentBranch
@@ -114,7 +114,7 @@ function Invoke-Update {
         if ($worktreeDirty -or $indexDirty) {
             Write-Host "Working tree has tracked local changes; fetched only, did not fast-forward." -ForegroundColor Yellow
         } else {
-            & git -C $RepoRoot merge --ff-only "refs/remotes/origin/$branch"
+            & git -C $RepoRoot merge --ff-only "refs/remotes/origin/$branch" | Out-Host
             if ($LASTEXITCODE -ne 0) { throw "git merge --ff-only origin/$branch failed" }
         }
     } else {
@@ -192,13 +192,13 @@ function Ensure-VariantBranch {
 
     & git -C $RepoRoot show-ref --verify --quiet "refs/heads/$branch"
     if ($LASTEXITCODE -eq 0) {
-        & git -C $RepoRoot switch $branch
+        & git -C $RepoRoot switch $branch | Out-Host
     } else {
         & git -C $RepoRoot show-ref --verify --quiet "refs/remotes/origin/$branch"
         if ($LASTEXITCODE -ne 0) {
             throw "Remote branch origin/$branch is not available. Run update first."
         }
-        & git -C $RepoRoot switch -c $branch --track "origin/$branch"
+        & git -C $RepoRoot switch -c $branch --track "origin/$branch" | Out-Host
     }
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to switch repository to '$branch'."
@@ -301,7 +301,7 @@ function Invoke-LocalBuild {
     }
 
     Write-Host "==> Local package: $scriptRel" -ForegroundColor Cyan
-    & pwsh -NoProfile -File $script
+    & pwsh -NoProfile -File $script | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Local packaging failed."
     }
