@@ -21,7 +21,7 @@ The single source of truth is `scripts/deploy/catalog.json`.
 |---|---|---|---|
 | iPad | Original | GitHub Actions | Ready |
 | iPad | Contra X | GitHub Actions | Ready |
-| iPad | Enhanced | Local Windows packager | Ready |
+| iPad | Enhanced | GitHub Actions | Ready |
 | iPad | All-in-One | Local Windows packager | Ready |
 | iPad | Online | GitHub Actions + Windows GameData packager | Experimental; full IPA build supported |
 | macOS | Original | GitHub Actions | Ready |
@@ -65,6 +65,9 @@ This creates the canonical folders without moving or deleting existing user file
 
 # Full update -> build -> download -> install preparation
 .\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant contra
+
+# Same lifecycle for Zero Hour Enhanced
+.\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant enhanced
 
 # Build a complete Generals Online iPad IPA from the latest Online shell + Original GameData
 .\scripts\build\ios\windows\build-online.ps1

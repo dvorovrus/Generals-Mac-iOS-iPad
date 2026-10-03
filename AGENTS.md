@@ -21,6 +21,7 @@ Run these from the workspace directory, not from `repo/`:
 - `build-launcher.ps1` requires authenticated `gh`. Its default fast workflow rebuilds only `libGeneralsXLauncher.dylib`; use `-FullBuild` after engine/runtime changes. `-NoBuild` downloads the latest successful artifact.
 - Build the launcher before a variant. Variant wrappers require Python 3 as `py`, `python`, or `python3`, consume `shell/GeneralsXZH-launcher-unsigned.ipa`, and automatically verify their output.
 - Enhanced packaging requires the 28/03/2024 patch (`!!ZHE8Patch_99.big`) in `input/ZHE/`. Contra archives are checked against pinned MD5 values; do not bypass this with `--skip-md5` unless explicitly requested.
+- Enhanced cloud packaging mirrors Contra: seed the private draft release with `scripts/build/ios/windows/seed-enhanced-ci-inputs.ps1`; the helper strips Windows-only content and splits the active Enhanced profile into bounded ZIP parts.
 - Outputs are unsigned and still require external signing/sideloading.
 
 ## Focused Verification
