@@ -1267,7 +1267,13 @@ void W3DDisplay::updateAverageFPS()
 			fprintf(stderr, "[RESOURCE-DIAG] sampleFrame=%u\n", (unsigned)frame);
 			m_assetManager->Log_Resource_Summary("match-periodic");
 			Log_Render_Memory_Summary("match-periodic", frame);
+#if defined(GENERALS_ONLINE)
+			// Asset/resource summaries walk large render collections. Keep them for
+			// diagnostics, but do not scan every 300 logic frames during Online play.
+			nextResourceFrame = frame + 1800;
+#else
 			nextResourceFrame = frame + 300;
+#endif
 		}
 
 		if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && frame >= nextMemoryTrimFrame)

@@ -1361,7 +1361,14 @@ void GameEngine::update()
 						}
 					}
 				}
+#if defined(GENERALS_ONLINE)
+				// Online gameplay is latency-sensitive. A 300-frame allocator/pool scan
+				// caused visible periodic hitches on Apple; retain the diagnostics at a
+				// much lower cadence while keeping transition and crash context intact.
+				nextMemoryDiagFrame = frame + 1800;
+#else
 				nextMemoryDiagFrame = frame + 300;
+#endif
 			}
 			lastMemoryDiagFrame = frame;
 			lastMemoryDiagState = state;

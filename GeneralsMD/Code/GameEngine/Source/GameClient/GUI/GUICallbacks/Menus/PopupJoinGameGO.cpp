@@ -59,6 +59,7 @@
 #include "GameClient/KeyDefs.h"
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetStaticText.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/PeerThread.h"
 #include "GameNetwork/GameSpyOverlay.h"
@@ -73,11 +74,14 @@
 static NameKeyType parentPopupID = NAMEKEY_INVALID;
 static NameKeyType textEntryGamePasswordID = NAMEKEY_INVALID;
 static NameKeyType buttonCancelID = NAMEKEY_INVALID;
+static NameKeyType buttonJoinID = NAMEKEY_INVALID;
 
 static GameWindow *parentPopup = nullptr;
 static GameWindow *textEntryGamePassword = nullptr;
+static GameWindow *buttonJoin = nullptr;
 
 static void joinGame( AsciiString password );
+static void submitPassword();
 
 //-----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////
@@ -100,6 +104,65 @@ void PopupJoinGameInit( WindowLayout *layout, void *userData )
 	GadgetStaticTextSetText(staticTextGameName, UnicodeString::TheEmptyString);
 
 	buttonCancelID = NAMEKEY("PopupJoinGame.wnd:ButtonCancel");
+	buttonJoinID = NAMEKEY("PopupJoinGame.wnd:ButtonJoin");
+
+	// The stock password popup has only Cancel and relies on pressing Enter in
+	// the text field. That is not discoverable on touch devices, so add an
+	// explicit Join button beside Cancel at runtime.
+	GameWindow *buttonCancel = TheWindowManager->winGetWindowFromId(parentPopup, buttonCancelID);
+	if (parentPopup != nullptr)
+	{
+		Int joinX = 8;
+		Int joinY = 8;
+		Int joinWidth = 120;
+		Int joinHeight = 30;
+		GameFont *joinFont = nullptr;
+		Int parentWidth = 0;
+		Int parentHeight = 0;
+		parentPopup->winGetSize(&parentWidth, &parentHeight);
+		if (buttonCancel != nullptr)
+		{
+			Int cancelX = 0;
+			Int cancelY = 0;
+			buttonCancel->winGetPosition(&cancelX, &cancelY);
+			buttonCancel->winGetSize(&joinWidth, &joinHeight);
+			joinFont = buttonCancel->winGetFont();
+
+			if (cancelX >= joinWidth + 16)
+			{
+				joinX = cancelX - joinWidth - 8;
+				joinY = cancelY;
+			}
+			else if (cancelX + (joinWidth * 2) + 8 <= parentWidth)
+			{
+				joinX = cancelX + joinWidth + 8;
+				joinY = cancelY;
+			}
+			else
+			{
+				joinX = cancelX;
+				joinY = cancelY >= joinHeight + 16 ? cancelY - joinHeight - 8 : 8;
+			}
+		}
+		else
+		{
+			joinX = (parentWidth - joinWidth) / 2;
+			joinY = parentHeight - joinHeight - 12;
+		}
+
+		WinInstanceData joinInstData;
+		joinInstData.init();
+		joinInstData.m_id = buttonJoinID;
+		BitSet(joinInstData.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK);
+		buttonJoin = TheWindowManager->gogoGadgetPushButton(parentPopup,
+			WIN_STATUS_ENABLED, joinX, joinY, joinWidth, joinHeight,
+			&joinInstData, joinFont, TRUE);
+		if (buttonJoin != nullptr)
+		{
+			GadgetButtonSetText(buttonJoin, UnicodeString(L"Join"));
+			NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-PASSWORD] Added explicit Join button to password popup");
+		}
+	}
 
 	NGMP_OnlineServices_LobbyInterface* pLobbyInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_LobbyInterface>();
 	if (pLobbyInterface == nullptr)
@@ -184,7 +247,9 @@ WindowMsgHandledType PopupJoinGameSystem( GameWindow *window, UnsignedInt msg, W
     //---------------------------------------------------------------------------------------------
 		case GWM_DESTROY:
 		{
-
+			buttonJoin = nullptr;
+			parentPopup = nullptr;
+			textEntryGamePassword = nullptr;
 			break;
 
 		}
@@ -193,12 +258,19 @@ WindowMsgHandledType PopupJoinGameSystem( GameWindow *window, UnsignedInt msg, W
 		case GBM_SELECTED:
 		{
 			GameWindow *control = (GameWindow *)mData1;
+			if (control == nullptr)
+				break;
 			Int controlID = control->winGetWindowId();
 			if (controlID == buttonCancelID)
 			{
 				GameSpyCloseOverlay(GSOVERLAY_GAMEPASSWORD);
 				SetLobbyAttemptHostJoin( FALSE );
 				parentPopup = nullptr;
+				buttonJoin = nullptr;
+			}
+			else if (controlID == buttonJoinID || control == buttonJoin)
+			{
+				submitPassword();
 			}
 			break;
 		}
@@ -222,17 +294,7 @@ WindowMsgHandledType PopupJoinGameSystem( GameWindow *window, UnsignedInt msg, W
 
       if( controlID == textEntryGamePasswordID )
 			{
-				// read the user's input and clear the entry box
-				UnicodeString txtInput;
-				txtInput.set(GadgetTextEntryGetText( textEntryGamePassword ));
-				GadgetTextEntrySetText(textEntryGamePassword, UnicodeString::TheEmptyString);
-				txtInput.trim();
-				if (!txtInput.isEmpty())
-				{
-					AsciiString munkee;
-					munkee.translate(txtInput);
-					joinGame(munkee);
-				}
+				submitPassword();
 			}
 			break;
 		}
@@ -249,6 +311,27 @@ WindowMsgHandledType PopupJoinGameSystem( GameWindow *window, UnsignedInt msg, W
 //-----------------------------------------------------------------------------
 // PRIVATE FUNCTIONS //////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
+
+static void submitPassword()
+{
+	if (textEntryGamePassword == nullptr)
+		return;
+
+	UnicodeString txtInput;
+	txtInput.set(GadgetTextEntryGetText(textEntryGamePassword));
+	txtInput.trim();
+	if (txtInput.isEmpty())
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP-PASSWORD] Join requested with an empty password");
+		TheWindowManager->winSetFocus(textEntryGamePassword);
+		return;
+	}
+
+	AsciiString password;
+	password.translate(txtInput);
+	GadgetTextEntrySetText(textEntryGamePassword, UnicodeString::TheEmptyString);
+	joinGame(password);
+}
 
 static void joinGame( AsciiString password )
 {
@@ -289,4 +372,5 @@ static void joinGame( AsciiString password )
 
 	GameSpyCloseOverlay(GSOVERLAY_GAMEPASSWORD);
 	parentPopup = nullptr;
+	buttonJoin = nullptr;
 }
