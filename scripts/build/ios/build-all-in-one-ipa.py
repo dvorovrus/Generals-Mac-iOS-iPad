@@ -63,6 +63,10 @@ ZHE_AI_PLUGIN_PREFIXES = {
     "plugins/restrained ai scripts/scripts/": "Optional/AI/Restrained/Scripts/",
     "plugins/skynet ai scripts/scripts/": "Optional/AI/Skynet/Scripts/",
 }
+ZHE_PREPARED_AI_PREFIXES = (
+    "optional/ai/restrained/scripts/",
+    "optional/ai/skynet/scripts/",
+)
 
 # Defaults mirrored from the current official Contra X Beta 2 launcher:
 # base content always on, English language/voices, original English hotkeys,
@@ -335,6 +339,17 @@ def build_enhanced_entries(
                 if suffix and p.suffix.lower() not in WINDOWS_ONLY_SUFFIXES:
                     target = destination + suffix
                 break
+
+        # The private CI release already contains the normalized Optional/AI
+        # layout. Keep those files on the second packaging pass as-is instead
+        # of dropping them because they no longer live under Plugins/.
+        if target is None:
+            for prefix in ZHE_PREPARED_AI_PREFIXES:
+                if lower_rel.startswith(prefix):
+                    suffix = rel[len(prefix):]
+                    if suffix and p.suffix.lower() not in WINDOWS_ONLY_SUFFIXES:
+                        target = rel
+                    break
 
         if target is None and should_skip_common(rel):
             continue
