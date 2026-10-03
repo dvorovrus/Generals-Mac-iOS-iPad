@@ -12,10 +12,19 @@ extern "C" {
 #include <cstring>
 #include <limits>
 
+namespace
+{
+#if defined(__APPLE__)
+constexpr UnsignedInt OPENAL_CACHE_MAX_BYTES = 96u * 1024u * 1024u;
+#else
+constexpr UnsignedInt OPENAL_CACHE_MAX_BYTES = 14u * 1024u * 1024u;
+#endif
+}
+
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-OpenALAudioFileCache::OpenALAudioFileCache() : m_maxSize(14*1024*1024), m_currentlyUsedSize(0)
+OpenALAudioFileCache::OpenALAudioFileCache() : m_maxSize(OPENAL_CACHE_MAX_BYTES), m_currentlyUsedSize(0)
 {
 }
 
@@ -132,8 +141,6 @@ ALuint OpenALAudioFileCache::getBufferForFile(const OpenFileInfo &fileInfo)
 		return 0;
 	}
 
-	UnsignedInt fileSize = file->size();
-
 	OpenAudioFile openedAudioFile;
 	alGenBuffers(1, &openedAudioFile.m_buffer);
 	openedAudioFile.m_eventInfo = eventToOpenFrom ? eventToOpenFrom->getAudioEventInfo() : NULL;
@@ -160,7 +167,9 @@ ALuint OpenALAudioFileCache::getBufferForFile(const OpenFileInfo &fileInfo)
 
 	openedAudioFile.m_ffmpegFile->close();
 
-	openedAudioFile.m_fileSize = fileSize;
+	// m_fileSize is accumulated from the decoded PCM frames in decodeFFmpeg().
+	// Do not overwrite it with the compressed source size: doing so under-counts
+	// OpenAL memory by an order of magnitude and prevents the cache from evicting.
 	m_currentlyUsedSize += openedAudioFile.m_fileSize;
 	if (m_currentlyUsedSize > m_maxSize) {
 		DEBUG_LOG(("Audio Cache is full, trying to free some space\n"));
@@ -213,9 +222,10 @@ void OpenALAudioFileCache::setMaxSize(UnsignedInt size)
 {
 	// Protect the function, in case we're trying to use this value elsewhere.
 
-	// Hardcoded to 14MiB for now, this is a workaround for the limit
-	//  set by the default config files being 4MB and causing needless reloads.
-	//m_maxSize = size;
+	// Keep the platform-tuned decoded-PCM budget from the constructor. The INI
+	// value is based on the original compressed Miles cache and is too small for
+	// OpenAL's fully decoded buffers, especially on Apple.
+	(void)size;
 }
 
 //-------------------------------------------------------------------------------------------------

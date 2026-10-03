@@ -1214,7 +1214,7 @@ void GameEngine::update()
 			TheScriptEngine->UPDATE();
 		}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(GENERALS_ONLINE)
 		// Long iOS matches can be terminated by memory pressure without a useful
 		// in-process crash stack. Keep a lightweight footprint trail in stderr so
 		// retained session logs show whether memory is climbing before an exit.
