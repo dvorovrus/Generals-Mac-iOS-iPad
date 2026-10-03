@@ -54,6 +54,15 @@ ZHE_ACTIVATE = {
     "!zhe8texturesbasehd_99.zhe",
 }
 ZHE_KEEP_INI = {"zhepatch.ini", "defaultpreset.ini"}
+ZHE_OPTIONAL_ARCHIVES = {
+    "!zhe8cameosd_99.zhe",
+    "!zhe8uihd_99.zhe",
+    "!zhe8uiqhd_99.zhe",
+}
+ZHE_AI_PLUGIN_PREFIXES = {
+    "plugins/restrained ai scripts/scripts/": "Optional/AI/Restrained/Scripts/",
+    "plugins/skynet ai scripts/scripts/": "Optional/AI/Skynet/Scripts/",
+}
 
 # Defaults mirrored from the current official Contra X Beta 2 launcher:
 # base content always on, English language/voices, original English hotkeys,
@@ -318,11 +327,21 @@ def build_enhanced_entries(
         lower_name = p.name.lower()
         lower_parts = [x.lower() for x in p.parts]
 
-        if should_skip_common(rel):
+        target: str | None = None
+        lower_rel = rel.lower()
+        for prefix, destination in ZHE_AI_PLUGIN_PREFIXES.items():
+            if lower_rel.startswith(prefix):
+                suffix = rel[len(prefix):]
+                if suffix and p.suffix.lower() not in WINDOWS_ONLY_SUFFIXES:
+                    target = destination + suffix
+                break
+
+        if target is None and should_skip_common(rel):
             continue
 
-        target: str | None = None
-        if p.suffix.lower() == ".big":
+        if target is not None:
+            pass
+        elif p.suffix.lower() == ".big":
             target = rel
         elif lower_parts and lower_parts[0] == "data" and p.suffix.lower() not in {
             ".dll", ".exe", ".zhe", ".bat", ".cmd"
@@ -330,6 +349,8 @@ def build_enhanced_entries(
             target = rel
         elif lower_name in ZHE_ACTIVATE:
             target = str(p.with_suffix(".big"))
+        elif lower_name in ZHE_OPTIONAL_ARCHIVES:
+            target = rel
         elif lower_name in ZHE_KEEP_INI:
             target = rel
 

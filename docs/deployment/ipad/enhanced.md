@@ -27,4 +27,17 @@ GeneralsZH-Enhanced-iPad-unsigned
 
 The standalone IPA uses `AutoLaunchProfile.txt=enhanced`, so it opens the dedicated Enhanced launcher with Play, Settings, and Diagnostics.
 
+## Enhanced settings
+
+The native Settings screen exposes the portable options from the original Enhanced launcher:
+
+- Texture resolution: `Vanilla` / `High`
+- UI quality: `HD` / `FHD` / `QHD`
+- Cameos: `SD` / `HD`
+- AI scripts: `Default` / `Restrained` / `Skynet`
+
+Selections are stored in `Documents/EnhancedSettings.ini`. On launch the engine builds `Documents/EnhancedRuntime` with only the selected `.big` overlays and selected `Data/Scripts`. The bundled `Profiles/enhanced` source remains unchanged.
+
+ReShade/DXWrapper are intentionally excluded because those plugins depend on Windows DLL injection and are not part of the Apple rendering path.
+
 Installation uses the same Sideloadly flow as Original and Contra. Runtime/device logs belong in `../output/logs/`.

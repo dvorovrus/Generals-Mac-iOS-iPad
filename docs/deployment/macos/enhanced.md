@@ -19,11 +19,13 @@ The standardized installer copies:
 - retail GameData -> `~/GeneralsX/GeneralsZH`
 - Enhanced profile -> `~/GeneralsX/Enhanced`
 
-The app launches with:
+The app opens a native Enhanced settings launcher first. After Save/Play it builds `~/GeneralsX/EnhancedRuntime` from the immutable source profile and launches with:
 
 ```text
--mod ~/GeneralsX/Enhanced
+-mod ~/GeneralsX/EnhancedRuntime
 ```
+
+Available Enhanced-specific options are Texture resolution (`Vanilla`/`High`), UI quality (`HD`/`FHD`/`QHD`), Cameos (`SD`/`HD`), and AI scripts (`Default`/`Restrained`/`Skynet`). ReShade/DXWrapper remain excluded because they require the Windows DLL path.
 
 Runtime log:
 

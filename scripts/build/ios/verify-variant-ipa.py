@@ -86,6 +86,20 @@ def main() -> None:
         if want_e:
             if not enhanced or not any(n.endswith(".big") for n in enhanced):
                 fail("Enhanced profile is missing or inactive")
+            required_enhanced_options = {
+                "!zhe8cameosd_99.zhe",
+                "!zhe8uihd_99.zhe",
+                "!zhe8uiqhd_99.zhe",
+                "optional/ai/restrained/scripts/skirmishscripts.scb",
+                "optional/ai/skynet/scripts/skirmishscripts.scb",
+            }
+            enhanced_relative = {
+                n[len(app_l + "profiles/enhanced/"):]
+                for n in enhanced
+            }
+            missing_options = sorted(required_enhanced_options - enhanced_relative)
+            if missing_options:
+                fail("Enhanced selectable options are missing: " + ", ".join(missing_options))
         elif enhanced:
             fail("unexpected Enhanced profile in this variant")
 

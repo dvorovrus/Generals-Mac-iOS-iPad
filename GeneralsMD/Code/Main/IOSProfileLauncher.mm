@@ -156,6 +156,11 @@ NSString *ContraSettingsPath()
     return DocumentsFilePath(@"ContraSettings.ini");
 }
 
+NSString *EnhancedSettingsPath()
+{
+    return DocumentsFilePath(@"EnhancedSettings.ini");
+}
+
 NSString *EngineOptionsPath()
 {
     NSString *dir = [NSHomeDirectory()
@@ -264,6 +269,30 @@ void EnsureDefaultContraSettings()
     if (!WriteKeyValueFile(path, DefaultContraSettings(), &error))
     {
         fprintf(stderr, "ERROR: failed to seed ContraSettings.ini: %s\n",
+                error != nil ? [[error description] UTF8String] : "unknown");
+    }
+}
+
+NSDictionary<NSString *, NSString *> *DefaultEnhancedSettings()
+{
+    return @{
+        @"TextureResolution": @"High",
+        @"UIQuality": @"FHD",
+        @"Cameos": @"HD",
+        @"AIScripts": @"Default"
+    };
+}
+
+void EnsureDefaultEnhancedSettings()
+{
+    NSString *path = EnhancedSettingsPath();
+    if ([[NSFileManager defaultManager] fileExistsAtPath:path])
+        return;
+
+    NSError *error = nil;
+    if (!WriteKeyValueFile(path, DefaultEnhancedSettings(), &error))
+    {
+        fprintf(stderr, "ERROR: failed to seed EnhancedSettings.ini: %s\n",
                 error != nil ? [[error description] UTF8String] : "unknown");
     }
 }
@@ -392,6 +421,11 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UISwitch *contraWaterSwitch;
 @property(nonatomic, strong) UISwitch *contraExtraBuildingPropsSwitch;
 
+@property(nonatomic, strong) UISegmentedControl *enhancedTextureResolutionSegment;
+@property(nonatomic, strong) UISegmentedControl *enhancedUIQualitySegment;
+@property(nonatomic, strong) UISegmentedControl *enhancedCameosSegment;
+@property(nonatomic, strong) UISegmentedControl *enhancedAIScriptsSegment;
+
 @property(nonatomic, strong) UISwitch *shadow3DSwitch;
 @property(nonatomic, strong) UISwitch *shadow2DSwitch;
 @property(nonatomic, strong) UISwitch *cloudShadowsSwitch;
@@ -428,6 +462,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.view.backgroundColor = UIColor.blackColor;
     EnsureDefaultIPadOverrides();
     EnsureDefaultContraSettings();
+    EnsureDefaultEnhancedSettings();
 
     [self buildMenu];
     [self buildSettings];
@@ -625,10 +660,23 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self.settingsView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-18.0],
     ]];
 
-    UILabel *title = MakeLabel(@"Contra X settings", 26.0, UIFontWeightBold);
+    NSString *bundledProfile = BundledAutoLaunchProfile();
+    BOOL dedicatedEnhanced = [bundledProfile isEqualToString:@"enhanced"];
+    BOOL dedicatedContra = [bundledProfile isEqualToString:@"contra-x"];
+
+    NSString *settingsTitle = dedicatedEnhanced
+        ? @"Enhanced settings"
+        : (dedicatedContra ? @"Contra X settings" : @"Game settings");
+    NSString *settingsNote = dedicatedEnhanced
+        ? @"Apple equivalents of the original Enhanced launcher options. Changes apply on the next game launch."
+        : (dedicatedContra
+            ? @"iPad equivalents of the official Contra X launcher options. Changes apply on the next game launch."
+            : @"Profile and engine settings. Changes apply on the next game launch.");
+
+    UILabel *title = MakeLabel(settingsTitle, 26.0, UIFontWeightBold);
     title.textAlignment = NSTextAlignmentLeft;
 
-    UILabel *note = MakeLabel(@"iPad equivalents of the official Contra X launcher options. Changes apply on the next game launch.", 13.0, UIFontWeightRegular);
+    UILabel *note = MakeLabel(settingsNote, 13.0, UIFontWeightRegular);
     note.textAlignment = NSTextAlignmentLeft;
     note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
@@ -642,6 +690,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.contraFogSwitch = [[UISwitch alloc] init];
     self.contraWaterSwitch = [[UISwitch alloc] init];
     self.contraExtraBuildingPropsSwitch = [[UISwitch alloc] init];
+
+    self.enhancedTextureResolutionSegment = [self makeSegmented:@[@"Vanilla", @"High"]];
+    self.enhancedUIQualitySegment = [self makeSegmented:@[@"HD", @"FHD", @"QHD"]];
+    self.enhancedCameosSegment = [self makeSegmented:@[@"SD", @"HD"]];
+    self.enhancedAIScriptsSegment = [self makeSegmented:@[@"Default", @"Restrained", @"Skynet"]];
 
     self.shadow3DSwitch = [[UISwitch alloc] init];
     self.shadow2DSwitch = [[UISwitch alloc] init];
@@ -678,19 +731,39 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.fpsLimitSwitch = [[UISwitch alloc] init];
     [self.fpsLimitSwitch addTarget:self action:@selector(fpsLimitChanged:) forControlEvents:UIControlEventValueChanged];
 
-    UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:@[
-        [self sectionLabel:@"CONTRA X"],
-        [self segmentedRow:@"Control Bar" control:self.contraControlBarSegment],
-        [self segmentedRow:@"Icon / cameo quality" control:self.contraCameosSegment],
-        [self segmentedRow:@"Music" control:self.contraMusicSegment],
-        [self segmentedRow:@"Unit voices" control:self.contraVoicesSegment],
-        [self segmentedRow:@"Hotkeys" control:self.contraHotkeysSegment],
-        [self segmentedRow:@"Hotkey language" control:self.contraHotkeyLanguageSegment],
-        [self segmentedRow:@"General portraits" control:self.contraPortraitsSegment],
-        [self switchRow:@"Fog effects" control:self.contraFogSwitch],
-        [self switchRow:@"Water effects" control:self.contraWaterSwitch],
-        [self switchRow:@"Extra building props" control:self.contraExtraBuildingPropsSwitch],
+    NSMutableArray<UIView *> *controlViews = [NSMutableArray array];
+    BOOL showEnhanced = dedicatedEnhanced || (!dedicatedContra && ProfileDirectoryExists(@"enhanced"));
+    BOOL showContra = dedicatedContra || (!dedicatedEnhanced && ProfileDirectoryExists(@"contra-x"));
 
+    if (showEnhanced)
+    {
+        [controlViews addObjectsFromArray:@[
+            [self sectionLabel:@"ENHANCED"],
+            [self segmentedRow:@"Texture resolution" control:self.enhancedTextureResolutionSegment],
+            [self segmentedRow:@"UI quality" control:self.enhancedUIQualitySegment],
+            [self segmentedRow:@"Cameos" control:self.enhancedCameosSegment],
+            [self segmentedRow:@"AI scripts" control:self.enhancedAIScriptsSegment],
+        ]];
+    }
+
+    if (showContra)
+    {
+        [controlViews addObjectsFromArray:@[
+            [self sectionLabel:@"CONTRA X"],
+            [self segmentedRow:@"Control Bar" control:self.contraControlBarSegment],
+            [self segmentedRow:@"Icon / cameo quality" control:self.contraCameosSegment],
+            [self segmentedRow:@"Music" control:self.contraMusicSegment],
+            [self segmentedRow:@"Unit voices" control:self.contraVoicesSegment],
+            [self segmentedRow:@"Hotkeys" control:self.contraHotkeysSegment],
+            [self segmentedRow:@"Hotkey language" control:self.contraHotkeyLanguageSegment],
+            [self segmentedRow:@"General portraits" control:self.contraPortraitsSegment],
+            [self switchRow:@"Fog effects" control:self.contraFogSwitch],
+            [self switchRow:@"Water effects" control:self.contraWaterSwitch],
+            [self switchRow:@"Extra building props" control:self.contraExtraBuildingPropsSwitch],
+        ]];
+    }
+
+    [controlViews addObjectsFromArray:@[
         [self sectionLabel:@"GRAPHICS"],
         [self switchRow:@"3D shadows" control:self.shadow3DSwitch],
         [self switchRow:@"2D shadows" control:self.shadow2DSwitch],
@@ -702,7 +775,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self switchRow:@"Extra animations" control:self.extraAnimationsSwitch],
         [self switchRow:@"Dynamic LOD" control:self.dynamicLODSwitch],
         [self switchRow:@"Heat effects" control:self.heatEffectsSwitch],
-        [self segmentedRow:@"Texture quality" control:self.textureQualitySegment],
+        [self segmentedRow:@"Engine texture quality" control:self.textureQualitySegment],
         [self segmentedRow:@"Particles" control:self.particleQualitySegment],
         [self segmentedRow:@"Texture filtering" control:self.textureFilterSegment],
         [self segmentedRow:@"Anisotropy" control:self.anisotropySegment],
@@ -718,6 +791,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self switchRow:@"FPS limit" control:self.fpsLimitSwitch],
         [self sliderRow:@"Frames per second" slider:self.fpsSlider value:self.fpsValue],
     ]];
+
+    UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:controlViews];
     controls.translatesAutoresizingMaskIntoConstraints = NO;
     controls.axis = UILayoutConstraintAxisVertical;
     controls.alignment = UIStackViewAlignmentFill;
@@ -798,8 +873,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     BOOL contraInstalled = ProfileDirectoryExists(@"contra-x");
 
     NSString *settingsPath = IPadOverridesPath();
+    NSString *enhancedSettingsPath = EnhancedSettingsPath();
     NSString *contraSettingsPath = ContraSettingsPath();
     BOOL settingsExists = [[NSFileManager defaultManager] fileExistsAtPath:settingsPath];
+    BOOL enhancedSettingsExists = [[NSFileManager defaultManager] fileExistsAtPath:enhancedSettingsPath];
     BOOL contraSettingsExists = [[NSFileManager defaultManager] fileExistsAtPath:contraSettingsPath];
 
     NSString *currentLog = DocumentsFilePath(@"generals-stderr.log");
@@ -843,6 +920,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
          "Contra X: %@\n\n"
          "FILES\n"
          "iPad settings: %@\n"
+         "Enhanced settings: %@\n"
          "Contra settings: %@\n"
          "Current session: %@\n"
          "Session logs: %@\n",
@@ -862,6 +940,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         enhancedInstalled ? @"Installed" : @"Not installed",
         contraInstalled ? @"Installed" : @"Not installed",
         settingsExists ? @"Present" : @"Missing",
+        enhancedSettingsExists ? @"Present" : @"Missing",
         contraSettingsExists ? @"Present" : @"Missing",
         currentLogText,
         sessionLogsText];
@@ -1151,6 +1230,71 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     return fallback;
 }
 
+- (void)resetEnhancedSettingsControls
+{
+    self.enhancedTextureResolutionSegment.selectedSegmentIndex = 1; // High
+    self.enhancedUIQualitySegment.selectedSegmentIndex = 1; // FHD
+    self.enhancedCameosSegment.selectedSegmentIndex = 1; // HD
+    self.enhancedAIScriptsSegment.selectedSegmentIndex = 0; // Default
+}
+
+- (void)loadGraphicsSettingsFromValues:(NSDictionary<NSString *, NSString *> *)values
+{
+    self.shadow3DSwitch.on = SettingBoolValue(values, @"UseShadowVolumes", NO);
+    self.shadow2DSwitch.on = SettingBoolValue(values, @"UseShadowDecals", YES);
+    self.cloudShadowsSwitch.on = SettingBoolValue(values, @"UseCloudMap", NO);
+    self.groundLightingSwitch.on = SettingBoolValue(values, @"UseLightMap", YES);
+    self.softWaterSwitch.on = SettingBoolValue(values, @"ShowSoftWaterEdge", YES);
+    self.buildingOcclusionSwitch.on = SettingBoolValue(values, @"BuildingOcclusion", YES);
+    self.showPropsSwitch.on = SettingBoolValue(values, @"ShowTrees", YES);
+    self.extraAnimationsSwitch.on = SettingBoolValue(values, @"ExtraAnimations", YES);
+    self.dynamicLODSwitch.on = SettingBoolValue(values, @"DynamicLOD", NO);
+    self.heatEffectsSwitch.on = SettingBoolValue(values, @"HeatEffects", NO);
+
+    NSInteger textureReduction = [SettingValue(values, @"TextureReduction", @"0") integerValue];
+    self.textureQualitySegment.selectedSegmentIndex = MAX(0, MIN(2, textureReduction));
+
+    NSInteger particleCount = [SettingValue(values, @"MaxParticleCount", @"2500") integerValue];
+    self.particleQualitySegment.selectedSegmentIndex = particleCount <= 1200 ? 0 : (particleCount >= 4000 ? 2 : 1);
+
+    NSString *filter = SettingValue(values, @"TextureFilter", @"Anisotropic");
+    self.textureFilterSegment.selectedSegmentIndex =
+        [filter caseInsensitiveCompare:@"Bilinear"] == NSOrderedSame ? 0 :
+        ([filter caseInsensitiveCompare:@"Trilinear"] == NSOrderedSame ? 1 : 2);
+
+    NSInteger anisotropy = [SettingValue(values, @"AnisotropyLevel", @"8") integerValue];
+    self.anisotropySegment.selectedSegmentIndex = anisotropy >= 16 ? 3 : (anisotropy >= 8 ? 2 : (anisotropy >= 4 ? 1 : 0));
+
+    NSInteger antiAliasing = [SettingValue(values, @"AntiAliasing", @"0") integerValue];
+    self.msaaSegment.selectedSegmentIndex = antiAliasing >= 8 ? 3 : (antiAliasing >= 4 ? 2 : (antiAliasing >= 2 ? 1 : 0));
+    [self textureFilterChanged:self.textureFilterSegment];
+}
+
+- (void)loadEnhancedSettingsControls
+{
+    EnsureDefaultEnhancedSettings();
+    NSDictionary<NSString *, NSString *> *values = ReadKeyValueFile(EnhancedSettingsPath());
+
+    self.enhancedTextureResolutionSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"TextureResolution", @"High")
+                           choices:@[@"Vanilla", @"High"]
+                          fallback:1];
+    self.enhancedUIQualitySegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"UIQuality", @"FHD")
+                           choices:@[@"HD", @"FHD", @"QHD"]
+                          fallback:1];
+    self.enhancedCameosSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"Cameos", @"HD")
+                           choices:@[@"SD", @"HD"]
+                          fallback:1];
+    self.enhancedAIScriptsSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"AIScripts", @"Default")
+                           choices:@[@"Default", @"Restrained", @"Skynet"]
+                          fallback:0];
+
+    [self loadGraphicsSettingsFromValues:ReadKeyValueFile(EngineOptionsPath())];
+}
+
 - (void)resetContraSettingsControls
 {
     NSDictionary<NSString *, NSString *> *defaults = DefaultContraSettings();
@@ -1221,39 +1365,13 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.contraWaterSwitch.on = SettingBoolValue(values, @"WaterEffects", YES);
     self.contraExtraBuildingPropsSwitch.on = SettingBoolValue(values, @"ExtraBuildingProps", YES);
 
-    self.shadow3DSwitch.on = SettingBoolValue(values, @"UseShadowVolumes", NO);
-    self.shadow2DSwitch.on = SettingBoolValue(values, @"UseShadowDecals", YES);
-    self.cloudShadowsSwitch.on = SettingBoolValue(values, @"UseCloudMap", NO);
-    self.groundLightingSwitch.on = SettingBoolValue(values, @"UseLightMap", YES);
-    self.softWaterSwitch.on = SettingBoolValue(values, @"ShowSoftWaterEdge", YES);
-    self.buildingOcclusionSwitch.on = SettingBoolValue(values, @"BuildingOcclusion", YES);
-    self.showPropsSwitch.on = SettingBoolValue(values, @"ShowTrees", YES);
-    self.extraAnimationsSwitch.on = SettingBoolValue(values, @"ExtraAnimations", YES);
-    self.dynamicLODSwitch.on = SettingBoolValue(values, @"DynamicLOD", NO);
-    self.heatEffectsSwitch.on = SettingBoolValue(values, @"HeatEffects", NO);
-
-    NSInteger textureReduction = [SettingValue(values, @"TextureReduction", @"0") integerValue];
-    self.textureQualitySegment.selectedSegmentIndex = MAX(0, MIN(2, textureReduction));
-
-    NSInteger particleCount = [SettingValue(values, @"MaxParticleCount", @"2500") integerValue];
-    self.particleQualitySegment.selectedSegmentIndex = particleCount <= 1200 ? 0 : (particleCount >= 4000 ? 2 : 1);
-
-    NSString *filter = SettingValue(values, @"TextureFilter", @"Anisotropic");
-    self.textureFilterSegment.selectedSegmentIndex =
-        [filter caseInsensitiveCompare:@"Bilinear"] == NSOrderedSame ? 0 :
-        ([filter caseInsensitiveCompare:@"Trilinear"] == NSOrderedSame ? 1 : 2);
-
-    NSInteger anisotropy = [SettingValue(values, @"AnisotropyLevel", @"8") integerValue];
-    self.anisotropySegment.selectedSegmentIndex = anisotropy >= 16 ? 3 : (anisotropy >= 8 ? 2 : (anisotropy >= 4 ? 1 : 0));
-
-    NSInteger antiAliasing = [SettingValue(values, @"AntiAliasing", @"0") integerValue];
-    self.msaaSegment.selectedSegmentIndex = antiAliasing >= 8 ? 3 : (antiAliasing >= 4 ? 2 : (antiAliasing >= 2 ? 1 : 0));
-    [self textureFilterChanged:self.textureFilterSegment];
+    [self loadGraphicsSettingsFromValues:ReadKeyValueFile(EngineOptionsPath())];
 }
 
 - (void)resetSettingsControls
 {
     [self resetContraSettingsControls];
+    [self resetEnhancedSettingsControls];
 
     self.maxCameraSlider.value = 550.0f;
     self.minCameraSlider.value = 70.0f;
@@ -1269,7 +1387,26 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
 - (void)loadSettingsControls
 {
-    [self loadContraSettingsControls];
+    NSString *bundledProfile = BundledAutoLaunchProfile();
+    if ([bundledProfile isEqualToString:@"enhanced"])
+    {
+        [self loadEnhancedSettingsControls];
+    }
+    else if ([bundledProfile isEqualToString:@"contra-x"])
+    {
+        [self loadContraSettingsControls];
+    }
+    else
+    {
+        BOOL hasEnhanced = ProfileDirectoryExists(@"enhanced");
+        BOOL hasContra = ProfileDirectoryExists(@"contra-x");
+        if (hasEnhanced)
+            [self loadEnhancedSettingsControls];
+        if (hasContra)
+            [self loadContraSettingsControls];
+        if (!hasEnhanced && !hasContra)
+            [self loadGraphicsSettingsFromValues:ReadKeyValueFile(EngineOptionsPath())];
+    }
 
     NSError *error = nil;
     NSString *contents = [NSString stringWithContentsOfFile:IPadOverridesPath()
@@ -1358,6 +1495,56 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.anisotropySegment.alpha = anisotropic ? 1.0 : 0.35;
 }
 
+- (BOOL)saveGraphicsOptions:(NSError **)error
+{
+    NSInteger particleIndex = self.particleQualitySegment.selectedSegmentIndex;
+    NSInteger particleCount = particleIndex == 0 ? 1000 : (particleIndex == 2 ? 5000 : 2500);
+    NSArray<NSString *> *filters = @[@"Bilinear", @"Trilinear", @"Anisotropic"];
+    NSString *filter = filters[MAX(0, MIN(2, self.textureFilterSegment.selectedSegmentIndex))];
+    NSArray<NSString *> *anisotropyLevels = @[@"2", @"4", @"8", @"16"];
+    NSString *anisotropy = anisotropyLevels[MAX(0, MIN(3, self.anisotropySegment.selectedSegmentIndex))];
+    NSArray<NSString *> *msaaLevels = @[@"0", @"2", @"4", @"8"];
+    NSString *antiAliasing = msaaLevels[MAX(0, MIN(3, self.msaaSegment.selectedSegmentIndex))];
+
+    NSMutableDictionary<NSString *, NSString *> *options = ReadKeyValueFile(EngineOptionsPath());
+    options[@"IdealStaticGameLOD"] = @"High";
+    options[@"StaticGameLOD"] = @"Custom";
+    options[@"UseShadowVolumes"] = self.shadow3DSwitch.on ? @"Yes" : @"No";
+    options[@"UseShadowDecals"] = self.shadow2DSwitch.on ? @"Yes" : @"No";
+    options[@"UseCloudMap"] = self.cloudShadowsSwitch.on ? @"Yes" : @"No";
+    options[@"UseLightMap"] = self.groundLightingSwitch.on ? @"Yes" : @"No";
+    options[@"ShowSoftWaterEdge"] = self.softWaterSwitch.on ? @"Yes" : @"No";
+    options[@"BuildingOcclusion"] = self.buildingOcclusionSwitch.on ? @"Yes" : @"No";
+    options[@"ShowTrees"] = self.showPropsSwitch.on ? @"Yes" : @"No";
+    options[@"ExtraAnimations"] = self.extraAnimationsSwitch.on ? @"Yes" : @"No";
+    options[@"DynamicLOD"] = self.dynamicLODSwitch.on ? @"Yes" : @"No";
+    options[@"HeatEffects"] = self.heatEffectsSwitch.on ? @"Yes" : @"No";
+    options[@"TextureReduction"] = [NSString stringWithFormat:@"%ld", (long)self.textureQualitySegment.selectedSegmentIndex];
+    options[@"MaxParticleCount"] = [NSString stringWithFormat:@"%ld", (long)particleCount];
+    options[@"TextureFilter"] = filter;
+    options[@"AnisotropyLevel"] = anisotropy;
+    options[@"AntiAliasing"] = antiAliasing;
+    return WriteKeyValueFile(EngineOptionsPath(), options, error);
+}
+
+- (BOOL)saveEnhancedSettingsAndOptions:(NSError **)error
+{
+    NSArray<NSString *> *textureModes = @[@"Vanilla", @"High"];
+    NSArray<NSString *> *uiModes = @[@"HD", @"FHD", @"QHD"];
+    NSArray<NSString *> *cameoModes = @[@"SD", @"HD"];
+    NSArray<NSString *> *aiModes = @[@"Default", @"Restrained", @"Skynet"];
+
+    NSMutableDictionary<NSString *, NSString *> *enhanced = [DefaultEnhancedSettings() mutableCopy];
+    enhanced[@"TextureResolution"] = textureModes[MAX(0, MIN(1, self.enhancedTextureResolutionSegment.selectedSegmentIndex))];
+    enhanced[@"UIQuality"] = uiModes[MAX(0, MIN(2, self.enhancedUIQualitySegment.selectedSegmentIndex))];
+    enhanced[@"Cameos"] = cameoModes[MAX(0, MIN(1, self.enhancedCameosSegment.selectedSegmentIndex))];
+    enhanced[@"AIScripts"] = aiModes[MAX(0, MIN(2, self.enhancedAIScriptsSegment.selectedSegmentIndex))];
+
+    if (!WriteKeyValueFile(EnhancedSettingsPath(), enhanced, error))
+        return NO;
+    return [self saveGraphicsOptions:error];
+}
+
 - (BOOL)saveContraSettingsAndOptions:(NSError **)error
 {
     NSArray<NSString *> *controlBars = @[@"Contra", @"Pro", @"Standard"];
@@ -1367,16 +1554,6 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSArray<NSString *> *hotkeys = @[@"Original", @"Leikeze"];
     NSArray<NSString *> *languages = @[@"English", @"Russian"];
     NSArray<NSString *> *portraits = @[@"Standard", @"Funny"];
-
-    NSInteger particleIndex = self.particleQualitySegment.selectedSegmentIndex;
-    NSInteger particleCount = particleIndex == 0 ? 1000 : (particleIndex == 2 ? 5000 : 2500);
-
-    NSArray<NSString *> *filters = @[@"Bilinear", @"Trilinear", @"Anisotropic"];
-    NSString *filter = filters[MAX(0, MIN(2, self.textureFilterSegment.selectedSegmentIndex))];
-    NSArray<NSString *> *anisotropyLevels = @[@"2", @"4", @"8", @"16"];
-    NSString *anisotropy = anisotropyLevels[MAX(0, MIN(3, self.anisotropySegment.selectedSegmentIndex))];
-    NSArray<NSString *> *msaaLevels = @[@"0", @"2", @"4", @"8"];
-    NSString *antiAliasing = msaaLevels[MAX(0, MIN(3, self.msaaSegment.selectedSegmentIndex))];
 
     NSMutableDictionary<NSString *, NSString *> *contra = [DefaultContraSettings() mutableCopy];
     contra[@"ControlBar"] = controlBars[self.contraControlBarSegment.selectedSegmentIndex];
@@ -1390,39 +1567,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     contra[@"WaterEffects"] = self.contraWaterSwitch.on ? @"Yes" : @"No";
     contra[@"ExtraBuildingProps"] = self.contraExtraBuildingPropsSwitch.on ? @"Yes" : @"No";
 
-    contra[@"UseShadowVolumes"] = self.shadow3DSwitch.on ? @"Yes" : @"No";
-    contra[@"UseShadowDecals"] = self.shadow2DSwitch.on ? @"Yes" : @"No";
-    contra[@"UseCloudMap"] = self.cloudShadowsSwitch.on ? @"Yes" : @"No";
-    contra[@"UseLightMap"] = self.groundLightingSwitch.on ? @"Yes" : @"No";
-    contra[@"ShowSoftWaterEdge"] = self.softWaterSwitch.on ? @"Yes" : @"No";
-    contra[@"BuildingOcclusion"] = self.buildingOcclusionSwitch.on ? @"Yes" : @"No";
-    contra[@"ShowTrees"] = self.showPropsSwitch.on ? @"Yes" : @"No";
-    contra[@"ExtraAnimations"] = self.extraAnimationsSwitch.on ? @"Yes" : @"No";
-    contra[@"DynamicLOD"] = self.dynamicLODSwitch.on ? @"Yes" : @"No";
-    contra[@"HeatEffects"] = self.heatEffectsSwitch.on ? @"Yes" : @"No";
-    contra[@"TextureReduction"] = [NSString stringWithFormat:@"%ld", (long)self.textureQualitySegment.selectedSegmentIndex];
-    contra[@"MaxParticleCount"] = [NSString stringWithFormat:@"%ld", (long)particleCount];
-    contra[@"TextureFilter"] = filter;
-    contra[@"AnisotropyLevel"] = anisotropy;
-    contra[@"AntiAliasing"] = antiAliasing;
-
     if (!WriteKeyValueFile(ContraSettingsPath(), contra, error))
         return NO;
-
-    NSMutableDictionary<NSString *, NSString *> *options = ReadKeyValueFile(EngineOptionsPath());
-    options[@"IdealStaticGameLOD"] = @"High";
-    options[@"StaticGameLOD"] = @"Custom";
-    for (NSString *key in @[
-        @"UseShadowVolumes", @"UseShadowDecals", @"UseCloudMap", @"UseLightMap",
-        @"ShowSoftWaterEdge", @"BuildingOcclusion", @"ShowTrees", @"ExtraAnimations",
-        @"DynamicLOD", @"HeatEffects", @"TextureReduction", @"MaxParticleCount",
-        @"TextureFilter", @"AnisotropyLevel", @"AntiAliasing"
-    ])
-    {
-        options[key] = contra[key];
-    }
-
-    return WriteKeyValueFile(EngineOptionsPath(), options, error);
+    return [self saveGraphicsOptions:error];
 }
 
 - (void)saveSettings
@@ -1452,14 +1599,40 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
                                atomically:YES
                                  encoding:NSUTF8StringEncoding
                                     error:&error];
-    BOOL contraOK = cameraOK ? [self saveContraSettingsAndOptions:&error] : NO;
+    BOOL profileOK = cameraOK;
+    NSString *bundledProfile = BundledAutoLaunchProfile();
+    if (profileOK && [bundledProfile isEqualToString:@"enhanced"])
+    {
+        profileOK = [self saveEnhancedSettingsAndOptions:&error];
+    }
+    else if (profileOK && [bundledProfile isEqualToString:@"contra-x"])
+    {
+        profileOK = [self saveContraSettingsAndOptions:&error];
+    }
+    else if (profileOK)
+    {
+        BOOL savedProfile = NO;
+        if (ProfileDirectoryExists(@"enhanced"))
+        {
+            profileOK = [self saveEnhancedSettingsAndOptions:&error];
+            savedProfile = YES;
+        }
+        if (profileOK && ProfileDirectoryExists(@"contra-x"))
+        {
+            profileOK = [self saveContraSettingsAndOptions:&error];
+            savedProfile = YES;
+        }
+        if (profileOK && !savedProfile)
+            profileOK = [self saveGraphicsOptions:&error];
+    }
 
-    if (cameraOK && contraOK)
+    if (cameraOK && profileOK)
     {
         self.settingsStatus.text = @"Saved. Changes apply on the next game launch.";
         self.settingsStatus.textColor = [UIColor systemGreenColor];
         fprintf(stderr,
-                "[CONTRA-SETTINGS] saved settings=%s options=%s camera=%s\n",
+                "[PROFILE-SETTINGS] saved enhanced=%s contra=%s options=%s camera=%s\n",
+                EnhancedSettingsPath().fileSystemRepresentation,
                 ContraSettingsPath().fileSystemRepresentation,
                 EngineOptionsPath().fileSystemRepresentation,
                 IPadOverridesPath().fileSystemRepresentation);

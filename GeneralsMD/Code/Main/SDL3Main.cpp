@@ -332,6 +332,44 @@ static bool IOSContraSettingBool(
     return value == "yes" || value == "true" || value == "1" || value == "on";
 }
 
+static std::filesystem::path IOSEnhancedSettingsPath()
+{
+    const char *home = getenv("HOME");
+    if (home == nullptr || home[0] == '\0')
+        return std::filesystem::path("EnhancedSettings.ini");
+    return std::filesystem::path(home) / "Documents" / "EnhancedSettings.ini";
+}
+
+static std::unordered_map<std::string, std::string> IOSLoadEnhancedSettings()
+{
+    std::unordered_map<std::string, std::string> values;
+    std::ifstream input(IOSEnhancedSettingsPath());
+    std::string line;
+    while (std::getline(input, line))
+    {
+        line = IOSContraTrim(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';')
+            continue;
+        const size_t equals = line.find('=');
+        if (equals == std::string::npos)
+            continue;
+        std::string key = IOSContraLower(IOSContraTrim(line.substr(0, equals)));
+        std::string value = IOSContraTrim(line.substr(equals + 1));
+        if (!key.empty())
+            values[key] = value;
+    }
+    return values;
+}
+
+static std::string IOSEnhancedSetting(
+    const std::unordered_map<std::string, std::string> &settings,
+    const char *key,
+    const char *fallback)
+{
+    auto it = settings.find(IOSContraLower(key));
+    return it == settings.end() || it->second.empty() ? fallback : it->second;
+}
+
 static bool IOSContraCoreArchive(const std::string &logicalCtr)
 {
     static const char *required[] = {
@@ -569,6 +607,192 @@ static bool IOSPrepareContraRuntimeProfile(
     return true;
 }
 
+static bool IOSPrepareEnhancedRuntimeProfile(
+    const char *sourceProfilePath,
+    char *runtimePath,
+    size_t runtimePathSize)
+{
+    if (sourceProfilePath == nullptr || runtimePath == nullptr || runtimePathSize == 0)
+        return false;
+
+    const char *home = getenv("HOME");
+    if (home == nullptr || home[0] == '\0')
+    {
+        fprintf(stderr, "[ENHANCED-SETTINGS] HOME is unavailable; using bundled profile\n");
+        return false;
+    }
+
+    auto settings = IOSLoadEnhancedSettings();
+    const std::string textureResolution =
+        IOSContraLower(IOSEnhancedSetting(settings, "TextureResolution", "High"));
+    const std::string uiQuality =
+        IOSContraLower(IOSEnhancedSetting(settings, "UIQuality", "FHD"));
+    const std::string cameos =
+        IOSContraLower(IOSEnhancedSetting(settings, "Cameos", "HD"));
+    const std::string aiScripts =
+        IOSContraLower(IOSEnhancedSetting(settings, "AIScripts", "Default"));
+
+    std::filesystem::path source(sourceProfilePath);
+    std::filesystem::path runtime =
+        std::filesystem::path(home) / "Documents" / "EnhancedRuntime";
+
+    std::error_code ec;
+    std::filesystem::remove_all(runtime, ec);
+    ec.clear();
+    std::filesystem::create_directories(runtime, ec);
+    if (ec)
+    {
+        fprintf(stderr, "[ENHANCED-SETTINGS] failed to create runtime profile: %s\n",
+                ec.message().c_str());
+        return false;
+    }
+
+    int activeArchives = 0;
+    int inactiveArchives = 0;
+    int linkedEntries = 0;
+
+    for (std::filesystem::directory_iterator it(source, ec), end; !ec && it != end; it.increment(ec))
+    {
+        const std::filesystem::path sourceEntry = it->path();
+        std::filesystem::path targetName = sourceEntry.filename();
+        std::string lowerName = IOSContraLower(sourceEntry.filename().string());
+
+        std::error_code typeError;
+        if (it->is_directory(typeError) && !typeError)
+        {
+            if (lowerName == "optional")
+                continue;
+
+            if (lowerName == "data")
+            {
+                std::filesystem::path runtimeData = runtime / "Data";
+                std::filesystem::create_directories(runtimeData, ec);
+                if (ec)
+                    return false;
+
+                std::error_code dataError;
+                for (std::filesystem::directory_iterator dit(sourceEntry, dataError), dend;
+                     !dataError && dit != dend;
+                     dit.increment(dataError))
+                {
+                    if (IOSContraLower(dit->path().filename().string()) == "scripts")
+                        continue;
+                    std::filesystem::create_symlink(
+                        dit->path(), runtimeData / dit->path().filename(), dataError);
+                    if (dataError)
+                        break;
+                }
+                if (dataError)
+                {
+                    fprintf(stderr, "[ENHANCED-SETTINGS] Data overlay failed: %s\n",
+                            dataError.message().c_str());
+                    return false;
+                }
+
+                std::filesystem::path scriptsSource = sourceEntry / "Scripts";
+                if (aiScripts == "restrained")
+                    scriptsSource = source / "Optional" / "AI" / "Restrained" / "Scripts";
+                else if (aiScripts == "skynet")
+                    scriptsSource = source / "Optional" / "AI" / "Skynet" / "Scripts";
+
+                if (!std::filesystem::exists(scriptsSource, dataError) || dataError)
+                {
+                    fprintf(stderr,
+                            "[ENHANCED-SETTINGS] selected AI scripts missing at '%s'; using default\n",
+                            scriptsSource.string().c_str());
+                    dataError.clear();
+                    scriptsSource = sourceEntry / "Scripts";
+                }
+                std::filesystem::create_directory_symlink(
+                    scriptsSource, runtimeData / "Scripts", dataError);
+                if (dataError)
+                {
+                    fprintf(stderr, "[ENHANCED-SETTINGS] Scripts link failed: %s\n",
+                            dataError.message().c_str());
+                    return false;
+                }
+                ++linkedEntries;
+                continue;
+            }
+
+            std::filesystem::create_directory_symlink(
+                sourceEntry, runtime / targetName, ec);
+            if (ec)
+            {
+                fprintf(stderr, "[ENHANCED-SETTINGS] directory link failed: %s\n",
+                        ec.message().c_str());
+                return false;
+            }
+            ++linkedEntries;
+            continue;
+        }
+
+        std::string ext = IOSContraLower(sourceEntry.extension().string());
+        if (ext == ".big" || ext == ".zhe")
+        {
+            bool active = ext == ".big";
+            const bool baseHD = lowerName.find("!zhe8texturesbasehd_") == 0;
+            const bool cameoHD = lowerName == "!zhe8cameohd_99.big" || lowerName == "!zhe8cameohd_99.zhe";
+            const bool cameoSD = lowerName == "!zhe8cameosd_99.big" || lowerName == "!zhe8cameosd_99.zhe";
+            const bool uiFHD = lowerName == "!zhe8uifhd_99.big" || lowerName == "!zhe8uifhd_99.zhe";
+            const bool uiHD = lowerName == "!zhe8uihd_99.big" || lowerName == "!zhe8uihd_99.zhe";
+            const bool uiQHD = lowerName == "!zhe8uiqhd_99.big" || lowerName == "!zhe8uiqhd_99.zhe";
+
+            if (baseHD)
+                active = textureResolution == "high";
+            else if (cameoHD || cameoSD)
+                active = (cameos == "hd" && cameoHD) || (cameos == "sd" && cameoSD);
+            else if (uiFHD || uiHD || uiQHD)
+                active = (uiQuality == "fhd" && uiFHD) ||
+                         (uiQuality == "hd" && uiHD) ||
+                         (uiQuality == "qhd" && uiQHD);
+
+            targetName.replace_extension(active ? ".big" : ".zhe");
+            if (active && (cameoHD || cameoSD))
+                targetName = "zzzz__IOS_Enhanced_Cameos.big";
+            else if (active && (uiFHD || uiHD || uiQHD))
+                targetName = "zzzz__IOS_Enhanced_UI.big";
+
+            if (active)
+                ++activeArchives;
+            else
+                ++inactiveArchives;
+        }
+
+        std::filesystem::create_symlink(sourceEntry, runtime / targetName, ec);
+        if (ec)
+        {
+            fprintf(stderr, "[ENHANCED-SETTINGS] file link failed source='%s' error='%s'\n",
+                    sourceEntry.string().c_str(), ec.message().c_str());
+            return false;
+        }
+        ++linkedEntries;
+    }
+
+    if (ec)
+    {
+        fprintf(stderr, "[ENHANCED-SETTINGS] runtime scan failed: %s\n", ec.message().c_str());
+        return false;
+    }
+
+    const std::string runtimeString = runtime.string();
+    if (runtimeString.size() + 1 > runtimePathSize)
+        return false;
+    strlcpy(runtimePath, runtimeString.c_str(), runtimePathSize);
+
+    fprintf(stderr,
+            "[ENHANCED-SETTINGS] runtime-ready path='%s' textures='%s' ui='%s' cameos='%s' ai='%s' active=%d inactive=%d entries=%d\n",
+            runtimePath,
+            IOSEnhancedSetting(settings, "TextureResolution", "High").c_str(),
+            IOSEnhancedSetting(settings, "UIQuality", "FHD").c_str(),
+            IOSEnhancedSetting(settings, "Cameos", "HD").c_str(),
+            IOSEnhancedSetting(settings, "AIScripts", "Default").c_str(),
+            activeArchives,
+            inactiveArchives,
+            linkedEntries);
+    return true;
+}
+
 static void LogIOSProfileContents(const char *modPath)
 {
     if (modPath == nullptr || modPath[0] == '\0')
@@ -653,6 +877,7 @@ static void InjectIOSProfileModArgument(const char *profileId)
     else
         return;
 
+    const bool isEnhanced = strcmp(profileId, "enhanced") == 0;
     const bool isContra = strcmp(profileId, "contra-x") == 0;
 
     if (__argc <= 0 || __argv[0] == nullptr)
@@ -686,7 +911,20 @@ static void InjectIOSProfileModArgument(const char *profileId)
     const char *selectedModPath = bundledModPath;
     bool forceFullViewport = false;
 
-    if (isContra &&
+    if (isEnhanced &&
+        IOSPrepareEnhancedRuntimeProfile(
+            bundledModPath,
+            runtimeModPath,
+            sizeof(runtimeModPath)))
+    {
+        selectedModPath = runtimeModPath;
+    }
+    else if (isEnhanced)
+    {
+        fprintf(stderr,
+                "[ENHANCED-SETTINGS] runtime overlay unavailable; using bundled profile\n");
+    }
+    else if (isContra &&
         IOSPrepareContraRuntimeProfile(
             bundledModPath,
             runtimeModPath,

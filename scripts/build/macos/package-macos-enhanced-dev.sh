@@ -27,6 +27,15 @@ if [[ -z "${BUILD_COMMIT}" ]]; then
 fi
 printf 'commit=%s\n' "${BUILD_COMMIT}" > "${RES}/build-info.txt"
 
+MAC_LAUNCHER_SRC="${ROOT}/scripts/build/macos/EnhancedMacLauncher.swift"
+MAC_LAUNCHER_BIN="${BIN}/GeneralsXEnhancedLauncher"
+if [[ -f "${MAC_LAUNCHER_SRC}" ]]; then
+  command -v xcrun >/dev/null 2>&1 || { echo "ERROR: xcrun is required to build the Enhanced macOS launcher"; exit 1; }
+  echo "==> Building native Enhanced macOS launcher"
+  xcrun swiftc -parse-as-library -O -framework SwiftUI -framework AppKit "${MAC_LAUNCHER_SRC}" -o "${MAC_LAUNCHER_BIN}"
+  chmod +x "${MAC_LAUNCHER_BIN}"
+fi
+
 cat > "${CONTENTS}/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -148,6 +157,7 @@ BIN="${RES}/bin"
 LIB="${RES}/lib"
 GAME_ROOT="${GX_GAME_ROOT:-${HOME}/GeneralsX/GeneralsZH}"
 SOURCE_MOD_ROOT="${GX_ENHANCED_ROOT:-${HOME}/GeneralsX/Enhanced}"
+RUNTIME_MOD_ROOT="${HOME}/GeneralsX/EnhancedRuntime"
 OPTIONS_FILE="${HOME}/Library/Application Support/GeneralsX/GeneralsZH/Options.ini"
 LOG_DIR="${HOME}/Library/Logs/GeneralsXZH"
 mkdir -p "${LOG_DIR}"
@@ -174,8 +184,24 @@ if [[ ! -d "${SOURCE_MOD_ROOT}" ]]; then
   exit 3
 fi
 
+# Native Enhanced settings launcher. It writes EnhancedSettings.ini/Options.ini
+# and creates a runtime overlay without modifying the installed source profile.
+if [[ "${GX_SKIP_MAC_LAUNCHER:-0}" != "1" && -x "${BIN}/GeneralsXEnhancedLauncher" ]]; then
+  ACTION_FILE="${TMPDIR:-/tmp}/generalsx-enhanced-action-$"
+  rm -f "${ACTION_FILE}"
+  export GX_MAC_LAUNCH_ACTION_FILE="${ACTION_FILE}"
+  "${BIN}/GeneralsXEnhancedLauncher"
+  if [[ ! -f "${ACTION_FILE}" || "$(tr -d '[:space:]' < "${ACTION_FILE}")" != "play" ]]; then
+    rm -f "${ACTION_FILE}"
+    exit 0
+  fi
+  rm -f "${ACTION_FILE}"
+fi
 
 MOD_ROOT="${SOURCE_MOD_ROOT}"
+if [[ -d "${RUNTIME_MOD_ROOT}" && -n "$(find "${RUNTIME_MOD_ROOT}" -maxdepth 1 -name '*.big' -print -quit 2>/dev/null)" ]]; then
+  MOD_ROOT="${RUNTIME_MOD_ROOT}"
+fi
 
 cd "${GAME_ROOT}"
 {
@@ -238,6 +264,7 @@ echo "Installing retail GameData -> ${GAME}"
 rsync -a --delete "${APP}/GameData/" "${GAME}/"
 echo "Installing Enhanced -> ${MOD}"
 rsync -a --delete "${APP}/Profiles/enhanced/" "${MOD}/"
+rm -rf "${HOME}/GeneralsX/EnhancedRuntime"
 
 BIG_COUNT="$(find "${GAME}" -name '*.big' | wc -l | tr -d ' ')"
 MOD_BIG_COUNT="$(find "${MOD}" -maxdepth 1 -name '*.big' | wc -l | tr -d ' ')"
@@ -257,7 +284,8 @@ GeneralsZH Enhanced Dev — Apple Silicon test build
 1. Run "Install Enhanced Data.command" once.
 2. Select your own GeneralsZH-Enhanced-unsigned.ipa.
 3. Open GeneralsZH-Enhanced-Dev.app.
-4. Runtime log:
+4. Choose Enhanced/Display/Camera settings in the native launcher, then Play Enhanced.
+5. Runtime log:
    ~/Library/Logs/GeneralsXZH/enhanced-dev.log
 
 Game assets are not included in this build.
@@ -266,6 +294,7 @@ The installer only extracts data from the IPA you provide locally.
 Environment overrides:
   GX_GAME_ROOT=~/GeneralsX/GeneralsZH
   GX_ENHANCED_ROOT=~/GeneralsX/Enhanced
+  GX_SKIP_MAC_LAUNCHER=1
   GX_MAC_FULLSCREEN=1
 README
 
