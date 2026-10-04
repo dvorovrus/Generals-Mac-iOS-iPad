@@ -609,6 +609,40 @@ BOOL GXHubInstallPackageAtURL(
         return NO;
     }
 
+    if (![[packageURL.pathExtension lowercaseString] isEqualToString:@"gxmod"])
+    {
+        if (error != nullptr)
+            *error = GXHubError(72, @"Selected file is not a .gxmod package.");
+        return NO;
+    }
+
+    NSDictionary<NSFileAttributeKey, id> *packageAttributes =
+        [[NSFileManager defaultManager] attributesOfItemAtPath:packageURL.path error:error];
+    if (packageAttributes == nil)
+        return NO;
+
+    unsigned long long packageBytes = [packageAttributes fileSize];
+    NSDictionary<NSFileAttributeKey, id> *fsAttributes =
+        [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:error];
+    if (fsAttributes == nil)
+        return NO;
+
+    unsigned long long freeBytes = [fsAttributes[NSFileSystemFreeSize] unsignedLongLongValue];
+    const unsigned long long reserveBytes = 256ULL * 1024ULL * 1024ULL;
+    if (freeBytes < packageBytes + reserveBytes)
+    {
+        if (error != nullptr)
+        {
+            *error = GXHubError(
+                73,
+                [NSString stringWithFormat:
+                    @"Not enough free space. Need about %.1f GB free to install this mod; available %.1f GB.",
+                    (double)(packageBytes + reserveBytes) / 1024.0 / 1024.0 / 1024.0,
+                    (double)freeBytes / 1024.0 / 1024.0 / 1024.0]);
+        }
+        return NO;
+    }
+
     if (expectedSHA256.length > 0)
     {
         NSString *actual = GXHubSHA256ForFile(packageURL, error);

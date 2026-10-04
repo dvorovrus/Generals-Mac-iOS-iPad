@@ -910,7 +910,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 {
     UIDocumentPickerViewController *picker =
         [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.data"]
-                                                               inMode:UIDocumentPickerModeImport];
+                                                               inMode:UIDocumentPickerModeOpen];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];
