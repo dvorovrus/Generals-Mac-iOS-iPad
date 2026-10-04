@@ -278,6 +278,7 @@ NSDictionary<NSString *, NSString *> *DefaultEnhancedSettings()
     return @{
         @"TextureResolution": @"High",
         @"UIQuality": @"FHD",
+        @"InfantryIconScale": @"100",
         @"Cameos": @"HD",
         @"AIScripts": @"Default"
     };
@@ -423,6 +424,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
 @property(nonatomic, strong) UISegmentedControl *enhancedTextureResolutionSegment;
 @property(nonatomic, strong) UISegmentedControl *enhancedUIQualitySegment;
+@property(nonatomic, strong) UISegmentedControl *enhancedInfantryIconScaleSegment;
 @property(nonatomic, strong) UISegmentedControl *enhancedCameosSegment;
 @property(nonatomic, strong) UISegmentedControl *enhancedAIScriptsSegment;
 
@@ -708,6 +710,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     self.enhancedTextureResolutionSegment = [self makeSegmented:@[@"Vanilla", @"High"]];
     self.enhancedUIQualitySegment = [self makeSegmented:@[@"HD", @"FHD", @"QHD"]];
+    self.enhancedInfantryIconScaleSegment = [self makeSegmented:@[@"100%", @"75%", @"50%"]];
     self.enhancedCameosSegment = [self makeSegmented:@[@"SD", @"HD"]];
     self.enhancedAIScriptsSegment = [self makeSegmented:@[@"Default", @"Restrained", @"Skynet"]];
 
@@ -754,8 +757,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     {
         [controlViews addObjectsFromArray:@[
             [self sectionLabel:@"ENHANCED"],
-            [self segmentedRow:@"Texture resolution" control:self.enhancedTextureResolutionSegment],
+            [self segmentedRow:@"Faction textures" control:self.enhancedTextureResolutionSegment],
             [self segmentedRow:@"UI quality" control:self.enhancedUIQualitySegment],
+            [self segmentedRow:@"Infantry icons" control:self.enhancedInfantryIconScaleSegment],
             [self segmentedRow:@"Cameos" control:self.enhancedCameosSegment],
             [self segmentedRow:@"AI scripts" control:self.enhancedAIScriptsSegment],
         ]];
@@ -1255,6 +1259,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 {
     self.enhancedTextureResolutionSegment.selectedSegmentIndex = 1; // High
     self.enhancedUIQualitySegment.selectedSegmentIndex = 1; // FHD
+    self.enhancedInfantryIconScaleSegment.selectedSegmentIndex = 0; // 100%
     self.enhancedCameosSegment.selectedSegmentIndex = 1; // HD
     self.enhancedAIScriptsSegment.selectedSegmentIndex = 0; // Default
 }
@@ -1304,6 +1309,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self segmentIndexForValue:SettingValue(values, @"UIQuality", @"FHD")
                            choices:@[@"HD", @"FHD", @"QHD"]
                           fallback:1];
+    self.enhancedInfantryIconScaleSegment.selectedSegmentIndex =
+        [self segmentIndexForValue:SettingValue(values, @"InfantryIconScale", @"100")
+                           choices:@[@"100", @"75", @"50"]
+                          fallback:0];
     self.enhancedCameosSegment.selectedSegmentIndex =
         [self segmentIndexForValue:SettingValue(values, @"Cameos", @"HD")
                            choices:@[@"SD", @"HD"]
@@ -1552,12 +1561,14 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 {
     NSArray<NSString *> *textureModes = @[@"Vanilla", @"High"];
     NSArray<NSString *> *uiModes = @[@"HD", @"FHD", @"QHD"];
+    NSArray<NSString *> *infantryIconScales = @[@"100", @"75", @"50"];
     NSArray<NSString *> *cameoModes = @[@"SD", @"HD"];
     NSArray<NSString *> *aiModes = @[@"Default", @"Restrained", @"Skynet"];
 
     NSMutableDictionary<NSString *, NSString *> *enhanced = [DefaultEnhancedSettings() mutableCopy];
     enhanced[@"TextureResolution"] = textureModes[MAX(0, MIN(1, self.enhancedTextureResolutionSegment.selectedSegmentIndex))];
     enhanced[@"UIQuality"] = uiModes[MAX(0, MIN(2, self.enhancedUIQualitySegment.selectedSegmentIndex))];
+    enhanced[@"InfantryIconScale"] = infantryIconScales[MAX(0, MIN(2, self.enhancedInfantryIconScaleSegment.selectedSegmentIndex))];
     enhanced[@"Cameos"] = cameoModes[MAX(0, MIN(1, self.enhancedCameosSegment.selectedSegmentIndex))];
     enhanced[@"AIScripts"] = aiModes[MAX(0, MIN(2, self.enhancedAIScriptsSegment.selectedSegmentIndex))];
 

@@ -37,12 +37,15 @@ The standalone IPA uses `AutoLaunchProfile.txt=enhanced`, so it opens the dedica
 
 The native Settings screen exposes the portable options from the original Enhanced launcher:
 
-- Texture resolution: `Vanilla` / `High`
+- Faction textures: `Vanilla` / `High` (the original ZHE HD faction texture pack)
 - UI quality: `HD` / `FHD` / `QHD`
+- Infantry icons: `100%` / `75%` / `50%`
 - Cameos: `SD` / `HD`
 - AI scripts: `Default` / `Restrained` / `Skynet`
 
-Selections are stored in `Documents/EnhancedSettings.ini`. On launch the engine builds `Documents/EnhancedRuntime` with only the selected `.big` overlays and selected `Data/Scripts`. The bundled `Profiles/enhanced` source remains unchanged.
+Selections are stored in `Documents/EnhancedSettings.ini`. On launch the engine builds `Documents/EnhancedRuntime` with only the selected `.big` overlays and selected AI. Selected faction-HD, UI, infantry-icon, cameo, and alternate-AI archives receive last-sorting `zzzz__...` runtime names so they win the Generals `-mod` archive precedence rules. The bundled `Profiles/enhanced` source remains unchanged.
+
+There is no separate UHD faction-texture preset in ZHE 1.0. `QHD` is the UI-definition option; faction textures are `Vanilla` or the ZHE high/HD texture pack.
 
 ReShade/DXWrapper are intentionally excluded because those plugins depend on Windows DLL injection and are not part of the Apple rendering path.
 

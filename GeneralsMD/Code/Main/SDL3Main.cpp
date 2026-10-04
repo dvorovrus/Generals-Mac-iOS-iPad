@@ -627,6 +627,8 @@ static bool IOSPrepareEnhancedRuntimeProfile(
         IOSContraLower(IOSEnhancedSetting(settings, "TextureResolution", "High"));
     const std::string uiQuality =
         IOSContraLower(IOSEnhancedSetting(settings, "UIQuality", "FHD"));
+    const std::string infantryIconScale =
+        IOSContraLower(IOSEnhancedSetting(settings, "InfantryIconScale", "100"));
     const std::string cameos =
         IOSContraLower(IOSEnhancedSetting(settings, "Cameos", "HD"));
     const std::string aiScripts =
@@ -737,12 +739,19 @@ static bool IOSPrepareEnhancedRuntimeProfile(
             const bool uiFHD = lowerName == "!zhe8uifhd_99.big" || lowerName == "!zhe8uifhd_99.zhe";
             const bool uiHD = lowerName == "!zhe8uihd_99.big" || lowerName == "!zhe8uihd_99.zhe";
             const bool uiQHD = lowerName == "!zhe8uiqhd_99.big" || lowerName == "!zhe8uiqhd_99.zhe";
+            const bool icons100 = lowerName == "!zhe8iui_97.big" || lowerName == "!zhe8iui_97.zhe";
+            const bool icons75 = lowerName == "!zhe8iui_98.big" || lowerName == "!zhe8iui_98.zhe";
+            const bool icons50 = lowerName == "!zhe8iui_99.big" || lowerName == "!zhe8iui_99.zhe";
             const bool defaultAI = lowerName == "scriptszh.big" || lowerName == "scriptszh.zhe";
             const bool restrainedAI = lowerName == "!zhe8airestrained_99.big" || lowerName == "!zhe8airestrained_99.zhe";
             const bool skynetAI = lowerName == "!zhe8aiskynet_99.big" || lowerName == "!zhe8aiskynet_99.zhe";
 
             if (baseHD)
                 active = textureResolution == "high";
+            else if (icons100 || icons75 || icons50)
+                active = (infantryIconScale == "100" && icons100) ||
+                         (infantryIconScale == "75" && icons75) ||
+                         (infantryIconScale == "50" && icons50);
             else if (cameoHD || cameoSD)
                 active = (cameos == "hd" && cameoHD) || (cameos == "sd" && cameoSD);
             else if (uiFHD || uiHD || uiQHD)
@@ -756,7 +765,11 @@ static bool IOSPrepareEnhancedRuntimeProfile(
                          (aiScripts == "skynet" && skynetAI);
 
             targetName.replace_extension(active ? ".big" : ".zhe");
-            if (active && (cameoHD || cameoSD))
+            if (active && baseHD)
+                targetName = "zzzz__IOS_Enhanced_FactionHD_" + sourceEntry.stem().string() + ".big";
+            else if (active && (icons100 || icons75 || icons50))
+                targetName = "zzzz__IOS_Enhanced_InfantryIcons.big";
+            else if (active && (cameoHD || cameoSD))
                 targetName = "zzzz__IOS_Enhanced_Cameos.big";
             else if (active && (uiFHD || uiHD || uiQHD))
                 targetName = "zzzz__IOS_Enhanced_UI.big";
@@ -767,6 +780,20 @@ static bool IOSPrepareEnhancedRuntimeProfile(
                 ++activeArchives;
             else
                 ++inactiveArchives;
+
+            if (baseHD || icons100 || icons75 || icons50 || cameoHD || cameoSD || uiFHD || uiHD || uiQHD || defaultAI || restrainedAI || skynetAI)
+            {
+                const char *category = baseHD ? "faction-textures" :
+                    ((icons100 || icons75 || icons50) ? "infantry-icons" :
+                    ((cameoHD || cameoSD) ? "cameos" :
+                    ((uiFHD || uiHD || uiQHD) ? "ui" : "ai")));
+                fprintf(stderr,
+                        "[ENHANCED-SETTINGS] archive='%s' category=%s state=%s runtime='%s'\n",
+                        sourceEntry.filename().string().c_str(),
+                        category,
+                        active ? "active" : "inactive",
+                        targetName.string().c_str());
+            }
         }
 
         std::filesystem::create_symlink(sourceEntry, runtime / targetName, ec);
@@ -791,10 +818,11 @@ static bool IOSPrepareEnhancedRuntimeProfile(
     strlcpy(runtimePath, runtimeString.c_str(), runtimePathSize);
 
     fprintf(stderr,
-            "[ENHANCED-SETTINGS] runtime-ready path='%s' textures='%s' ui='%s' cameos='%s' ai='%s' active=%d inactive=%d entries=%d\n",
+            "[ENHANCED-SETTINGS] runtime-ready path='%s' textures='%s' ui='%s' infantryIcons='%s%%' cameos='%s' ai='%s' active=%d inactive=%d entries=%d\n",
             runtimePath,
             IOSEnhancedSetting(settings, "TextureResolution", "High").c_str(),
             IOSEnhancedSetting(settings, "UIQuality", "FHD").c_str(),
+            IOSEnhancedSetting(settings, "InfantryIconScale", "100").c_str(),
             IOSEnhancedSetting(settings, "Cameos", "HD").c_str(),
             IOSEnhancedSetting(settings, "AIScripts", "Default").c_str(),
             activeArchives,

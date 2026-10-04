@@ -57,6 +57,7 @@ final class EnhancedLauncherModel: ObservableObject {
     let engineTextureQualities = ["High", "Medium", "Low"]
     let textureResolutions = ["Vanilla", "High"]
     let uiQualities = ["HD", "FHD", "QHD"]
+    let infantryIconScales = ["100%", "75%", "50%"]
     let cameoQualities = ["SD", "HD"]
     let aiModes = ["Default", "Restrained", "Skynet"]
 
@@ -67,6 +68,7 @@ final class EnhancedLauncherModel: ObservableObject {
 
     @Published var textureResolution = "High"
     @Published var uiQuality = "FHD"
+    @Published var infantryIconScale = "100%"
     @Published var cameos = "HD"
     @Published var aiScripts = "Default"
 
@@ -100,6 +102,7 @@ final class EnhancedLauncherModel: ObservableObject {
         let settings = readKeyValues(settingsURL)
         textureResolution = settings["TextureResolution"] ?? "High"
         uiQuality = settings["UIQuality"] ?? "FHD"
+        infantryIconScale = (settings["InfantryIconScale"] ?? "100") + "%"
         cameos = settings["Cameos"] ?? "HD"
         aiScripts = settings["AIScripts"] ?? "Default"
 
@@ -118,6 +121,7 @@ final class EnhancedLauncherModel: ObservableObject {
         engineTextureQuality = "High"
         textureResolution = "High"
         uiQuality = "FHD"
+        infantryIconScale = "100%"
         cameos = "HD"
         aiScripts = "Default"
         maxCameraHeight = 550
@@ -146,6 +150,7 @@ final class EnhancedLauncherModel: ObservableObject {
             let settings = [
                 "TextureResolution": textureResolution,
                 "UIQuality": uiQuality,
+                "InfantryIconScale": infantryIconScale.replacingOccurrences(of: "%", with: ""),
                 "Cameos": cameos,
                 "AIScripts": aiScripts
             ]
@@ -249,6 +254,9 @@ final class EnhancedLauncherModel: ObservableObject {
                 let uiFHD = name == "!zhe8uifhd_99.big" || name == "!zhe8uifhd_99.zhe"
                 let uiHD = name == "!zhe8uihd_99.big" || name == "!zhe8uihd_99.zhe"
                 let uiQHD = name == "!zhe8uiqhd_99.big" || name == "!zhe8uiqhd_99.zhe"
+                let icons100 = name == "!zhe8iui_97.big" || name == "!zhe8iui_97.zhe"
+                let icons75 = name == "!zhe8iui_98.big" || name == "!zhe8iui_98.zhe"
+                let icons50 = name == "!zhe8iui_99.big" || name == "!zhe8iui_99.zhe"
                 let defaultAI = name == "scriptszh.big" || name == "scriptszh.zhe"
                 let restrainedAI = name == "!zhe8airestrained_99.big" || name == "!zhe8airestrained_99.zhe"
                 let skynetAI = name == "!zhe8aiskynet_99.big" || name == "!zhe8aiskynet_99.zhe"
@@ -256,6 +264,10 @@ final class EnhancedLauncherModel: ObservableObject {
                 var active = ext == "big"
                 if baseHD {
                     active = textureResolution.lowercased() == "high"
+                } else if icons100 || icons75 || icons50 {
+                    active = (infantryIconScale == "100%" && icons100) ||
+                             (infantryIconScale == "75%" && icons75) ||
+                             (infantryIconScale == "50%" && icons50)
                 } else if cameoHD || cameoSD {
                     active = (cameos.lowercased() == "hd" && cameoHD) ||
                              (cameos.lowercased() == "sd" && cameoSD)
@@ -271,7 +283,11 @@ final class EnhancedLauncherModel: ObservableObject {
                 }
 
                 targetName = base + (active ? ".big" : ".zhe")
-                if active && (cameoHD || cameoSD) {
+                if active && baseHD {
+                    targetName = "zzzz__Mac_Enhanced_FactionHD_\(base).big"
+                } else if active && (icons100 || icons75 || icons50) {
+                    targetName = "zzzz__Mac_Enhanced_InfantryIcons.big"
+                } else if active && (cameoHD || cameoSD) {
                     targetName = "zzzz__Mac_Enhanced_Cameos.big"
                 } else if active && (uiFHD || uiHD || uiQHD) {
                     targetName = "zzzz__Mac_Enhanced_UI.big"
@@ -295,6 +311,7 @@ final class EnhancedLauncherModel: ObservableObject {
             "",
             "Texture resolution: \(textureResolution)",
             "UI quality: \(uiQuality)",
+            "Infantry icons: \(infantryIconScale)",
             "Cameos: \(cameos)",
             "AI scripts: \(aiScripts)",
             ""
@@ -348,11 +365,14 @@ struct EnhancedLauncherView: View {
                 .tabItem { Label("Display", systemImage: "display") }
 
                 Form {
-                    Picker("Texture resolution", selection: $model.textureResolution) {
+                    Picker("Faction textures", selection: $model.textureResolution) {
                         ForEach(model.textureResolutions, id: \.self) { Text($0) }
                     }
                     Picker("UI quality", selection: $model.uiQuality) {
                         ForEach(model.uiQualities, id: \.self) { Text($0) }
+                    }
+                    Picker("Infantry icons", selection: $model.infantryIconScale) {
+                        ForEach(model.infantryIconScales, id: \.self) { Text($0) }
                     }
                     Picker("Cameos", selection: $model.cameos) {
                         ForEach(model.cameoQualities, id: \.self) { Text($0) }

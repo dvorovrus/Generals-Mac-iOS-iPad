@@ -59,6 +59,8 @@ ZHE_OPTIONAL_ARCHIVES = {
     "!zhe8cameosd_99.zhe",
     "!zhe8uihd_99.zhe",
     "!zhe8uiqhd_99.zhe",
+    "!zhe8iui_98.zhe",
+    "!zhe8iui_99.zhe",
 }
 ZHE_AI_PLUGIN_PREFIXES = {
     "plugins/restrained ai scripts/scripts/": "Optional/AI/Restrained/Scripts/",

@@ -25,7 +25,7 @@ The app opens a native Enhanced settings launcher first. After Save/Play it buil
 -mod ~/GeneralsX/EnhancedRuntime
 ```
 
-Available Enhanced-specific options are Texture resolution (`Vanilla`/`High`), UI quality (`HD`/`FHD`/`QHD`), Cameos (`SD`/`HD`), and AI scripts (`Default`/`Restrained`/`Skynet`). ReShade/DXWrapper remain excluded because they require the Windows DLL path.
+Available Enhanced-specific options are faction textures (`Vanilla`/`High`), UI quality (`HD`/`FHD`/`QHD`), infantry icons (`100%`/`75%`/`50%`), Cameos (`SD`/`HD`), and AI scripts (`Default`/`Restrained`/`Skynet`). Selected visual/AI overlays are renamed to last-sorting `zzzz__...` runtime archives so they win `-mod` archive precedence. ReShade/DXWrapper remain excluded because they require the Windows DLL path.
 
 Runtime log:
 
