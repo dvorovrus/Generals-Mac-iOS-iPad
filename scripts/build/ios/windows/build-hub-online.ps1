@@ -6,9 +6,9 @@ if ((Split-Path -Leaf (Split-Path -Parent $RepoRoot)) -eq "worktrees") {
 }
 $RepoName = "dvorovrus/Generals-Mac-iOS-iPad"
 $Branch = "feature/generals-hub-online"
-$Workflow = "build-ios-online.yml"
-$ArtifactName = "GeneralsXZH-online-unsigned"
-$ArtifactFile = "GeneralsXZH-online-unsigned.ipa"
+$Workflow = "build-ios-shell.yml"
+$ArtifactName = "GeneralsXZH-launcher-unsigned"
+$ArtifactFile = "GeneralsXZH-launcher-unsigned.ipa"
 $BaseIpa = Join-Path $Workspace "input\GeneralsZH-FULL-unsigned.ipa"
 $Output = Join-Path $Workspace "output\GeneralsZH-Hub-Online-unsigned.ipa"
 $Builder = Join-Path $RepoRoot "scripts\build\ios\build-variant-ipa.py"
@@ -27,16 +27,16 @@ if ($LASTEXITCODE -ne 0) { throw "GitHub CLI is not authenticated." }
 
 $runsJson = & gh run list --repo $RepoName --workflow $Workflow --branch $Branch --status success --limit 1 --json databaseId
 $runs = @($runsJson | ConvertFrom-Json)
-if ($runs.Count -eq 0) { throw "No successful Hub Online engine build found on $Branch." }
+if ($runs.Count -eq 0) { throw "No successful Online-capable Hub shared shell found on $Branch." }
 $RunId = [long]$runs[0].databaseId
 $run = (& gh run view $RunId --repo $RepoName --json status,conclusion,url,headSha,headBranch | ConvertFrom-Json)
-if ($run.conclusion -ne "success" -or $run.headBranch -ne $Branch) { throw "Run $RunId is not a successful Hub Online build." }
+if ($run.conclusion -ne "success" -or $run.headBranch -ne $Branch) { throw "Run $RunId is not a successful Online-capable Hub shared shell." }
 
 $ArtifactDir = Join-Path $Workspace "artifacts\ipad\hub-online\$RunId"
 $Shell = Join-Path $ArtifactDir $ArtifactFile
 New-Item -ItemType Directory -Force -Path $ArtifactDir | Out-Null
 if (-not (Test-Path -LiteralPath $Shell)) {
-    Write-Host "Downloading Hub Online engine shell..." -ForegroundColor Cyan
+    Write-Host "Downloading Online-capable Hub shared shell..." -ForegroundColor Cyan
     & gh run download $RunId --repo $RepoName --name $ArtifactName --dir $ArtifactDir
     if ($LASTEXITCODE -ne 0) { throw "Artifact download failed." }
 }

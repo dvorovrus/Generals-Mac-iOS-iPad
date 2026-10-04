@@ -34,8 +34,7 @@
         "installReady": true,
         "installMode": "sideloadly",
         "localFallbackScript": "scripts/build/ios/windows/build-contra.ps1",
-        "localOutput": "GeneralsZH-ContraX-unsigned.ipa"
-,
+        "localOutput": "GeneralsZH-ContraX-unsigned.ipa",
         "note": "Windows default: download the shared iPad engine shell from GitHub and package the full Contra X IPA locally. The full GitHub workflow remains available as a manual backup/release build."
       },
       "enhanced": {
@@ -49,8 +48,7 @@
         "installReady": true,
         "installMode": "sideloadly",
         "localFallbackScript": "scripts/build/ios/windows/build-enhanced.ps1",
-        "localOutput": "GeneralsZH-Enhanced-unsigned.ipa"
-,
+        "localOutput": "GeneralsZH-Enhanced-unsigned.ipa",
         "note": "Windows default: download the shared iPad engine shell from GitHub and package the full Enhanced IPA locally. The full GitHub workflow remains available as a manual backup/release build."
       },
       "all": {
@@ -77,21 +75,20 @@
         "installReady": false,
         "installMode": "sideloadly",
         "note": "Current Online artifact is an engine shell without retail GameData. Treat it as a test build, not a normal end-user full IPA."
-      }
-,
+      },
       "hub": {
-        "title": "Generals Hub: Zero Hour Online + installable mods",
+        "title": "Generals Hub: Online + installable mods",
         "status": "experimental",
         "branch": "feature/generals-hub-online",
         "buildMode": "local",
-        "workflow": "build-ios-online.yml",
-        "artifact": "GeneralsXZH-online-unsigned",
+        "workflow": "build-ios-shell.yml",
+        "artifact": "GeneralsXZH-launcher-unsigned",
         "artifactFile": "GeneralsZH-Hub-Online-unsigned.ipa",
         "installReady": true,
         "installMode": "sideloadly",
         "localFallbackScript": "scripts/build/ios/windows/build-hub-online.ps1",
         "localOutput": "GeneralsZH-Hub-Online-unsigned.ipa",
-        "note": "One base Online-enabled IPA. Enhanced/Contra and future mods install later as .gxmod packages under Documents/Mods."
+        "note": "One Online-enabled Hub IPA. There is no separate vanilla launch mode. Enhanced/Contra and future mods install later as .gxmod packages under Documents/Mods, with per-mod settings kept separately."
       }
     },
     "macos": {
