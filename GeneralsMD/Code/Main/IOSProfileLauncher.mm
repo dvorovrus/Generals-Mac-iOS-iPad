@@ -5,6 +5,7 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <atomic>
 #include <cstring>
@@ -904,8 +905,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 - (void)importModPackage
 {
     UIDocumentPickerViewController *picker =
-        [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.data"]
-                                                               inMode:UIDocumentPickerModeImport];
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeData]
+                                                                    asCopy:YES];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];
@@ -1193,12 +1194,6 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:controlViews];
     controls.translatesAutoresizingMaskIntoConstraints = NO;
-    // The first eleven rows are specific to the optional Contra profile.
-    if (!contraInstalled)
-    {
-        for (NSUInteger index = 0; index < 11; ++index)
-            controls.arrangedSubviews[index].hidden = YES;
-    }
     controls.axis = UILayoutConstraintAxisVertical;
     controls.alignment = UIStackViewAlignmentFill;
     controls.spacing = 9.0;
