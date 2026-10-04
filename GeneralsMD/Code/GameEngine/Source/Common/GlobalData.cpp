@@ -1269,6 +1269,18 @@ void GlobalData::parseCustomDefinition()
 	}
 }
 
+#if defined(__APPLE__) && defined(GENERALS_ONLINE)
+static UnsignedInt s_appleOnlineExeCRCSeed = 0;
+
+UnsignedInt GlobalData::generateExeCRCForApple(UnsignedInt executableSeedCRC)
+{
+	s_appleOnlineExeCRCSeed = executableSeedCRC;
+	const UnsignedInt result = generateExeCRC();
+	s_appleOnlineExeCRCSeed = 0;
+	return result;
+}
+#endif
+
 UnsignedInt GlobalData::generateExeCRC()
 {
 	DEBUG_ASSERTCRASH(TheFileSystem != nullptr, ("TheFileSystem is null"));
@@ -1288,11 +1300,39 @@ UnsignedInt GlobalData::generateExeCRC()
 	exeCRC.set(GENERALSMD_104_CD_EXE_CRC);
 	DEBUG_LOG(("Fake EXE CRC is 0x%8.8X", exeCRC.get()));
 
+#elif defined(__APPLE__) && defined(GENERALS_ONLINE)
+	if (s_appleOnlineExeCRCSeed != 0)
+	{
+		exeCRC.set(s_appleOnlineExeCRCSeed);
+		DEBUG_LOG(("Generals Online Apple parity EXE CRC seed is 0x%8.8X", exeCRC.get()));
+	}
+	else
+	{
+		Char buffer[_MAX_PATH];
+		uint32_t len = sizeof(buffer);
+		if (_NSGetExecutablePath(buffer, &len) != 0)
+			buffer[0] = '\0';
+		fp = TheFileSystem->openFile(buffer, File::READ | File::BINARY);
+		if (fp != nullptr)
+		{
+			unsigned char crcBlock[blockSize];
+			Int amtRead = 0;
+			Int readCount = 0;
+			while ((amtRead = fp->read(crcBlock, blockSize)) > 0)
+			{
+				++readCount;
+				exeCRC.computeCRC(crcBlock, amtRead);
+				if (readCount > 1000)
+					break;
+			}
+			fp->close();
+			fp = nullptr;
+		}
+	}
+
 #elif defined(__linux__)
-	// GeneralsX @bugfix BenderAI 18/02/2026
-	// On Linux, reading the entire 180MB+ binary for CRC is prohibitively slow
-	// and unnecessary. Instead, use version-based CRC which is fast and sufficient.
-	// Only compute CRC from version number below.
+	// On Linux, reading the entire binary for CRC is prohibitively slow.
+	// Only compute CRC from version/scripts below.
 
 #else
 	{

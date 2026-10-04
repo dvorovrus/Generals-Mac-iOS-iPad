@@ -887,7 +887,9 @@ void TextureClass::Apply_New_Surface
 	bool disable_auto_invalidation
 )
 {
+#if !(defined(__APPLE__) && defined(GENERALS_ONLINE))
 	const bool wasInitialized = Initialized;
+#endif
 	IDirect3DBaseTexture8* d3d_tex=Peek_D3D_Base_Texture();
 
 	if (d3d_tex) d3d_tex->Release();
@@ -910,6 +912,7 @@ void TextureClass::Apply_New_Surface
 		Width=d3d_desc.Width;
 		Height=d3d_desc.Height;
 
+#if !(defined(__APPLE__) && defined(GENERALS_ONLINE))
 		if (!wasInitialized)
 		{
 			fprintf(stderr,
@@ -920,10 +923,10 @@ void TextureClass::Apply_New_Surface
 			        (unsigned)d3d_desc.Width,
 			        (unsigned)d3d_desc.Height,
 			        (int)d3d_desc.Format,
-			        (int)TextureFormat,
 			        (unsigned)Peek_D3D_Texture()->GetLevelCount(),
 			        Is_Compression_Allowed() ? 1 : 0);
 		}
+#endif
 	}
 	surface->Release();
 

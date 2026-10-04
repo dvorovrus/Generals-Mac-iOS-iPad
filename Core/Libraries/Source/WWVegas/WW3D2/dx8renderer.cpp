@@ -115,6 +115,12 @@ static void Log_Material_Diag_Once(
 	VertexMaterialClass *material,
 	const ShaderClass &shader)
 {
+#if defined(__APPLE__) && defined(GENERALS_ONLINE)
+	// This diagnostic was added for Contra material debugging. In an Online
+	// match it executes from the render hot path and performs string/set work
+	// even after a mesh has already been seen, so keep it out of Apple Online.
+	return;
+#endif
 	if (mesh == nullptr)
 		return;
 

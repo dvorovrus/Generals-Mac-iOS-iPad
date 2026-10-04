@@ -42,6 +42,11 @@ public:
 	void reset();
 
 	Int id;
+#if defined(GENERALS_ONLINE)
+	Int elo_rating;
+	Int elo_num_matches;
+	Int monthly_elo_rating;
+#endif
 	PerGeneralMap wins;
 	PerGeneralMap losses;
 	PerGeneralMap games;              //first: playerTemplate #,  second: #games played (see also gamesAsRandom)

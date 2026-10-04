@@ -38,5 +38,10 @@ enum LocaleType CPP_11(: Int)
 void HandlePersistentStorageResponses();
 void UpdateLocalPlayerStats();
 
-void SetLookAtPlayer( Int id, AsciiString nick );
+#if defined(GENERALS_ONLINE)
+void SetLookAtPlayer(int64_t id, UnicodeString nick);
+void SetLookAtPlayer(int64_t id, AsciiString nick);
+#else
+void SetLookAtPlayer(Int id, AsciiString nick);
+#endif
 void PopulatePlayerInfoWindows( AsciiString parentWindowName );

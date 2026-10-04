@@ -235,6 +235,15 @@ static void LogMallocZoneDiagnostics(const char *phase, unsigned int frame)
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 #include "GameNetwork/LANAPI.h"
 #include "GameNetwork/GameSpy/GameResultsThread.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/OnlineServices_Init.h"
+static bool g_generalsOnlineTeardownRequested = false;
+
+void TearDownGeneralsOnline()
+{
+	g_generalsOnlineTeardownRequested = true;
+}
+#endif
 
 #include "Common/version.h"
 
@@ -438,6 +447,11 @@ GameEngine::~GameEngine()
 	delete TheGameLODManager;
 	TheGameLODManager = nullptr;
 
+#if defined(GENERALS_ONLINE)
+	NGMP_OnlineServicesManager::DestroyInstance();
+	NGMP_OnlineServicesManager::ShutdownSentry();
+#endif
+
 	Drawable::killStaticImages();
 
 // TheSuperHackers @build fighter19 11/02/2026 COM termination (Windows-only)
@@ -598,6 +612,12 @@ void GameEngine::init()
 	initSubsystem(TheWritableGlobalData, "TheWritableGlobalData", TheWritableGlobalData, &xferCRC, "Data\\INI\\Default\\GameData", "Data\\INI\\GameData");
 	TheWritableGlobalData->parseCustomDefinition();
 
+#if defined(GENERALS_ONLINE)
+	// Initializes libcurl global state before any Generals Online HTTP/WebSocket work.
+	// Sentry itself remains opt-in and is disabled on Apple by default.
+	NGMP_OnlineServicesManager::InitSentry();
+#endif
+
 	// GeneralsX @feature felipebraz 08/06/2026 Auto-create SagePatch.ini in user data dir with defaults.
 	// This replaces the run.sh copy approach with engine-managed defaults.
 	{
@@ -675,6 +695,11 @@ void GameEngine::init()
 
 		// special-case: parse command-line parameters after loading global data
 		CommandLine::parseCommandLineForEngineInit();
+
+#if defined(GENERALS_ONLINE)
+		// Load Generals Online settings before mods/data packs are resolved.
+		NGMP_OnlineServicesManager::Settings.Initialize();
+#endif
 
 		TheArchiveFileSystem->loadMods();
 
@@ -1158,6 +1183,19 @@ void GameEngine::update()
 			{
 				TheNetwork->UPDATE();
 			}
+
+#if defined(GENERALS_ONLINE)
+			if (g_generalsOnlineTeardownRequested)
+			{
+				g_generalsOnlineTeardownRequested = false;
+				NGMP_OnlineServicesManager::DestroyInstance();
+			}
+
+			if (NGMP_OnlineServicesManager::GetInstance() != nullptr)
+			{
+				NGMP_OnlineServicesManager::GetInstance()->Tick();
+			}
+#endif
 		}
 
 		const Bool canUpdate = canUpdateGameLogic();
@@ -1176,7 +1214,7 @@ void GameEngine::update()
 			TheScriptEngine->UPDATE();
 		}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(GENERALS_ONLINE)
 		// Long iOS matches can be terminated by memory pressure without a useful
 		// in-process crash stack. Keep a lightweight footprint trail in stderr so
 		// retained session logs show whether memory is climbing before an exit.
@@ -1323,7 +1361,14 @@ void GameEngine::update()
 						}
 					}
 				}
+#if defined(GENERALS_ONLINE)
+				// Online gameplay is latency-sensitive. A 300-frame allocator/pool scan
+				// caused visible periodic hitches on Apple; retain the diagnostics at a
+				// much lower cadence while keeping transition and crash context intact.
+				nextMemoryDiagFrame = frame + 1800;
+#else
 				nextMemoryDiagFrame = frame + 300;
+#endif
 			}
 			lastMemoryDiagFrame = frame;
 			lastMemoryDiagState = state;

@@ -103,6 +103,7 @@ enum { NOTIFICATION_EXPIRES = 3000 };
 void setUnignoreText( WindowLayout *layout, AsciiString nick, GPProfile id);
 void refreshIgnoreList();
 void showNotificationBox( AsciiString nick, UnicodeString message);
+void showNotificationBox(AsciiString nick, UnicodeString message, bool bPlaySound);
 void deleteNotificationBox();
 static Bool lastNotificationWasStatus = FALSE;
 static Int numOnlineInNotification = 0;
@@ -648,10 +649,17 @@ void HandleBuddyResponses()
 
 void showNotificationBox( AsciiString nick, UnicodeString message)
 {
+	showNotificationBox(nick, message, true);
+}
+
+void showNotificationBox(AsciiString nick, UnicodeString message, bool bPlaySound)
+{
 //	if(!GameSpyIsOverlayOpen(GSOVERLAY_BUDDY))
 //		return;
 	if( !noticeLayout )
 		noticeLayout = TheWindowManager->winCreateLayout( "Menus/PopupBuddyListNotification.wnd" );
+	if (!noticeLayout)
+		return;
 	noticeLayout->hide( FALSE );
 	if (buttonNotificationID == NAMEKEY_INVALID)
 	{
@@ -678,7 +686,7 @@ void showNotificationBox( AsciiString nick, UnicodeString message)
 
 	AudioEventRTS buttonClick("GUICommunicatorIncoming");
 
-	if( TheAudio )
+	if( bPlaySound && TheAudio )
 	{
 		TheAudio->addAudioEvent( &buttonClick );
 	}

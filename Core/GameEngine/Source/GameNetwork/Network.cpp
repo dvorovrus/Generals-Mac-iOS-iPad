@@ -43,6 +43,9 @@
 #include "GameClient/Shell.h"
 #include "Common/CRCDebug.h"
 #include "GameLogic/GameLogic.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NextGenMP_defines.h"
+#endif
 
 #include "Common/RandomValue.h"
 
@@ -160,6 +163,11 @@ public:
 
 	virtual Int getAverageFPS() override { return m_conMgr->getAverageFPS(); }
 	virtual Int getSlotAverageFPS(Int slot) override;
+
+#if defined(GENERALS_ONLINE)
+	virtual void SeedLatencyData(int highestLatency) override;
+	virtual ConnectionManager *GetConnectionManager() override { return m_conMgr; }
+#endif
 
 	virtual void attachTransport(Transport *transport) override;
 	virtual void initTransport() override;
@@ -650,9 +658,15 @@ void Network::processRunAheadCommand(NetRunAheadCommandMsg *msg) {
 	if (frameGrouping < 1) {
 		frameGrouping = 1; // Having a value less than 1 doesn't make sense.
 	}
+#if defined(GENERALS_ONLINE)
+	if (frameGrouping > FRAME_GROUPING_CAP) {
+		frameGrouping = FRAME_GROUPING_CAP;
+	}
+#else
 	if (frameGrouping > 500) {
 		frameGrouping = 500; // Max of a half a second.
 	}
+#endif
 	m_conMgr->setFrameGrouping(frameGrouping);
 }
 
@@ -1046,6 +1060,14 @@ Int Network::getSlotAverageFPS(Int slot) {
 	}
 	return -1;
 }
+
+#if defined(GENERALS_ONLINE)
+void Network::SeedLatencyData(int highestLatency)
+{
+	if (m_conMgr != nullptr)
+		m_conMgr->SeedLatencyData(highestLatency);
+}
+#endif
 
 #if defined(RTS_DEBUG)
 void Network::toggleNetworkOn() {

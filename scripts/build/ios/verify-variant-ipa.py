@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import zipfile
 from pathlib import PurePosixPath
@@ -30,6 +31,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--variant", choices=("original", "hub", "enhanced", "contra", "all"), required=True)
     p.add_argument("ipa")
+    p.add_argument("--require-online-data", action="store_true")
     args = p.parse_args()
 
     if not zipfile.is_zipfile(args.ipa):
@@ -83,6 +85,27 @@ def main() -> None:
 
         if len(game) < 10 or not any(n.endswith(".big") for n in game):
             fail("GameData looks incomplete")
+
+        if args.require_online_data:
+            patch_name = app_l + "gamedata/generalsonlinegamedata/500_900_communitypatch_coreini.big"
+            parity_name = app_l + "gamedata/generalsonlinegamedata/generals-online-parity.json"
+            if patch_name not in lower:
+                fail("missing official Generals Online community data patch")
+            if parity_name not in lower:
+                fail("missing Generals Online parity metadata")
+            parity_actual = next(n for n in names if n.lower() == parity_name)
+            try:
+                parity = json.loads(z.read(parity_actual).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                fail(f"invalid Generals Online parity metadata: {exc}")
+            if parity.get("version") != "100126_QFE6":
+                fail(f"unexpected Generals Online data version: {parity.get('version')!r}")
+            if int(parity.get("windows_60_shift_add_seed", -1)) != 0x808CB29E:
+                fail("unexpected Windows 60 Hz parity seed")
+            expected_maps = int(parity.get("maps_file_count", 0))
+            map_files = [n for n in lower if n.startswith(app_l + "gamedata/maps/")]
+            if expected_maps <= 0 or len(map_files) < expected_maps:
+                fail(f"official Generals Online maps are incomplete: expected {expected_maps}, found {len(map_files)}")
 
         want_e = args.variant in ("enhanced", "all")
         want_c = args.variant in ("contra", "all")

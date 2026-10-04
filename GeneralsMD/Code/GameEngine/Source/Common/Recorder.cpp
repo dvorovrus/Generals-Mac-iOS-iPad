@@ -48,6 +48,11 @@
 #include "Common/OptionPreferences.h"
 #include "Common/version.h"
 
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NGMPGame.h"
+extern NGMPGame* TheNGMPGame;
+#endif
+
 // TheSuperHackers @build fighter19 11/02/2026 POSIX CopyFile implementation for Linux
 #ifndef _WIN32
 #include <fstream>
@@ -93,6 +98,9 @@ const char *lastReplayFileName = "00000000";	// a name the user is unlikely to e
 // In order to remain compatible we need to load and save time values with 32 bits.
 // Note that this will overflow on January 18, 2038. @todo Upgrade to 64 bits when we break compatibility.
 typedef int32_t replay_time_t;
+
+// Keep replay wide characters compatible with the retail Windows UTF-16 layout on every platform.
+typedef uint16_t replay_wide_char_t;
 
 static time_t startTime;
 static const UnsignedInt startTimeOffset = 6;
@@ -365,6 +373,7 @@ void RecorderClass::init() {
 	m_wasDesync = FALSE;
 	m_doingAnalysis = FALSE;
 	m_playbackFrameCount = 0;
+	m_replayWideCharBytes = sizeof(replay_wide_char_t);
 
 	OptionPreferences optionPref;
 	m_archiveReplays = optionPref.getArchiveReplaysEnabled();
@@ -556,8 +565,7 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	// Print out the name of the replay.
 	UnicodeString replayName;
 	replayName = TheGameText->fetch("GUI:LastReplay");
-	m_file->writeFormat(L"%s", replayName.str());
-	m_file->writeChar(L"\0");
+	writeReplayUnicodeString(replayName);
 
 	// Date and Time
 	SYSTEMTIME systemTime;
@@ -568,10 +576,8 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	UnicodeString versionString = TheVersion->getUnicodeVersion();
 	UnicodeString versionTimeString = TheVersion->getUnicodeBuildTime();
 	UnsignedInt versionNumber = TheVersion->getVersionNumber();
-	m_file->writeFormat(L"%s", versionString.str());
-	m_file->writeChar(L"\0");
-	m_file->writeFormat(L"%s", versionTimeString.str());
-	m_file->writeChar(L"\0");
+	writeReplayUnicodeString(versionString);
+	writeReplayUnicodeString(versionTimeString);
 	m_file->write(&versionNumber, sizeof(versionNumber));
 	m_file->write(&(TheGlobalData->m_exeCRC), sizeof(TheGlobalData->m_exeCRC));
 	m_file->write(&(TheGlobalData->m_iniCRC), sizeof(TheGlobalData->m_iniCRC));
@@ -604,8 +610,25 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 		}
 		else
 		{
+#if defined(GENERALS_ONLINE)
+			// Generals Online does not initialize the legacy GameSpy game singleton.
+			// Use the NGMP game state for replay metadata, matching the current
+			// GeneralsOnline GameClient path and avoiding a null dereference at match start.
+			if (TheNGMPGame != nullptr)
+			{
+				theSlotList = GameInfoToAsciiString(TheNGMPGame);
+				localIndex = TheNGMPGame->getLocalSlotNum();
+			}
+			else
+			{
+				DEBUG_LOG(("RecorderClass::startRecording() - TheNGMPGame is null; using empty replay slot list"));
+				m_gameInfo.setCRCInterval(REPLAY_CRC_INTERVAL);
+				theSlotList = GameInfoToAsciiString(&m_gameInfo);
+			}
+#else
 			theSlotList = GameInfoToAsciiString(TheGameSpyGame);
 			localIndex = TheGameSpyGame->getLocalSlotNum();
+#endif
 		}
 	}
 	else
@@ -829,7 +852,7 @@ void RecorderClass::writeArgument(GameMessageArgumentDataType type, const GameMe
 			m_file->write( &(arg.timestamp), sizeof(arg.timestamp) );
 			break;
 		case ARGUMENTDATATYPE_WIDECHAR:
-			m_file->write( &(arg.wChar), sizeof(arg.wChar) );
+			writeReplayWideChar(arg.wChar);
 			break;
 		default:
 			DEBUG_LOG(("Unknown GameMessageArgumentDataType in RecorderClass::writeArgument"));
@@ -908,6 +931,15 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header)
 	{
 		m_file->read(&(header.playerDiscons[i]), sizeof(Bool));
 	}
+
+	// Read legacy POSIX UTF-32 replays while using fixed UTF-16 for new cross-platform replays.
+	const Int wideCharOffset = m_file->seek(0, File::CURRENT);
+	uint32_t firstReplayCharacter = 0;
+	const Int probeBytes = m_file->read(&firstReplayCharacter, sizeof(firstReplayCharacter));
+	m_file->seek(wideCharOffset, File::START);
+	m_replayWideCharBytes = probeBytes == static_cast<Int>(sizeof(firstReplayCharacter)) && (firstReplayCharacter & 0xFFFF0000u) == 0
+		? sizeof(uint32_t)
+		: sizeof(replay_wide_char_t);
 
 	// Read the Replay Name.  We don't actually do anything with it.  Oh well.
 	header.replayName = readUnicodeString();
@@ -1314,25 +1346,41 @@ UnicodeString RecorderClass::readUnicodeString() {
 	WideChar str[1024] = L"";
 	Int index = 0;
 
-	Int c = m_file->readWideChar();
-	if (c == EOF) {
-		str[index] = 0;
-	}
-	str[index] = c;
-
-	while (index < 1024 && str[index] != 0) {
-		++index;
-		Int c = m_file->readWideChar();
-		if (c == EOF) {
-			str[index] = 0;
+	while (index < static_cast<Int>(ARRAY_SIZE(str) - 1)) {
+		const Int c = readReplayWideChar();
+		if (c == EOF || c == 0) {
 			break;
 		}
-		str[index] = c;
+		str[index++] = static_cast<WideChar>(c);
 	}
-	str[1023] = L'\0';
+	str[index] = L'\0';
 
 	UnicodeString retval(str);
 	return retval;
+}
+
+Int RecorderClass::readReplayWideChar()
+{
+	uint32_t value = 0;
+	if (m_file->read(&value, m_replayWideCharBytes) != static_cast<Int>(m_replayWideCharBytes)) {
+		return EOF;
+	}
+	return static_cast<Int>(value);
+}
+
+void RecorderClass::writeReplayUnicodeString(const UnicodeString& value)
+{
+	const WideChar* character = value.str();
+	while (*character != L'\0') {
+		writeReplayWideChar(*character++);
+	}
+	writeReplayWideChar(L'\0');
+}
+
+void RecorderClass::writeReplayWideChar(WideChar value)
+{
+	const replay_wide_char_t character = static_cast<replay_wide_char_t>(value);
+	m_file->write(&character, sizeof(character));
 }
 
 /**
@@ -1611,8 +1659,7 @@ void RecorderClass::readArgument(GameMessageArgumentDataType type, GameMessage *
 			break;
 		}
 		case ARGUMENTDATATYPE_WIDECHAR: {
-			WideChar theid;
-			m_file->read(&theid, sizeof(theid));
+			WideChar theid = static_cast<WideChar>(readReplayWideChar());
 			msg->appendWideCharArgument(theid);
 #ifdef DEBUG_LOGGING
 			if (m_doingAnalysis)
@@ -1706,8 +1753,13 @@ AsciiString RecorderClass::getLastReplayFileName()
 		GameInfo *game = nullptr;
 		if (TheLAN)
 			game = TheLAN->GetMyGame();
+#if defined(GENERALS_ONLINE)
+		else if (TheNGMPGame != nullptr)
+			game = TheNGMPGame;
+#else
 		else if (TheGameSpyInfo)
 			game = TheGameSpyGame;
+#endif
 		if (game)
 		{
 			AsciiString players;

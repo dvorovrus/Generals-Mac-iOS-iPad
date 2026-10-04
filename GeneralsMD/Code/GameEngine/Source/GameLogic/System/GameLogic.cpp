@@ -116,6 +116,10 @@
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/NetworkInterface.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NGMPGame.h"
+extern NGMPGame* TheNGMPGame;
+#endif
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 
 #include <rts/profile.h>
@@ -1268,6 +1272,17 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 			DEBUG_LOG(("Starting network game"));
 			TheGameInfo = TheLAN->GetMyGame();
 		}
+#if defined(GENERALS_ONLINE)
+		else if (TheNGMPGame != nullptr)
+		{
+			DEBUG_LOG(("Starting Generals Online NGMP game"));
+			TheGameInfo = TheNGMPGame;
+#if defined(__APPLE__)
+			fprintf(stderr, "[NGMP-MATCH] Using TheNGMPGame=%p map='%s' localSlot=%d\n",
+			        (void*)TheNGMPGame, TheNGMPGame->getMap().str(), TheNGMPGame->getLocalSlotNum());
+#endif
+		}
+#endif
 		else
 		{
 			DEBUG_LOG(("Starting gamespy game"));

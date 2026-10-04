@@ -66,6 +66,8 @@
 #include "Common/GameMemory.h"
 #include "Common/Debug.h"
 #include "Common/version.h"  // GeneralsX @bugfix BenderAI 14/02/2026 Version class + TheVersion extern
+#include "BuildVersion.h"
+#include "GeneratedVersion.h"
 #include "SDL3GameEngine.h"
 
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
@@ -1407,6 +1409,13 @@ int main(int argc, char* argv[])
 		// GameEngine::init() calls updateWindowTitle() which uses TheVersion
 		// Must be created before GameMain() to avoid nullptr dereference
 		TheVersion = NEW Version;
+		TheVersion->setVersion(VERSION_MAJOR, VERSION_MINOR, VERSION_BUILDNUM, VERSION_LOCALBUILDNUM,
+			AsciiString(VERSION_BUILDUSER), AsciiString(VERSION_BUILDLOC),
+			AsciiString(__TIME__), AsciiString(__DATE__));
+#if defined(GENERALS_ONLINE)
+		fprintf(stderr, "[GO-VERSION] runtime=%d.%d build=%d networkVersion=0x%08X\n",
+			VERSION_MAJOR, VERSION_MINOR, VERSION_BUILDNUM, TheVersion->getVersionNumber());
+#endif
 
 		// Parse command line (CommandLine class handles argc/argv internally)
 		// TheSuperHackers @build felipebraz 10/02/2026 Phase 1.5

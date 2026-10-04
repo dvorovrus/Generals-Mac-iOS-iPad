@@ -66,6 +66,8 @@ public:
 
 	virtual HRESULT downloadFile( AsciiString server, AsciiString username, AsciiString password, AsciiString file, AsciiString localfile, AsciiString regkey, Bool tryResume );
 	AsciiString getLastLocalFile();
+	// UI hook for downloads managed externally (e.g. Generals Online HTTP).
+	virtual void SetFileName(AsciiString file) {}
 
 	Bool isDone() { return m_sawEnd || m_wasError; }
 	Bool isOk() { return m_sawEnd; }

@@ -1248,7 +1248,7 @@ const UnsignedInt START_CUMU_FRAME = LOGICFRAMES_PER_SECOND / 2;	// skip first h
 
 void W3DDisplay::updateAverageFPS()
 {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(GENERALS_ONLINE)
 	// Pair periodic resource counts with the process footprint trail. Avoid
 	// per-frame hash scans, and restart sampling when a new map resets time.
 	static UnsignedInt nextResourceFrame = 0;
@@ -1267,7 +1267,13 @@ void W3DDisplay::updateAverageFPS()
 			fprintf(stderr, "[RESOURCE-DIAG] sampleFrame=%u\n", (unsigned)frame);
 			m_assetManager->Log_Resource_Summary("match-periodic");
 			Log_Render_Memory_Summary("match-periodic", frame);
+#if defined(GENERALS_ONLINE)
+			// Asset/resource summaries walk large render collections. Keep them for
+			// diagnostics, but do not scan every 300 logic frames during Online play.
+			nextResourceFrame = frame + 1800;
+#else
 			nextResourceFrame = frame + 300;
+#endif
 		}
 
 		if (TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && frame >= nextMemoryTrimFrame)

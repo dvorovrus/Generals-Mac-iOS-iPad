@@ -40,16 +40,40 @@ void RefreshGameInfoListBox( GameWindow *mainWin, GameWindow *win );
 void RefreshGameListBoxes();
 void ToggleGameListType();
 
+#if defined(GENERALS_ONLINE)
+// The listbox stores a compact row index; the service lobby ID remains 64-bit.
+int64_t ResolveGameListLobbyID(Int rowItemData);
+#endif
+
 void playerTemplateComboBoxTooltip(GameWindow *wndComboBox, WinInstanceData *instData, UnsignedInt mouse);
 void playerTemplateListBoxTooltip(GameWindow *wndListBox, WinInstanceData *instData, UnsignedInt mouse);
 
 enum GameSortType CPP_11(: Int)
 {
+#if defined(GENERALS_ONLINE)
+	GAMESORT_AGE_ASCENDING = 0,
+	GAMESORT_AGE_DESCENDING,
+	GAMESORT_MAP_ASCENDING,
+	GAMESORT_MAP_DESCENDING,
+#else
 	GAMESORT_ALPHA_ASCENDING = 0,
 	GAMESORT_ALPHA_DESCENDING,
 	GAMESORT_PING_ASCENDING,
 	GAMESORT_PING_DESCENDING,
+#endif
 };
 
 Bool HandleSortButton( NameKeyType sortButton );
 void PopulateLobbyPlayerListbox();
+
+#if defined(GENERALS_ONLINE)
+enum LobbyGameModeFilter CPP_11(: Int)
+{
+	LOBBY_FILTER_ALL = 0,
+	LOBBY_FILTER_1V1,
+	LOBBY_FILTER_TEAM,
+	LOBBY_FILTER_FFA,
+	LOBBY_FILTER_AOD,
+	LOBBY_FILTER_BUDDIES,
+};
+#endif

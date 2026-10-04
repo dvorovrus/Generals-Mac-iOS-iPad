@@ -296,6 +296,29 @@
             "environment": {
                 "PKG_CONFIG_PATH": ""
             }
+        },
+        {
+            "name": "ios-vulkan-online",
+            "inherits": "ios-vulkan",
+            "displayName": "iPad Zero Hour + Generals Online (arm64 + MoltenVK)",
+            "binaryDir": "${sourceDir}/build/ios-vulkan-online",
+            "cacheVariables": {
+                "SAGE_USE_GENERALS_ONLINE": "ON",
+                "SAGE_USE_DETERMINISTIC_MATH": "ON",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "16.3",
+                "VCPKG_MANIFEST_FEATURES": "generals-online"
+            }
+        },
+        {
+            "name": "macos-vulkan-online",
+            "inherits": "macos-vulkan",
+            "displayName": "macOS Zero Hour + Generals Online (arm64 + MoltenVK)",
+            "binaryDir": "${sourceDir}/build/macos-vulkan-online",
+            "cacheVariables": {
+                "SAGE_USE_GENERALS_ONLINE": "ON",
+                "SAGE_USE_DETERMINISTIC_MATH": "ON",
+                "VCPKG_MANIFEST_FEATURES": "generals-online"
+            }
         }
     ],
     "buildPresets": [
@@ -401,6 +424,16 @@
             "configurePreset": "linux64-deploy",
             "displayName": "Build Linux 64-bit DXVK/SDL3/OpenAL Release",
             "description": "Build Linux 64-bit with DXVK graphics, SDL3 windowing, and OpenAL audio"
+        },
+        {
+            "name": "ios-vulkan-online",
+            "configurePreset": "ios-vulkan-online",
+            "displayName": "Build iPad Zero Hour + Generals Online"
+        },
+        {
+            "name": "macos-vulkan-online",
+            "configurePreset": "macos-vulkan-online",
+            "displayName": "Build macOS Zero Hour + Generals Online"
         }
     ],
     "workflowPresets": [

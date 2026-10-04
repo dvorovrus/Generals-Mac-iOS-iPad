@@ -272,8 +272,12 @@ NSDictionary<NSString *, NSString *> *DefaultContraSettings()
     };
 }
 
+bool ProfileDirectoryExists(NSString *profileDirectory);
+
 void EnsureDefaultContraSettings()
 {
+    if (!ProfileDirectoryExists(@"contra-x"))
+        return;
     NSString *path = ContraSettingsPath();
     if ([[NSFileManager defaultManager] fileExistsAtPath:path])
         return;
@@ -1189,6 +1193,12 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:controlViews];
     controls.translatesAutoresizingMaskIntoConstraints = NO;
+    // The first eleven rows are specific to the optional Contra profile.
+    if (!contraInstalled)
+    {
+        for (NSUInteger index = 0; index < 11; ++index)
+            controls.arrangedSubviews[index].hidden = YES;
+    }
     controls.axis = UILayoutConstraintAxisVertical;
     controls.alignment = UIStackViewAlignmentFill;
     controls.spacing = 9.0;

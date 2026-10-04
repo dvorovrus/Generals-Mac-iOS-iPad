@@ -122,6 +122,7 @@ class DownloadManagerMunkee : public DownloadManager
 {
 public:
 	DownloadManagerMunkee() {m_shouldQuitOnSuccess = true; m_shouldQuitOnSuccess = false;}
+	virtual void SetFileName(AsciiString file) override;
 	virtual HRESULT OnError( Int error ) override;
 	virtual HRESULT OnEnd() override;
 	virtual HRESULT OnProgressUpdate( Int bytesread, Int totalsize, Int timetaken, Int timeleft ) override;
@@ -131,6 +132,16 @@ public:
 private:
 	Bool m_shouldQuitOnSuccess;
 };
+
+void DownloadManagerMunkee::SetFileName(AsciiString file)
+{
+	if (staticTextFile)
+	{
+		UnicodeString fileString;
+		fileString.translate(file);
+		GadgetStaticTextSetText(staticTextFile, fileString);
+	}
+}
 
 HRESULT DownloadManagerMunkee::downloadFile( AsciiString server, AsciiString username, AsciiString password, AsciiString file, AsciiString localfile, AsciiString regkey, Bool tryResume )
 {

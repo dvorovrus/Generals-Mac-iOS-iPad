@@ -73,10 +73,19 @@ static constexpr const Int MAX_LANAPI_PACKET_SIZE = RETAIL_GAME_PACKET_SIZE;
 #if RETAIL_COMPATIBLE_NETWORKING
 static constexpr const Int MAX_PACKET_SIZE = RETAIL_GAME_PACKET_SIZE;
 static constexpr const Int MAX_NETWORK_MESSAGE_LEN = 1024;
+#elif defined(GENERALS_ONLINE)
+// Generals Online reserves room for TURN + GameNetworkingSockets overhead.
+// These values match the upstream NGMP wire format.
+static constexpr const Int MAX_PACKET_SIZE = 1098;
+static constexpr const Int MAX_NETWORK_MESSAGE_LEN = 1104;
 #else
 static constexpr const Int MAX_PACKET_SIZE = MAX_UDP_PAYLOAD_SIZE - sizeof(TransportMessageHeader);
 static constexpr const Int MAX_NETWORK_MESSAGE_LEN = MAX_UDP_PAYLOAD_SIZE;
 #endif
+
+// Upstream Generals Online names this capacity MAX_MESSAGE_LEN. Keep an alias
+// so imported NGMP transport code does not fork the existing Apple network API.
+static constexpr const Int MAX_MESSAGE_LEN = MAX_NETWORK_MESSAGE_LEN;
 
 // TheSuperHackers @bugfix Mauller 08/02/2026 Double send and receive buffer sizes to alleviate the occurance of disconnection issues in retail and non retail code.
 static constexpr const Int MAX_MESSAGES = 256;

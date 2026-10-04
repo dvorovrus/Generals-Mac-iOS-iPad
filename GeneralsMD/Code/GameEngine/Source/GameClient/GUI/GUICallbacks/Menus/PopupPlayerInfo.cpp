@@ -57,6 +57,9 @@
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/GameSpy/LobbyUtils.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/NGMP_include.h"
+#endif
 
 #include "WWDownload/Registry.h"
 
@@ -86,7 +89,11 @@ static GameWindow *checkBoxNonAsianFont = nullptr;
 
 static Bool isOverlayActive = false;
 static Bool raiseMessageBox = false;
+#if defined(GENERALS_ONLINE)
+static int64_t lookAtPlayerID = 0;
+#else
 static Int lookAtPlayerID = 0;
+#endif
 static std::string lookAtPlayerName;
 
 
@@ -239,6 +246,12 @@ void GetAdditionalDisconnectsFromUserFile(PSPlayerStats *stats)
 // default values
 RankPoints::RankPoints()
 {
+#if defined(GENERALS_ONLINE)
+	// GO initializes ranks without the legacy GameSpy configuration service.
+	const Int defaults[MAX_RANKS] = {0, 5, 10, 20, 50, 100, 200, 500, 1000, 2000};
+	for (Int rank = 0; rank < MAX_RANKS; ++rank)
+		m_ranks[rank] = defaults[rank];
+#else
 	m_ranks[RANK_PRIVATE]							= 0;
 	m_ranks[RANK_CORPORAL]						= TheGameSpyConfig->getPointsForRank(RANK_CORPORAL); // 5
 	m_ranks[RANK_SERGEANT]						= TheGameSpyConfig->getPointsForRank(RANK_SERGEANT); // 10
@@ -249,6 +262,7 @@ RankPoints::RankPoints()
 	m_ranks[RANK_BRIGADIER_GENERAL]		= TheGameSpyConfig->getPointsForRank(RANK_BRIGADIER_GENERAL); // 500
 	m_ranks[RANK_GENERAL]							= TheGameSpyConfig->getPointsForRank(RANK_GENERAL); // 1000
 	m_ranks[RANK_COMMANDER_IN_CHIEF]	= TheGameSpyConfig->getPointsForRank(RANK_COMMANDER_IN_CHIEF); // 2000
+#endif
 
 	m_winMultiplier = 3.0f;
 	m_lostMultiplier = 0.0f;
@@ -259,11 +273,25 @@ RankPoints::RankPoints()
 
 RankPoints *TheRankPointValues = nullptr;
 
-void SetLookAtPlayer( Int id, AsciiString nick)
+#if defined(GENERALS_ONLINE)
+void SetLookAtPlayer(int64_t id, UnicodeString nick)
+{
+	lookAtPlayerID = id;
+	lookAtPlayerName = to_utf8(nick.str());
+}
+
+void SetLookAtPlayer(int64_t id, AsciiString nick)
 {
 	lookAtPlayerID = id;
 	lookAtPlayerName = nick.str();
 }
+#else
+void SetLookAtPlayer(Int id, AsciiString nick)
+{
+	lookAtPlayerID = id;
+	lookAtPlayerName = nick.str();
+}
+#endif
 
 //	BATTLE_HONOR_LADDER_CHAMP		= 0x0000001,
 //	BATTLE_HONOR_STREAK					= 0x0000002,
