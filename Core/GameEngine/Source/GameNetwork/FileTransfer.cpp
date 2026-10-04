@@ -46,6 +46,12 @@ static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, Int
 
 	if (mask)
 	{
+#if defined(GENERALS_ONLINE)
+		fprintf(stderr, "[MAP-TRANSFER] file-start role=%s file='%s' mask=0x%02X localSlot=%d\n",
+		        TheGameInfo->amIHost() ? "host" : "client", filename.str(), mask,
+		        TheGameInfo->getLocalSlotNum());
+		fflush(stderr);
+#endif
 		ls->setCurrentFilename(filename);
 		UnsignedInt startTime = timeGetTime();
 		const Int timeoutPeriod = 2*60*1000;
@@ -61,6 +67,11 @@ static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, Int
 		{
 			Sleep(500);
 			fileCommandID = TheNetwork->sendFileAnnounce(filename, mask);
+#if defined(GENERALS_ONLINE)
+			fprintf(stderr, "[MAP-TRANSFER] announce file='%s' command=%u mask=0x%02X\n",
+			        filename.str(), (unsigned)fileCommandID, mask);
+			fflush(stderr);
+#endif
 		}
 		else
 		{
@@ -125,10 +136,22 @@ static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, Int
 
 		if (!fileTransferDone)
 		{
+#if defined(GENERALS_ONLINE)
+			fprintf(stderr, "[MAP-TRANSFER] file-failed file='%s' percent=%d\n",
+			        filename.str(), fileTransferPercent);
+			fflush(stderr);
+#endif
 			return FALSE;
 		}
 	}
 
+#if defined(GENERALS_ONLINE)
+	if (mask)
+	{
+		fprintf(stderr, "[MAP-TRANSFER] file-complete file='%s' percent=100\n", filename.str());
+		fflush(stderr);
+	}
+#endif
 	return TRUE;
 }
 
@@ -254,6 +277,12 @@ Bool DoAnyMapTransfers(GameInfo *game)
 			mask |= (1<<i);
 		}
 	}
+#if defined(GENERALS_ONLINE)
+	fprintf(stderr, "[MAP-TRANSFER] scan host=%d localSlot=%d map='%s' mask=0x%02X contents=0x%02X\n",
+	        TheGameInfo->amIHost() ? 1 : 0, TheGameInfo->getLocalSlotNum(),
+	        TheGameInfo->getMap().str(), mask, TheGameInfo->getMapContentsMask());
+	fflush(stderr);
+#endif
 	if (!mask)
 		return TRUE;
 

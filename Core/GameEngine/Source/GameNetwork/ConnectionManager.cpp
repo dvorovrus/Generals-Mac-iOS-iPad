@@ -814,6 +814,11 @@ void ConnectionManager::processFile(NetFileCommandMsg *msg)
 #endif
 
 	AsciiString realFileName = msg->getRealFilename();
+#if defined(GENERALS_ONLINE)
+	fprintf(stderr, "[MAP-TRANSFER] receive-file from=%d file='%s' bytes=%d\n",
+	        msg->getPlayerID(), realFileName.str(), msg->getFileLength());
+	fflush(stderr);
+#endif
 	if (realFileName.isEmpty())
 	{
 		// TheSuperHackers @security slurmlord 18/06/2025 As the file name/path from the NetFileCommandMsg failed to normalize,
@@ -883,6 +888,10 @@ void ConnectionManager::processFile(NetFileCommandMsg *msg)
 		fp->close();
 		fp = nullptr;
 		DEBUG_LOG(("Wrote %d bytes to file %s!", len, realFileName.str()));
+#if defined(GENERALS_ONLINE)
+		fprintf(stderr, "[MAP-TRANSFER] write-ok file='%s' bytes=%d\n", realFileName.str(), len);
+		fflush(stderr);
+#endif
 
 	}
 	else
@@ -925,6 +934,12 @@ void ConnectionManager::processFileAnnounce(NetFileAnnounceCommandMsg *msg)
 	DEBUG_LOG(("ConnectionManager::processFileAnnounce() - expecting '%s' (%s) in command %d", msg->getPortableFilename().str(), msg->getRealFilename().str(), msg->getFileID()));
 	s_fileCommandMap[msg->getFileID()] = msg->getRealFilename();
 	s_fileRecipientMaskMap[msg->getFileID()] = msg->getPlayerMask();
+#if defined(GENERALS_ONLINE)
+	fprintf(stderr, "[MAP-TRANSFER] receive-announce from=%d file='%s' command=%u mask=0x%02X localSlot=%d\n",
+	        msg->getPlayerID(), msg->getRealFilename().str(), (unsigned)msg->getFileID(),
+	        msg->getPlayerMask(), m_localSlot);
+	fflush(stderr);
+#endif
 	for (Int i=0; i<MAX_SLOTS; ++i)
 	{
 		if ( (1<<i) & msg->getPlayerMask() )
@@ -950,6 +965,14 @@ void ConnectionManager::processFileProgress(NetFileProgressCommandMsg *msg)
 	const UnsignedShort fileID = msg->getFileID();
 	const Int oldProgress = s_fileProgressMap[playerID][fileID];
 	s_fileProgressMap[playerID][fileID] = max(oldProgress, msg->getProgress());
+#if defined(GENERALS_ONLINE)
+	if (msg->getProgress() == 100)
+	{
+		fprintf(stderr, "[MAP-TRANSFER] progress player=%u command=%u percent=100\n",
+		        playerID, (unsigned)fileID);
+		fflush(stderr);
+	}
+#endif
 }
 
 void ConnectionManager::processProgress( NetProgressCommandMsg *msg )

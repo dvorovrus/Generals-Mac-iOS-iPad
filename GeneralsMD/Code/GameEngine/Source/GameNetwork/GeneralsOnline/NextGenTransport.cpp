@@ -22,6 +22,10 @@ NextGenTransport::NextGenTransport()
     m_lastSecond = timeGetTime();
     m_useLatency = FALSE;
     m_usePacketLoss = FALSE;
+    NetworkLog(ELogVerbosity::LOG_RELEASE,
+        "[ONLINE-NET-LIMITS] packet=%d message=%d header=%zu wireMax=%zu",
+        MAX_PACKET_SIZE, MAX_MESSAGE_LEN, sizeof(TransportMessageHeader),
+        sizeof(TransportMessageHeader) + static_cast<size_t>(MAX_MESSAGE_LEN));
 }
 
 NextGenTransport::~NextGenTransport()

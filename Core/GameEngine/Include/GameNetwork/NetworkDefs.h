@@ -70,14 +70,15 @@ static constexpr const Int RETAIL_GAME_PACKET_SIZE = 476;
 static constexpr const Int MAX_LANAPI_PACKET_SIZE = RETAIL_GAME_PACKET_SIZE;
 
 // TheSuperHackers @bugfix Mauller 08/02/2026 Allow larger ethernet UDP payload to be used for game messages, this fixes connection issues and eliminates disconnection bugs
-#if RETAIL_COMPATIBLE_NETWORKING
-static constexpr const Int MAX_PACKET_SIZE = RETAIL_GAME_PACKET_SIZE;
-static constexpr const Int MAX_NETWORK_MESSAGE_LEN = 1024;
-#elif defined(GENERALS_ONLINE)
-// Generals Online reserves room for TURN + GameNetworkingSockets overhead.
-// These values match the upstream NGMP wire format.
+#if defined(GENERALS_ONLINE)
+// Generals Online uses the upstream NGMP wire sizes regardless of the legacy
+// retail-compatible networking default. Windows peers legitimately send wire
+// packets larger than the retail 1024-byte message capacity (e.g. 1102 bytes).
 static constexpr const Int MAX_PACKET_SIZE = 1098;
 static constexpr const Int MAX_NETWORK_MESSAGE_LEN = 1104;
+#elif RETAIL_COMPATIBLE_NETWORKING
+static constexpr const Int MAX_PACKET_SIZE = RETAIL_GAME_PACKET_SIZE;
+static constexpr const Int MAX_NETWORK_MESSAGE_LEN = 1024;
 #else
 static constexpr const Int MAX_PACKET_SIZE = MAX_UDP_PAYLOAD_SIZE - sizeof(TransportMessageHeader);
 static constexpr const Int MAX_NETWORK_MESSAGE_LEN = MAX_UDP_PAYLOAD_SIZE;
@@ -86,6 +87,10 @@ static constexpr const Int MAX_NETWORK_MESSAGE_LEN = MAX_UDP_PAYLOAD_SIZE;
 // Upstream Generals Online names this capacity MAX_MESSAGE_LEN. Keep an alias
 // so imported NGMP transport code does not fork the existing Apple network API.
 static constexpr const Int MAX_MESSAGE_LEN = MAX_NETWORK_MESSAGE_LEN;
+#if defined(GENERALS_ONLINE)
+static_assert(MAX_PACKET_SIZE == 1098, "Generals Online packet payload must match upstream NGMP");
+static_assert(MAX_MESSAGE_LEN == 1104, "Generals Online message capacity must match upstream NGMP");
+#endif
 
 // TheSuperHackers @bugfix Mauller 08/02/2026 Double send and receive buffer sizes to alleviate the occurance of disconnection issues in retail and non retail code.
 static constexpr const Int MAX_MESSAGES = 256;
