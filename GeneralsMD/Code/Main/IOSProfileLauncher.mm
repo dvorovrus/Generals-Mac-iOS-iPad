@@ -1,4 +1,5 @@
 #include "IOSProfileLauncher.h"
+#include "IOSModManager.h"
 
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
 
@@ -36,7 +37,7 @@
 namespace
 {
 std::atomic<bool> gLauncherFinished(false);
-char gSelectedProfile[32] = "vanilla";
+char gSelectedProfile[64] = "vanilla";
 GeneralsXIOSDiagnosticClearCallback gDiagnosticClearCallback = nullptr;
 
 NSString *ShortBuildIdentifier(const char *raw)
@@ -102,10 +103,22 @@ unsigned long long DirectorySizeAtPath(NSString *path)
 
 bool IsSupportedProfile(const char *profile)
 {
-    return profile != nullptr &&
-        (strcmp(profile, "vanilla") == 0 ||
-         strcmp(profile, "enhanced") == 0 ||
-         strcmp(profile, "contra-x") == 0);
+    if (profile == nullptr || profile[0] == '\0')
+        return false;
+    const size_t length = strlen(profile);
+    if (length >= sizeof(gSelectedProfile))
+        return false;
+    for (size_t i = 0; i < length; ++i)
+    {
+        const char c = profile[i];
+        const bool valid = (c >= 'a' && c <= 'z') ||
+                           (c >= 'A' && c <= 'Z') ||
+                           (c >= '0' && c <= '9') ||
+                           c == '.' || c == '_' || c == '-';
+        if (!valid)
+            return false;
+    }
+    return true;
 }
 
 void SetSelectedProfile(NSString *profile)
@@ -300,6 +313,9 @@ void EnsureDefaultEnhancedSettings()
 
 bool ProfileDirectoryExists(NSString *profileDirectory)
 {
+    if (GXHubProfileInstalled(profileDirectory))
+        return true;
+
     NSString *resourcePath = [[NSBundle mainBundle] resourcePath];
     NSString *path = [[resourcePath stringByAppendingPathComponent:@"Profiles"]
                       stringByAppendingPathComponent:profileDirectory];
@@ -307,6 +323,40 @@ bool ProfileDirectoryExists(NSString *profileDirectory)
     BOOL isDirectory = NO;
     return [[NSFileManager defaultManager] fileExistsAtPath:path
                                                isDirectory:&isDirectory] && isDirectory;
+}
+
+NSArray<NSDictionary<NSString *, id> *> *HubCombinedEntries()
+{
+    NSMutableDictionary<NSString *, NSMutableDictionary *> *byId = [NSMutableDictionary dictionary];
+    for (NSDictionary *entry in GXHubCatalogEntries())
+    {
+        NSString *profileId = entry[@"profileId"];
+        if (profileId.length > 0)
+            byId[profileId] = [entry mutableCopy];
+    }
+    for (NSDictionary *installed in GXHubInstalledModEntries())
+    {
+        NSString *profileId = installed[@"profileId"];
+        if (profileId.length == 0)
+            continue;
+        NSMutableDictionary *merged = byId[profileId] ?: [NSMutableDictionary dictionary];
+        [merged addEntriesFromDictionary:installed];
+        byId[profileId] = merged;
+    }
+    NSArray *values = byId.allValues;
+    return [values sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+        return [a[@"name"] localizedCaseInsensitiveCompare:b[@"name"]];
+    }];
+}
+
+NSDictionary<NSString *, id> *HubEntryForProfile(NSString *profileId)
+{
+    for (NSDictionary *entry in HubCombinedEntries())
+    {
+        if ([entry[@"profileId"] isEqualToString:profileId])
+            return entry;
+    }
+    return nil;
 }
 
 NSString *DefaultIPadOverrides()
@@ -392,8 +442,11 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 }
 }
 
-@interface GXProfileLauncherViewController : UIViewController
+@interface GXProfileLauncherViewController : UIViewController <UIDocumentPickerDelegate>
 @property(nonatomic, strong) UIStackView *menuStack;
+@property(nonatomic, strong) UIView *modsView;
+@property(nonatomic, strong) UIStackView *modsListStack;
+@property(nonatomic, strong) UILabel *modsStatus;
 @property(nonatomic, strong) UIView *settingsView;
 @property(nonatomic, strong) UILabel *settingsStatus;
 @property(nonatomic, strong) UISlider *maxCameraSlider;
@@ -482,6 +535,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     }
 
     [self buildMenu];
+    [self buildMods];
     [self buildSettings];
     [self buildDiagnostics];
 }
@@ -494,10 +548,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     NSString *titleText = dedicatedEnhanced
         ? @"ZERO HOUR ENHANCED"
-        : (dedicatedContra ? @"CONTRA X" : @"ZERO HOUR");
+        : (dedicatedContra ? @"CONTRA X" : @"GENERALS HUB");
     NSString *subtitleText = dedicatedEnhanced
         ? @"v1.0 + 28/03/2024 patch · iPad"
-        : (dedicatedContra ? @"Beta 2 + Patch 1 · iPad" : @"iPad launcher");
+        : (dedicatedContra ? @"Beta 2 + Patch 1 · iPad" : @"Zero Hour · Mods · iPad");
 
     UILabel *title = MakeLabel(titleText, 34.0, UIFontWeightBold);
     UILabel *subtitle = MakeLabel(subtitleText, 14.0, UIFontWeightRegular);
@@ -505,8 +559,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     UIButton *settings = MakeButton(@"Settings", self, @selector(showSettings));
     UIButton *diagnostics = MakeButton(@"Diagnostics", self, @selector(showDiagnostics));
+    UIButton *mods = MakeButton(@"Mods", self, @selector(showMods));
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
     diagnostics.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
+    mods.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
 
     NSMutableArray<UIView *> *views = [NSMutableArray arrayWithObjects:title, subtitle, nil];
     NSMutableArray<UIButton *> *buttons = [NSMutableArray array];
@@ -531,21 +587,36 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [views addObject:vanilla];
         [buttons addObject:vanilla];
 
-        if (ProfileDirectoryExists(@"enhanced"))
+        NSMutableSet<NSString *> *shownProfiles = [NSMutableSet set];
+        for (NSDictionary *entry in HubCombinedEntries())
+        {
+            NSString *profileId = entry[@"profileId"];
+            if (profileId.length == 0 || !ProfileDirectoryExists(profileId))
+                continue;
+            NSString *name = entry[@"name"] ?: profileId;
+            UIButton *profile = MakeButton(name, self, @selector(playHubMod:));
+            profile.accessibilityIdentifier = profileId;
+            [views addObject:profile];
+            [buttons addObject:profile];
+            [shownProfiles addObject:profileId];
+            fprintf(stderr, "[HUB] launcher profile available id='%s'\n", profileId.UTF8String);
+        }
+
+        if (ProfileDirectoryExists(@"enhanced") && ![shownProfiles containsObject:@"enhanced"])
         {
             UIButton *enhanced = MakeButton(@"Zero Hour Enhanced", self, @selector(launchEnhanced));
             [views addObject:enhanced];
             [buttons addObject:enhanced];
-            fprintf(stderr, "INFO: iOS launcher found Enhanced profile\n");
         }
-
-        if (ProfileDirectoryExists(@"contra-x"))
+        if (ProfileDirectoryExists(@"contra-x") && ![shownProfiles containsObject:@"contra-x"])
         {
             UIButton *contra = MakeButton(@"Contra X Beta 2 + Patch 1", self, @selector(launchContra));
             [views addObject:contra];
             [buttons addObject:contra];
-            fprintf(stderr, "INFO: iOS launcher found Contra X profile\n");
         }
+
+        [views addObject:mods];
+        [buttons addObject:mods];
     }
 
     [views addObject:settings];
@@ -569,6 +640,311 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [self.menuStack.centerXAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.centerXAnchor],
         [self.menuStack.centerYAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.centerYAnchor],
     ]];
+}
+
+- (void)buildMods
+{
+    self.modsView = [[UIView alloc] init];
+    self.modsView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.modsView.backgroundColor = UIColor.blackColor;
+    self.modsView.hidden = YES;
+    [self.view addSubview:self.modsView];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [self.modsView.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:28.0],
+        [self.modsView.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-28.0],
+        [self.modsView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:18.0],
+        [self.modsView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-18.0],
+    ]];
+
+    UILabel *title = MakeLabel(@"MODS", 28.0, UIFontWeightBold);
+    title.textAlignment = NSTextAlignmentLeft;
+    UILabel *note = MakeLabel(
+        @"Install .gxmod packages without reinstalling the app. Remote installs require HTTPS + SHA-256; local packages can be imported from Files.",
+        13.0,
+        UIFontWeightRegular);
+    note.textAlignment = NSTextAlignmentLeft;
+    note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+
+    self.modsListStack = [[UIStackView alloc] init];
+    self.modsListStack.translatesAutoresizingMaskIntoConstraints = NO;
+    self.modsListStack.axis = UILayoutConstraintAxisVertical;
+    self.modsListStack.alignment = UIStackViewAlignmentFill;
+    self.modsListStack.spacing = 10.0;
+
+    UIScrollView *scroll = [[UIScrollView alloc] init];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.alwaysBounceVertical = YES;
+    scroll.showsVerticalScrollIndicator = YES;
+    [scroll addSubview:self.modsListStack];
+
+    UIButton *importButton = MakeButton(@"Import .gxmod", self, @selector(importModPackage));
+    UIButton *back = MakeButton(@"Back", self, @selector(hideMods));
+    [importButton.widthAnchor constraintEqualToConstant:220.0].active = YES;
+    [back.widthAnchor constraintEqualToConstant:180.0].active = YES;
+    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[importButton, back]];
+    buttons.translatesAutoresizingMaskIntoConstraints = NO;
+    buttons.axis = UILayoutConstraintAxisHorizontal;
+    buttons.alignment = UIStackViewAlignmentCenter;
+    buttons.spacing = 14.0;
+
+    self.modsStatus = MakeLabel(@"", 13.0, UIFontWeightRegular);
+    self.modsStatus.textAlignment = NSTextAlignmentLeft;
+    self.modsStatus.textColor = [UIColor colorWithWhite:0.65 alpha:1.0];
+
+    [self.modsView addSubview:title];
+    [self.modsView addSubview:note];
+    [self.modsView addSubview:scroll];
+    [self.modsView addSubview:buttons];
+    [self.modsView addSubview:self.modsStatus];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [title.leadingAnchor constraintEqualToAnchor:self.modsView.leadingAnchor],
+        [title.trailingAnchor constraintEqualToAnchor:self.modsView.trailingAnchor],
+        [title.topAnchor constraintEqualToAnchor:self.modsView.topAnchor],
+        [note.leadingAnchor constraintEqualToAnchor:self.modsView.leadingAnchor],
+        [note.trailingAnchor constraintEqualToAnchor:self.modsView.trailingAnchor],
+        [note.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:4.0],
+        [scroll.leadingAnchor constraintEqualToAnchor:self.modsView.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:self.modsView.trailingAnchor],
+        [scroll.topAnchor constraintEqualToAnchor:note.bottomAnchor constant:12.0],
+        [scroll.bottomAnchor constraintEqualToAnchor:buttons.topAnchor constant:-12.0],
+        [self.modsListStack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [self.modsListStack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [self.modsListStack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [self.modsListStack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [self.modsListStack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
+        [buttons.centerXAnchor constraintEqualToAnchor:self.modsView.centerXAnchor],
+        [buttons.bottomAnchor constraintEqualToAnchor:self.modsStatus.topAnchor constant:-7.0],
+        [self.modsStatus.leadingAnchor constraintEqualToAnchor:self.modsView.leadingAnchor],
+        [self.modsStatus.trailingAnchor constraintEqualToAnchor:self.modsView.trailingAnchor],
+        [self.modsStatus.bottomAnchor constraintEqualToAnchor:self.modsView.bottomAnchor],
+    ]];
+
+    [self reloadModsList];
+}
+
+- (void)reloadModsList
+{
+    for (UIView *view in [self.modsListStack.arrangedSubviews copy])
+    {
+        [self.modsListStack removeArrangedSubview:view];
+        [view removeFromSuperview];
+    }
+
+    NSArray<NSDictionary<NSString *, id> *> *entries = HubCombinedEntries();
+    if (entries.count == 0)
+    {
+        UILabel *empty = MakeLabel(@"No mod catalog entries yet. Import a .gxmod package from Files.", 15.0, UIFontWeightRegular);
+        empty.textColor = [UIColor colorWithWhite:0.65 alpha:1.0];
+        [self.modsListStack addArrangedSubview:empty];
+        return;
+    }
+
+    for (NSDictionary *entry in entries)
+    {
+        NSString *profileId = entry[@"profileId"] ?: @"";
+        NSString *name = entry[@"name"] ?: profileId;
+        NSString *catalogVersion = entry[@"version"] ?: @"unknown";
+        NSDictionary *installed = GXHubInstalledManifest(profileId);
+        BOOL externalInstalled = GXHubProfileInstalled(profileId);
+        BOOL available = ProfileDirectoryExists(profileId);
+        NSString *installedVersion = installed[@"version"];
+        BOOL updateAvailable = externalInstalled && installedVersion.length > 0 &&
+            ![installedVersion isEqualToString:catalogVersion] && [entry[@"packageURL"] length] > 0;
+
+        UILabel *nameLabel = MakeLabel(name, 17.0, UIFontWeightSemibold);
+        nameLabel.textAlignment = NSTextAlignmentLeft;
+        NSString *statusText = nil;
+        if (externalInstalled)
+            statusText = updateAvailable
+                ? [NSString stringWithFormat:@"Installed %@ · Update %@ available", installedVersion, catalogVersion]
+                : [NSString stringWithFormat:@"Installed %@", installedVersion ?: catalogVersion];
+        else if (available)
+            statusText = [NSString stringWithFormat:@"Built in · %@", catalogVersion];
+        else
+            statusText = [NSString stringWithFormat:@"Not installed · %@", catalogVersion];
+
+        NSNumber *sizeBytes = entry[@"packageBytes"];
+        if (sizeBytes.unsignedLongLongValue > 0)
+            statusText = [statusText stringByAppendingFormat:@" · %@",
+                HumanReadableBytes(sizeBytes.unsignedLongLongValue)];
+        UILabel *detail = MakeLabel(statusText, 12.0, UIFontWeightRegular);
+        detail.textAlignment = NSTextAlignmentLeft;
+        detail.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+
+        UIStackView *actions = [[UIStackView alloc] init];
+        actions.axis = UILayoutConstraintAxisHorizontal;
+        actions.alignment = UIStackViewAlignmentCenter;
+        actions.spacing = 8.0;
+
+        if (available)
+        {
+            UIButton *play = MakeButton(@"Play", self, @selector(playHubMod:));
+            play.accessibilityIdentifier = profileId;
+            [play.widthAnchor constraintEqualToConstant:130.0].active = YES;
+            [actions addArrangedSubview:play];
+        }
+
+        NSString *packageURL = entry[@"packageURL"];
+        if (packageURL.length > 0 && (!externalInstalled || updateAvailable))
+        {
+            UIButton *install = MakeButton(externalInstalled ? @"Update" : @"Install", self, @selector(downloadHubMod:));
+            install.accessibilityIdentifier = profileId;
+            [install.widthAnchor constraintEqualToConstant:140.0].active = YES;
+            [actions addArrangedSubview:install];
+        }
+
+        if (externalInstalled)
+        {
+            UIButton *remove = MakeButton(@"Remove", self, @selector(removeHubMod:));
+            remove.accessibilityIdentifier = profileId;
+            [remove.widthAnchor constraintEqualToConstant:130.0].active = YES;
+            [actions addArrangedSubview:remove];
+        }
+
+        UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[nameLabel, detail, actions]];
+        row.axis = UILayoutConstraintAxisVertical;
+        row.alignment = UIStackViewAlignmentFill;
+        row.spacing = 6.0;
+        row.layoutMargins = UIEdgeInsetsMake(10.0, 14.0, 10.0, 14.0);
+        row.layoutMarginsRelativeArrangement = YES;
+        row.backgroundColor = [UIColor colorWithWhite:0.055 alpha:1.0];
+        row.layer.cornerRadius = 9.0;
+        [self.modsListStack addArrangedSubview:row];
+    }
+}
+
+- (void)rebuildHubMenuAfterMutation
+{
+    [self.menuStack removeFromSuperview];
+    self.menuStack = nil;
+    [self buildMenu];
+    self.menuStack.hidden = YES;
+
+    [self.settingsView removeFromSuperview];
+    self.settingsView = nil;
+    [self buildSettings];
+    self.settingsView.hidden = YES;
+
+    [self reloadModsList];
+}
+
+- (void)showMods
+{
+    self.menuStack.hidden = YES;
+    self.settingsView.hidden = YES;
+    self.diagnosticsView.hidden = YES;
+    self.modsView.hidden = NO;
+    self.modsStatus.text = @"";
+    [self reloadModsList];
+}
+
+- (void)hideMods
+{
+    self.modsView.hidden = YES;
+    self.menuStack.hidden = NO;
+}
+
+- (void)playHubMod:(UIButton *)sender
+{
+    NSString *profileId = sender.accessibilityIdentifier;
+    if (profileId.length > 0 && ProfileDirectoryExists(profileId))
+        SetSelectedProfile(profileId);
+}
+
+- (void)downloadHubMod:(UIButton *)sender
+{
+    NSString *profileId = sender.accessibilityIdentifier;
+    NSDictionary *entry = HubEntryForProfile(profileId);
+    if (entry == nil)
+        return;
+
+    self.modsStatus.textColor = [UIColor systemYellowColor];
+    self.modsStatus.text = [NSString stringWithFormat:@"Downloading %@… Keep Generals Hub open.", entry[@"name"] ?: profileId];
+    sender.enabled = NO;
+
+    __weak GXProfileLauncherViewController *weakSelf = self;
+    GXHubDownloadAndInstall(entry, ^(NSDictionary *manifest, NSError *error) {
+        GXProfileLauncherViewController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
+        sender.enabled = YES;
+        if (error != nil)
+        {
+            strongSelf.modsStatus.textColor = [UIColor systemRedColor];
+            strongSelf.modsStatus.text = [NSString stringWithFormat:@"Install failed: %@", error.localizedDescription];
+            return;
+        }
+        strongSelf.modsStatus.textColor = [UIColor systemGreenColor];
+        strongSelf.modsStatus.text = [NSString stringWithFormat:@"Installed %@ %@.", manifest[@"name"], manifest[@"version"]];
+        [strongSelf rebuildHubMenuAfterMutation];
+    });
+}
+
+- (void)removeHubMod:(UIButton *)sender
+{
+    NSString *profileId = sender.accessibilityIdentifier;
+    NSError *error = nil;
+    if (!GXHubRemoveMod(profileId, &error))
+    {
+        self.modsStatus.textColor = [UIColor systemRedColor];
+        self.modsStatus.text = [NSString stringWithFormat:@"Remove failed: %@", error.localizedDescription];
+        return;
+    }
+    self.modsStatus.textColor = [UIColor systemGreenColor];
+    self.modsStatus.text = @"Mod removed.";
+    [self rebuildHubMenuAfterMutation];
+}
+
+- (void)importModPackage
+{
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.data"]
+                                                               inMode:UIDocumentPickerModeImport];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+    didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls
+{
+    NSURL *url = urls.firstObject;
+    if (url == nil)
+        return;
+
+    self.modsStatus.textColor = [UIColor systemYellowColor];
+    self.modsStatus.text = @"Installing .gxmod…";
+    __weak GXProfileLauncherViewController *weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        BOOL scoped = [url startAccessingSecurityScopedResource];
+        NSError *error = nil;
+        NSDictionary *manifest = nil;
+        BOOL ok = GXHubInstallPackageAtURL(url, nil, &manifest, &error);
+        if (scoped)
+            [url stopAccessingSecurityScopedResource];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            GXProfileLauncherViewController *strongSelf = weakSelf;
+            if (strongSelf == nil)
+                return;
+            if (!ok)
+            {
+                strongSelf.modsStatus.textColor = [UIColor systemRedColor];
+                strongSelf.modsStatus.text = [NSString stringWithFormat:@"Import failed: %@", error.localizedDescription];
+                return;
+            }
+            strongSelf.modsStatus.textColor = [UIColor systemGreenColor];
+            strongSelf.modsStatus.text = [NSString stringWithFormat:@"Installed %@ %@.", manifest[@"name"], manifest[@"version"]];
+            [strongSelf rebuildHubMenuAfterMutation];
+        });
+    });
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller
+{
+    self.modsStatus.text = @"";
 }
 
 - (UISlider *)makeSliderWithMin:(float)minimum max:(float)maximum
@@ -1058,6 +1434,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.menuStack.hidden = YES;
     self.settingsView.hidden = YES;
     self.diagnosticsView.hidden = NO;
+    self.modsView.hidden = YES;
     [self refreshDiagnostics];
 }
 
@@ -1480,6 +1857,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 {
     [self loadSettingsControls];
     self.menuStack.hidden = YES;
+    self.modsView.hidden = YES;
+    self.diagnosticsView.hidden = YES;
     self.settingsView.hidden = NO;
 }
 

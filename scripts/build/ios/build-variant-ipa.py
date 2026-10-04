@@ -3,6 +3,7 @@
 
 Variants:
 - original: native launcher + shared Zero Hour 1.04 GameData
+- hub: Generals Hub launcher + shared Zero Hour 1.04 GameData; mods install later
 - enhanced: original + Zero Hour Enhanced profile
 - contra: original + Contra X Beta 2 + Patch 1 profile
 - all: original + Enhanced + Contra X
@@ -39,7 +40,7 @@ b = load_builder()
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a selected GeneralsXZH iPad IPA variant.")
-    parser.add_argument("--variant", choices=("original", "enhanced", "contra", "all"), required=True)
+    parser.add_argument("--variant", choices=("original", "hub", "enhanced", "contra", "all"), required=True)
     parser.add_argument("--shell", type=Path, required=True)
     parser.add_argument("--base-ipa", type=Path, required=True)
     parser.add_argument("--enhanced", type=Path)

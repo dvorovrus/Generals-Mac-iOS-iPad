@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "mods": [
+    {
+      "profileId": "enhanced",
+      "name": "Zero Hour Enhanced",
+      "version": "1.0+2024-03-28",
+      "description": "Zero Hour Enhanced v1.0 with 28/03/2024 patch.",
+      "packageURL": "",
+      "sha256": "",
+      "packageBytes": 0
+    },
+    {
+      "profileId": "contra-x",
+      "name": "Contra X",
+      "version": "Beta2+Patch1",
+      "description": "Contra X Beta 2 + Patch 1.",
+      "packageURL": "",
+      "sha256": "",
+      "packageBytes": 0
+    }
+  ]
+}

@@ -28,7 +28,7 @@ def find_app(names: list[str]) -> str:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--variant", choices=("original", "enhanced", "contra", "all"), required=True)
+    p.add_argument("--variant", choices=("original", "hub", "enhanced", "contra", "all"), required=True)
     p.add_argument("ipa")
     args = p.parse_args()
 
@@ -59,6 +59,7 @@ def main() -> None:
         enhanced = [n for n in lower if n.startswith(app_l + "profiles/enhanced/")]
         contra = [n for n in lower if n.startswith(app_l + "profiles/contra-x/")]
         auto_launch_marker = app_l + "autolaunchprofile.txt"
+        hub_catalog = app_l + "hubcatalog.json"
 
         expected_auto_profile = {
             "enhanced": "enhanced",
@@ -76,6 +77,9 @@ def main() -> None:
                 )
         elif auto_launch_marker in lower:
             fail("unexpected AutoLaunchProfile.txt outside a dedicated single-profile variant")
+
+        if args.variant == "hub" and hub_catalog not in lower:
+            fail("Hub IPA is missing HubCatalog.json")
 
         if len(game) < 10 or not any(n.endswith(".big") for n in game):
             fail("GameData looks incomplete")

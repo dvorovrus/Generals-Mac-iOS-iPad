@@ -14,6 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 LAUNCHER_SRC="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSProfileLauncher.mm"
 LAUNCHER_HEADER="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSProfileLauncher.h"
+MOD_MANAGER_SRC="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSModManager.mm"
+MOD_MANAGER_HEADER="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSModManager.h"
+HUB_CATALOG="${PROJECT_ROOT}/ios/hub/HubCatalog.json"
 VERSION_FILE="${PROJECT_ROOT}/ios/version.env"
 
 PROJECT_VERSION="0.0.0"
@@ -27,6 +30,8 @@ fi
 test -f "${BASE_IPA}" || { echo "ERROR: base shell IPA not found: ${BASE_IPA}" >&2; exit 1; }
 test -f "${LAUNCHER_SRC}" || { echo "ERROR: launcher source not found: ${LAUNCHER_SRC}" >&2; exit 1; }
 test -f "${LAUNCHER_HEADER}" || { echo "ERROR: launcher header not found: ${LAUNCHER_HEADER}" >&2; exit 1; }
+test -f "${MOD_MANAGER_SRC}" || { echo "ERROR: mod manager source not found: ${MOD_MANAGER_SRC}" >&2; exit 1; }
+test -f "${MOD_MANAGER_HEADER}" || { echo "ERROR: mod manager header not found: ${MOD_MANAGER_HEADER}" >&2; exit 1; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -60,6 +65,7 @@ xcrun --sdk iphoneos clang++ \
   -framework Foundation \
   -framework UIKit \
   -lobjc \
+  "${MOD_MANAGER_SRC}" \
   "${LAUNCHER_SRC}" \
   -o "${LAUNCHER_LIB}"
 
@@ -86,6 +92,9 @@ otool -L "${ENGINE}" | grep -q "@rpath/libGeneralsXLauncher.dylib" || {
 
 echo "==> Replacing libGeneralsXLauncher.dylib"
 cp "${LAUNCHER_LIB}" "${TARGET_LIB}"
+if [[ -f "${HUB_CATALOG}" ]]; then
+  cp "${HUB_CATALOG}" "${APP}/HubCatalog.json"
+fi
 
 PLIST="${APP}/Info.plist"
 if [[ -f "${PLIST}" ]]; then

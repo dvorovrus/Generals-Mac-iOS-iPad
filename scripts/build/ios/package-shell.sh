@@ -70,6 +70,10 @@ if [[ -f "${PLIST}" ]]; then
 fi
 
 cp "${GAME_BIN}" "${APP}/${APP_NAME}"
+HUB_CATALOG="${PROJECT_ROOT}/ios/hub/HubCatalog.json"
+if [[ -f "${HUB_CATALOG}" ]]; then
+  cp "${HUB_CATALOG}" "${APP}/HubCatalog.json"
+fi
 mkdir -p "${APP}/Frameworks"
 
 for lib in \

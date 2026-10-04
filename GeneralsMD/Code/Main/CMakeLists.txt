@@ -111,6 +111,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_library(generalsx_ios_launcher SHARED
         IOSProfileLauncher.h
         IOSProfileLauncher.mm
+        IOSModManager.h
+        IOSModManager.mm
     )
     set_target_properties(generalsx_ios_launcher PROPERTIES
         OUTPUT_NAME "GeneralsXLauncher"
@@ -122,7 +124,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
 
-    set_source_files_properties(IOSProfileLauncher.mm PROPERTIES
+    set_source_files_properties(IOSProfileLauncher.mm IOSModManager.mm PROPERTIES
         SKIP_PRECOMPILE_HEADERS ON
         COMPILE_OPTIONS "-fobjc-arc"
     )

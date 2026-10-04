@@ -1,0 +1,37 @@
+#pragma once
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+
+#import <Foundation/Foundation.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+FOUNDATION_EXPORT NSString *GXHubModsRootPath(void);
+FOUNDATION_EXPORT NSString *GXHubInstalledProfilePath(NSString *profileId);
+FOUNDATION_EXPORT BOOL GXHubProfileInstalled(NSString *profileId);
+FOUNDATION_EXPORT NSDictionary<NSString *, id> * _Nullable GXHubInstalledManifest(NSString *profileId);
+FOUNDATION_EXPORT NSArray<NSDictionary<NSString *, id> *> *GXHubCatalogEntries(void);
+FOUNDATION_EXPORT NSArray<NSDictionary<NSString *, id> *> *GXHubInstalledModEntries(void);
+FOUNDATION_EXPORT BOOL GXHubRemoveMod(NSString *profileId, NSError **error);
+
+FOUNDATION_EXPORT BOOL GXHubInstallPackageAtURL(
+    NSURL *packageURL,
+    NSString * _Nullable expectedSHA256,
+    NSDictionary<NSString *, id> * _Nullable * _Nullable installedManifest,
+    NSError **error);
+
+typedef void (^GXHubInstallCompletion)(
+    NSDictionary<NSString *, id> * _Nullable installedManifest,
+    NSError * _Nullable error);
+
+FOUNDATION_EXPORT void GXHubDownloadAndInstall(
+    NSDictionary<NSString *, id> *catalogEntry,
+    GXHubInstallCompletion completion);
+
+NS_ASSUME_NONNULL_END
+
+#endif

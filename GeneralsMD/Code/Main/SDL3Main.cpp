@@ -907,14 +907,7 @@ static void InjectIOSProfileModArgument(const char *profileId)
         }
     }
 
-    const char *profileDir = nullptr;
-    if (strcmp(profileId, "enhanced") == 0)
-        profileDir = "enhanced";
-    else if (strcmp(profileId, "contra-x") == 0)
-        profileDir = "contra-x";
-    else
-        return;
-
+    const char *profileDir = profileId;
     const bool isEnhanced = strcmp(profileId, "enhanced") == 0;
     const bool isContra = strcmp(profileId, "contra-x") == 0;
 
@@ -938,20 +931,48 @@ static void InjectIOSProfileModArgument(const char *profileId)
     strncat(bundledModPath, "/Profiles/", sizeof(bundledModPath) - strlen(bundledModPath) - 1);
     strncat(bundledModPath, profileDir, sizeof(bundledModPath) - strlen(bundledModPath) - 1);
 
-    if (access(bundledModPath, R_OK) != 0)
+    static char externalModPath[1024];
+    externalModPath[0] = '\0';
+    const char *home = getenv("HOME");
+    if (home != nullptr && home[0] != '\0')
     {
-        fprintf(stderr, "ERROR: iOS launcher: selected profile '%s' is missing at %s\n",
+        snprintf(externalModPath,
+                 sizeof(externalModPath),
+                 "%s/Documents/Mods/%s/profile",
+                 home,
+                 profileDir);
+    }
+
+    const char *sourceModPath = nullptr;
+    if (externalModPath[0] != '\0' && access(externalModPath, R_OK) == 0)
+    {
+        sourceModPath = externalModPath;
+        fprintf(stderr, "[HUB] external profile selected id='%s' path='%s'\n",
+                profileId, externalModPath);
+    }
+    else if (access(bundledModPath, R_OK) == 0)
+    {
+        sourceModPath = bundledModPath;
+        fprintf(stderr, "[HUB] bundled profile selected id='%s' path='%s'\n",
                 profileId, bundledModPath);
+    }
+    else
+    {
+        fprintf(stderr,
+                "ERROR: iOS launcher: selected profile '%s' is missing (external='%s', bundled='%s')\n",
+                profileId,
+                externalModPath,
+                bundledModPath);
         return;
     }
 
     static char runtimeModPath[1024];
-    const char *selectedModPath = bundledModPath;
+    const char *selectedModPath = sourceModPath;
     bool forceFullViewport = false;
 
     if (isEnhanced &&
         IOSPrepareEnhancedRuntimeProfile(
-            bundledModPath,
+            sourceModPath,
             runtimeModPath,
             sizeof(runtimeModPath)))
     {
@@ -960,11 +981,11 @@ static void InjectIOSProfileModArgument(const char *profileId)
     else if (isEnhanced)
     {
         fprintf(stderr,
-                "[ENHANCED-SETTINGS] runtime overlay unavailable; using bundled profile\n");
+                "[ENHANCED-SETTINGS] runtime overlay unavailable; using selected source profile\n");
     }
     else if (isContra &&
         IOSPrepareContraRuntimeProfile(
-            bundledModPath,
+            sourceModPath,
             runtimeModPath,
             sizeof(runtimeModPath),
             &forceFullViewport))
@@ -977,7 +998,7 @@ static void InjectIOSProfileModArgument(const char *profileId)
         forceFullViewport =
             IOSContraLower(IOSContraSetting(settings, "ControlBar", "Contra")) == "pro";
         fprintf(stderr,
-                "[CONTRA-SETTINGS] runtime overlay unavailable; using bundled profile\n");
+                "[CONTRA-SETTINGS] runtime overlay unavailable; using selected source profile\n");
     }
 
     static char modFlag[] = "-mod";
