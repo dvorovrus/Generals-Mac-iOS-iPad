@@ -450,6 +450,19 @@ BOOL GXHubInstallTar(NSURL *packageURL, NSDictionary **installedManifest, NSErro
     }
 
     NSString *finalPath = [modsRoot stringByAppendingPathComponent:profileId];
+    NSString *existingSettings = [finalPath stringByAppendingPathComponent:@"settings.ini"];
+    if ([fm fileExistsAtPath:existingSettings])
+    {
+        NSString *stageSettings = [stage stringByAppendingPathComponent:@"settings.ini"];
+        NSError *settingsError = nil;
+        if (![fm copyItemAtPath:existingSettings toPath:stageSettings error:&settingsError])
+        {
+            fprintf(stderr,
+                    "WARNING: preserving settings for profile '%s' failed: %s\n",
+                    profileId.UTF8String,
+                    settingsError != nil ? settingsError.description.UTF8String : "unknown");
+        }
+    }
     NSString *backupPath = [modsRoot stringByAppendingPathComponent:
         [@".backup-" stringByAppendingString:[NSUUID UUID].UUIDString]];
 
@@ -606,6 +619,40 @@ BOOL GXHubInstallPackageAtURL(
     {
         if (error != nullptr)
             *error = GXHubError(70, @"Installer requires a local .gxmod file URL.");
+        return NO;
+    }
+
+    if (![[packageURL.pathExtension lowercaseString] isEqualToString:@"gxmod"])
+    {
+        if (error != nullptr)
+            *error = GXHubError(72, @"Selected file is not a .gxmod package.");
+        return NO;
+    }
+
+    NSDictionary<NSFileAttributeKey, id> *packageAttributes =
+        [[NSFileManager defaultManager] attributesOfItemAtPath:packageURL.path error:error];
+    if (packageAttributes == nil)
+        return NO;
+
+    unsigned long long packageBytes = [packageAttributes fileSize];
+    NSDictionary<NSFileAttributeKey, id> *fsAttributes =
+        [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:error];
+    if (fsAttributes == nil)
+        return NO;
+
+    unsigned long long freeBytes = [fsAttributes[NSFileSystemFreeSize] unsignedLongLongValue];
+    const unsigned long long reserveBytes = 256ULL * 1024ULL * 1024ULL;
+    if (freeBytes < packageBytes + reserveBytes)
+    {
+        if (error != nullptr)
+        {
+            *error = GXHubError(
+                73,
+                [NSString stringWithFormat:
+                    @"Not enough free space. Need about %.1f GB free to install this mod; available %.1f GB.",
+                    (double)(packageBytes + reserveBytes) / 1024.0 / 1024.0 / 1024.0,
+                    (double)freeBytes / 1024.0 / 1024.0 / 1024.0]);
+        }
         return NO;
     }
 

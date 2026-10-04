@@ -289,8 +289,8 @@ static std::filesystem::path IOSContraSettingsPath()
 {
     const char *home = getenv("HOME");
     if (home == nullptr || home[0] == '\0')
-        return std::filesystem::path("ContraSettings.ini");
-    return std::filesystem::path(home) / "Documents" / "ContraSettings.ini";
+        return std::filesystem::path("settings.ini");
+    return std::filesystem::path(home) / "Documents" / "Mods" / "contra-x" / "settings.ini";
 }
 
 static std::unordered_map<std::string, std::string> IOSLoadContraSettings()
@@ -338,8 +338,8 @@ static std::filesystem::path IOSEnhancedSettingsPath()
 {
     const char *home = getenv("HOME");
     if (home == nullptr || home[0] == '\0')
-        return std::filesystem::path("EnhancedSettings.ini");
-    return std::filesystem::path(home) / "Documents" / "EnhancedSettings.ini";
+        return std::filesystem::path("settings.ini");
+    return std::filesystem::path(home) / "Documents" / "Mods" / "enhanced" / "settings.ini";
 }
 
 static std::unordered_map<std::string, std::string> IOSLoadEnhancedSettings()
@@ -896,7 +896,9 @@ static void LogIOSProfileContents(const char *modPath)
 // never sees Enhanced/Contra archives unless explicitly selected.
 static void InjectIOSProfileModArgument(const char *profileId)
 {
-    if (profileId == nullptr || strcmp(profileId, "vanilla") == 0)
+    if (profileId == nullptr ||
+        strcmp(profileId, "vanilla") == 0 ||
+        strcmp(profileId, "online") == 0)
         return;
 
     for (int i = 1; i < __argc; ++i)

@@ -20,6 +20,7 @@ The single source of truth is `scripts/deploy/catalog.json`.
 | Platform | Variant | Canonical build | Install status |
 |---|---|---|---|
 | iPad | Original | GitHub Actions | Ready |
+| iPad | Generals Hub | Shared shell + local Windows package | MVP ready for device test |
 | iPad | Contra X | GitHub Actions | Ready |
 | iPad | Enhanced | GitHub Actions | Ready |
 | iPad | All-in-One | Local Windows packager | Ready |
@@ -123,6 +124,7 @@ Existing `input/`, `shell/` and `output/` paths are intentionally preserved so o
 ## Per-variant guides
 
 iPad:
+- `docs/deployment/ipad/hub.md`
 - `docs/deployment/ipad/original.md`
 - `docs/deployment/ipad/contra.md`
 - `docs/deployment/ipad/enhanced.md`

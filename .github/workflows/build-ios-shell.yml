@@ -10,6 +10,8 @@ on:
       - 'GeneralsMD/**'
       - '!GeneralsMD/Code/Main/IOSProfileLauncher.mm'
       - '!GeneralsMD/Code/Main/IOSProfileLauncher.h'
+      - '!GeneralsMD/Code/Main/IOSModManager.mm'
+      - '!GeneralsMD/Code/Main/IOSModManager.h'
       - 'Core/**'
       - 'Dependencies/Utility/**'
       - 'resources/**'

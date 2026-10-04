@@ -7,7 +7,8 @@
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
 
 // GeneralsX @feature dvorovrus 25/09/2026 Show the embedded launcher before game initialization.
-// Returns one of: "vanilla", "enhanced", "contra-x".
+// Returns "vanilla" or a safe installed/bundled profile ID (for example
+// "enhanced" or "contra-x").
 const char *GeneralsXRunIOSProfileLauncher();
 
 // The launcher lives in a standalone dylib, so it must not directly import
