@@ -379,6 +379,15 @@ void Network::init()
 void Network::setSawCRCMismatch()
 {
 	m_sawCRCMismatch = TRUE;
+#if defined(GENERALS_ONLINE)
+	fprintf(stderr,
+	        "[ONLINE-DESYNC] network-final gameFrame=%d validatedFrame=%d runAhead=%d rngBase=0x%08X rngCRC=0x%08X\n",
+	        TheGameLogic != nullptr ? TheGameLogic->getFrame() : -1,
+	        TheGameLogic != nullptr ? TheGameLogic->getFrame() - m_runAhead - 1 : -1,
+	        m_runAhead,
+	        GetGameLogicRandomSeed(),
+	        GetGameLogicRandomSeedCRC());
+#endif
 
 	TheScriptActions->closeWindows( TRUE );
 	m_messageWindow = TheWindowManager->winCreateFromScript("Menus/CRCMismatch.wnd");
