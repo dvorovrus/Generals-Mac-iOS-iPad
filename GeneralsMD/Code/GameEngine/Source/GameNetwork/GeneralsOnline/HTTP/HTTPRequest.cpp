@@ -198,30 +198,38 @@ void HTTPRequest::Threaded_SetComplete(CURLcode result)
 	}
 #endif
 
-	std::string strResponse = std::string(reinterpret_cast<const char*>(m_vecBuffer.data()), m_currentBufSize_Used);
+	// Avoid a second large body allocation solely for release logging. Lobby and
+	// stats responses can exceed 100 KB and arrive repeatedly while browsing rooms.
+	const bool logResponseBody = m_currentBufSize_Used <= 8192;
+	std::string strResponse;
+	if (logResponseBody)
+		strResponse.assign(reinterpret_cast<const char*>(m_vecBuffer.data()), m_currentBufSize_Used);
+	else
+		strResponse = "<body omitted: " + std::to_string(m_currentBufSize_Used) + " bytes>";
 	NetworkLog(ELogVerbosity::LOG_RELEASE, "[%p|%s|Verb %d] Transfer is complete: %d bytes total! Curl result is %d", this, strURIRedacted.c_str(), m_httpVerb, m_currentBufSize_Used, result);
 
 	// if we got an error, set the response code to 0
 
 #if !_DEBUG
-	static const std::string strSeedKey = "\"RNGSeed\":";
-	for (size_t seedPos = strResponse.find(strSeedKey); seedPos != std::string::npos; seedPos = strResponse.find(strSeedKey, seedPos))
+	if (logResponseBody)
 	{
-		size_t valueStart = seedPos + strSeedKey.length();
-		size_t valueEnd = strResponse.find_first_of(",}", valueStart);
-		if (valueEnd == std::string::npos)
-			break;
+		static const std::string strSeedKey = "\"RNGSeed\":";
+		for (size_t seedPos = strResponse.find(strSeedKey); seedPos != std::string::npos; seedPos = strResponse.find(strSeedKey, seedPos))
+		{
+			size_t valueStart = seedPos + strSeedKey.length();
+			size_t valueEnd = strResponse.find_first_of(",}", valueStart);
+			if (valueEnd == std::string::npos)
+				break;
 
-		strResponse.replace(valueStart, valueEnd - valueStart, "<redacted>");
-		seedPos = valueStart;
-	}
+			strResponse.replace(valueStart, valueEnd - valueStart, "<redacted>");
+			seedPos = valueStart;
+		}
 
-	std::string strResponseLower = strResponse;
-	std::transform(strResponseLower.begin(), strResponseLower.end(), strResponseLower.begin(),
-		[](unsigned char c) { return std::tolower(c); });
-	if (strResponseLower.find("token") != std::string::npos)
-	{
-		strResponse = "<redacted>";
+		std::string strResponseLower = strResponse;
+		std::transform(strResponseLower.begin(), strResponseLower.end(), strResponseLower.begin(),
+			[](unsigned char c) { return std::tolower(c); });
+		if (strResponseLower.find("token") != std::string::npos)
+			strResponse = "<redacted>";
 	}
 #endif
 

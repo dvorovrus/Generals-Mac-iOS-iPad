@@ -6,6 +6,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#include <malloc/malloc.h>
 
 #include <atomic>
 #include <cstring>
@@ -564,6 +565,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 {
     [super viewDidLoad];
 
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(handleMemoryWarning:)
+                                                 name:UIApplicationDidReceiveMemoryWarningNotification
+                                               object:nil];
+
     self.view.backgroundColor = UIColor.blackColor;
     EnsureDefaultIPadOverrides();
 
@@ -588,6 +594,16 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     [self buildMods];
     [self buildSettings];
     [self buildDiagnostics];
+}
+
+- (void)handleMemoryWarning:(NSNotification *)notification
+{
+    (void)notification;
+    const size_t relievedBytes = malloc_zone_pressure_relief(nullptr, 0);
+    fprintf(stderr,
+            "[IOS-MEMORY-WARNING] received relievedMB=%.2f\n",
+            (double)relievedBytes / (1024.0 * 1024.0));
+    fflush(stderr);
 }
 
 - (void)buildMenu

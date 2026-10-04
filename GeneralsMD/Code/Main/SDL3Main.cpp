@@ -52,7 +52,7 @@
 #include <cstdio>
 #include <unistd.h>   // _exit()
 #include <glob.h>     // glob() for Vulkan ICD discovery
-#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
+#if defined(__APPLE__)
 #include <execinfo.h>
 #include <signal.h>
 #endif
@@ -1082,8 +1082,8 @@ void GeneralsXClearIOSDiagnosticLogs()
 
 #endif
 
-#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
-static void MacFatalSignalHandler(int signalNumber)
+#if defined(__APPLE__)
+static void AppleFatalSignalHandler(int signalNumber)
 {
 	char header[128];
 	const int headerLength = snprintf(header, sizeof(header),
@@ -1103,10 +1103,10 @@ static void MacFatalSignalHandler(int signalNumber)
 	_exit(128 + signalNumber);
 }
 
-static void InstallMacFatalSignalHandlers()
+static void InstallAppleFatalSignalHandlers()
 {
 	struct sigaction action = {};
-	action.sa_handler = MacFatalSignalHandler;
+	action.sa_handler = AppleFatalSignalHandler;
 	sigemptyset(&action.sa_mask);
 	action.sa_flags = SA_RESETHAND;
 
@@ -1122,9 +1122,13 @@ int main(int argc, char* argv[])
 {
 	int exitcode = 1;
 
-#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
-	InstallMacFatalSignalHandlers();
+#if defined(__APPLE__)
+	InstallAppleFatalSignalHandlers();
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+	fprintf(stderr, "[CRASH-DIAG] iOS fatal-signal backtrace handlers installed\n");
+#else
 	fprintf(stderr, "[CRASH-DIAG] macOS fatal-signal backtrace handlers installed\n");
+#endif
 #endif
 
 	// TheSuperHackers @build felipebraz 13/02/2026

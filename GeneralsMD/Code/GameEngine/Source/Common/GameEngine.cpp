@@ -1214,7 +1214,7 @@ void GameEngine::update()
 			TheScriptEngine->UPDATE();
 		}
 
-#if defined(__APPLE__) && !defined(GENERALS_ONLINE)
+#if defined(__APPLE__)
 		// Long iOS matches can be terminated by memory pressure without a useful
 		// in-process crash stack. Keep a lightweight footprint trail in stderr so
 		// retained session logs show whether memory is climbing before an exit.
@@ -1234,7 +1234,7 @@ void GameEngine::update()
 				if (state == 1)
 					++memoryDiagSession;
 			}
-			if (transition || frameReset || (state == 1 && frame >= nextMemoryDiagFrame))
+			if (transition || frameReset || frame >= nextMemoryDiagFrame)
 			{
 				task_vm_info_data_t vmInfo = {};
 				mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
@@ -1365,7 +1365,7 @@ void GameEngine::update()
 				// Online gameplay is latency-sensitive. A 300-frame allocator/pool scan
 				// caused visible periodic hitches on Apple; retain the diagnostics at a
 				// much lower cadence while keeping transition and crash context intact.
-				nextMemoryDiagFrame = frame + 1800;
+				nextMemoryDiagFrame = frame + (state == 1 ? 900 : 300);
 #else
 				nextMemoryDiagFrame = frame + 300;
 #endif
