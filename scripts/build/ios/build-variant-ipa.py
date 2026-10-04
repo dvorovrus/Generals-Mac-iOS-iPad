@@ -22,6 +22,8 @@ import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+PROJECT_ROOT = HERE.parents[2]
+HUB_CATALOG = PROJECT_ROOT / "ios" / "hub" / "HubCatalog.json"
 LEGACY_BUILDER = HERE / "build-all-in-one-ipa.py"
 
 
@@ -163,6 +165,8 @@ def main() -> None:
             name = info.filename.replace("\\", "/")
             if info.is_dir() or any(name.startswith(prefix) for prefix in skipped_prefixes):
                 continue
+            if args.variant == "hub" and name.lower() == (shell_app + "HubCatalog.json").lower():
+                continue
             shell_bytes += b.zip_copy(shell, info, out, name)
 
         # Shared retail Zero Hour 1.04 data.
@@ -180,6 +184,11 @@ def main() -> None:
             base_files += 1
         if base_files == 0:
             b.die("base IPA contains no GameData files")
+
+        if args.variant == "hub":
+            if not HUB_CATALOG.is_file():
+                b.die(f"Hub catalog not found: {HUB_CATALOG}")
+            out.writestr(shell_app + "HubCatalog.json", HUB_CATALOG.read_bytes())
 
         enhanced_bytes = 0
         enhanced_count = 0
