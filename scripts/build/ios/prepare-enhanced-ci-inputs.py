@@ -14,6 +14,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 LEGACY_BUILDER = HERE / "build-all-in-one-ipa.py"
 DEFAULT_PART_BYTES = 1750 * 1024 * 1024
+APPLE_OPTIONS_NAME = "EnhancedProfile-apple-options.zip"
+APPLE_OPTION_TARGETS = {
+    "!zhe8iui_98.zhe",
+    "!zhe8iui_99.zhe",
+}
 
 
 def load_builder():
@@ -75,13 +80,28 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for old in args.output_dir.glob("EnhancedProfile-part-*.zip"):
         old.unlink()
-    for name in ("enhanced-inputs.json", "enhanced-inputs.sha256"):
+    for name in ("enhanced-inputs.json", "enhanced-inputs.sha256", APPLE_OPTIONS_NAME):
         path = args.output_dir / name
         if path.exists():
             path.unlink()
 
     with b.ModSource(args.enhanced) as source:
-        entries = b.build_enhanced_entries([source])
+        all_entries = b.build_enhanced_entries([source])
+        supplemental_entries = [
+            (entry, target)
+            for entry, target in all_entries
+            if target.lower() in APPLE_OPTION_TARGETS
+        ]
+        entries = [
+            (entry, target)
+            for entry, target in all_entries
+            if target.lower() not in APPLE_OPTION_TARGETS
+        ]
+        missing_supplemental = APPLE_OPTION_TARGETS - {target.lower() for _, target in supplemental_entries}
+        if missing_supplemental:
+            raise SystemExit(
+                "missing Apple Enhanced options: " + ", ".join(sorted(missing_supplemental))
+            )
 
         groups = []
         current = []
@@ -124,28 +144,51 @@ def main() -> None:
                 f"{len(group)} files"
             )
 
+        supplemental = args.output_dir / APPLE_OPTIONS_NAME
+        with zipfile.ZipFile(supplemental, "w", allowZip64=True) as zout:
+            for entry, target in supplemental_entries:
+                write_entry(zout, entry, target)
+        supplemental_digest = sha256(supplemental)
+        supplemental_info = {
+            "name": supplemental.name,
+            "sha256": supplemental_digest,
+            "sizeBytes": supplemental.stat().st_size,
+            "profileFiles": len(supplemental_entries),
+        }
+        print(
+            f"{supplemental.name}: {supplemental.stat().st_size / 1024:.1f} KiB, "
+            f"{len(supplemental_entries)} files"
+        )
+
     manifest = {
         "schemaVersion": 1,
         "profile": "enhanced",
         "patch": "28/03/2024",
         "patchPresent": True,
-        "profileFiles": len(entries),
+        "profileFiles": len(entries) + len(supplemental_entries),
         "profileBytes": total_bytes,
         "maxPartBytes": args.max_part_bytes,
         "parts": parts,
+        "supplemental": supplemental_info,
     }
     (args.output_dir / "enhanced-inputs.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
+    checksum_lines = "".join(f'{part["sha256"]}  {part["name"]}\n' for part in parts)
+    checksum_lines += f'{supplemental_info["sha256"]}  {supplemental_info["name"]}\n'
     (args.output_dir / "enhanced-inputs.sha256").write_text(
-        "".join(f'{part["sha256"]}  {part["name"]}\n' for part in parts),
+        checksum_lines,
         encoding="utf-8",
     )
 
     print()
     print(f"READY: {args.output_dir.resolve()}")
-    print(f"Enhanced profile: {len(entries)} files, {total_bytes / 1024 / 1024:.1f} MiB")
-    print(f"Parts: {len(parts)}")
+    print(
+        f"Enhanced profile: {len(entries) + len(supplemental_entries)} files "
+        f"({len(entries)} base + {len(supplemental_entries)} Apple options), "
+        f"{total_bytes / 1024 / 1024:.1f} MiB base"
+    )
+    print(f"Parts: {len(parts)} + supplemental")
 
 
 if __name__ == "__main__":

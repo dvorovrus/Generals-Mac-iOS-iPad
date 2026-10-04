@@ -83,6 +83,7 @@ $assets = @(
     $Base,
     (Join-Path $Output "enhanced-inputs.json"),
     (Join-Path $Output "enhanced-inputs.sha256")
+    (Join-Path $Output "EnhancedProfile-apple-options.zip")
 )
 $assets += Get-ChildItem -LiteralPath $Output -File -Filter "EnhancedProfile-part-*.zip" |
     Sort-Object Name |

@@ -93,12 +93,13 @@ jobs:
             exit 1
           }
 
-          gh release download "${ASSETS_RELEASE}"             --repo "${GITHUB_REPOSITORY}"             --dir build-input/assets             --pattern 'GeneralsZH-FULL-unsigned.ipa'             --pattern 'EnhancedProfile-part-*.zip'             --pattern 'enhanced-inputs.json'             --pattern 'enhanced-inputs.sha256'
+          gh release download "${ASSETS_RELEASE}"             --repo "${GITHUB_REPOSITORY}"             --dir build-input/assets             --pattern 'GeneralsZH-FULL-unsigned.ipa'             --pattern 'EnhancedProfile-part-*.zip'             --pattern 'EnhancedProfile-apple-options.zip'             --pattern 'enhanced-inputs.json'             --pattern 'enhanced-inputs.sha256'
 
           test -f build-input/assets/GeneralsZH-FULL-unsigned.ipa
           test -f build-input/assets/enhanced-inputs.json
           test -f build-input/assets/enhanced-inputs.sha256
           compgen -G 'build-input/assets/EnhancedProfile-part-*.zip' >/dev/null
+          test -f build-input/assets/EnhancedProfile-apple-options.zip
 
       - name: Verify and extract private inputs
         shell: bash
@@ -121,6 +122,8 @@ jobs:
           assert manifest["patchPresent"] is True
           assert manifest["profileFiles"] > 0
           assert len(manifest["parts"]) > 0
+          assert manifest["supplemental"]["name"] == "EnhancedProfile-apple-options.zip"
+          assert manifest["supplemental"]["profileFiles"] == 2
           print(
               f"Enhanced manifest: {manifest['profileFiles']} files, "
               f"{len(manifest['parts'])} parts"
@@ -131,9 +134,12 @@ jobs:
           for part in build-input/assets/EnhancedProfile-part-*.zip; do
             unzip -q -o "${part}" -d build-input/enhanced
           done
+          unzip -q -o build-input/assets/EnhancedProfile-apple-options.zip -d build-input/enhanced
 
           test -d build-input/enhanced/ZHE
           test -f build-input/enhanced/ZHE/!!ZHE8Patch_99.big
+          test -f build-input/enhanced/ZHE/!ZHE8IUI_98.zhe
+          test -f build-input/enhanced/ZHE/!ZHE8IUI_99.zhe
           df -h .
 
       - name: Package Enhanced IPA
