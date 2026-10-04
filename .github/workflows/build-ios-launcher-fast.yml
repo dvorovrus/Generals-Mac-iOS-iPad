@@ -13,6 +13,8 @@ on:
     paths:
       - 'GeneralsMD/Code/Main/IOSProfileLauncher.mm'
       - 'GeneralsMD/Code/Main/IOSProfileLauncher.h'
+      - 'GeneralsMD/Code/Main/IOSModManager.mm'
+      - 'GeneralsMD/Code/Main/IOSModManager.h'
       - 'scripts/build/ios/package-launcher-fast.sh'
       - 'ios/version.env'
       - '.github/workflows/build-ios-launcher-fast.yml'
