@@ -450,6 +450,19 @@ BOOL GXHubInstallTar(NSURL *packageURL, NSDictionary **installedManifest, NSErro
     }
 
     NSString *finalPath = [modsRoot stringByAppendingPathComponent:profileId];
+    NSString *existingSettings = [finalPath stringByAppendingPathComponent:@"settings.ini"];
+    if ([fm fileExistsAtPath:existingSettings])
+    {
+        NSString *stageSettings = [stage stringByAppendingPathComponent:@"settings.ini"];
+        NSError *settingsError = nil;
+        if (![fm copyItemAtPath:existingSettings toPath:stageSettings error:&settingsError])
+        {
+            fprintf(stderr,
+                    "WARNING: preserving settings for profile '%s' failed: %s\n",
+                    profileId.UTF8String,
+                    settingsError != nil ? settingsError.description.UTF8String : "unknown");
+        }
+    }
     NSString *backupPath = [modsRoot stringByAppendingPathComponent:
         [@".backup-" stringByAppendingString:[NSUUID UUID].UUIDString]];
 

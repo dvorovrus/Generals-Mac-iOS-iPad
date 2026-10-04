@@ -164,14 +164,49 @@ NSString *IPadOverridesPath()
     return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/iPadOverrides.ini"];
 }
 
+NSString *ModSettingsPath(NSString *profileId, NSString *legacyName)
+{
+    NSString *dir = [GXHubModsRootPath() stringByAppendingPathComponent:profileId];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    NSString *path = [dir stringByAppendingPathComponent:@"settings.ini"];
+
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path] && legacyName.length > 0)
+    {
+        NSString *legacyPath = DocumentsFilePath(legacyName);
+        if ([[NSFileManager defaultManager] fileExistsAtPath:legacyPath])
+        {
+            NSError *migrationError = nil;
+            if ([[NSFileManager defaultManager] copyItemAtPath:legacyPath toPath:path error:&migrationError])
+            {
+                fprintf(stderr,
+                        "[HUB-SETTINGS] migrated profile='%s' legacy='%s' -> '%s'\n",
+                        profileId.UTF8String,
+                        legacyPath.fileSystemRepresentation,
+                        path.fileSystemRepresentation);
+            }
+            else
+            {
+                fprintf(stderr,
+                        "WARNING: failed to migrate settings for profile '%s': %s\n",
+                        profileId.UTF8String,
+                        migrationError != nil ? migrationError.description.UTF8String : "unknown");
+            }
+        }
+    }
+    return path;
+}
+
 NSString *ContraSettingsPath()
 {
-    return DocumentsFilePath(@"ContraSettings.ini");
+    return ModSettingsPath(@"contra-x", @"ContraSettings.ini");
 }
 
 NSString *EnhancedSettingsPath()
 {
-    return DocumentsFilePath(@"EnhancedSettings.ini");
+    return ModSettingsPath(@"enhanced", @"EnhancedSettings.ini");
 }
 
 NSString *EngineOptionsPath()
@@ -458,6 +493,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UILabel *modsStatus;
 @property(nonatomic, strong) UIView *settingsView;
 @property(nonatomic, strong) UILabel *settingsStatus;
+@property(nonatomic, copy) NSString *settingsProfileId;
 @property(nonatomic, strong) UISlider *maxCameraSlider;
 @property(nonatomic, strong) UISlider *minCameraSlider;
 @property(nonatomic, strong) UISlider *cameraPitchSlider;
@@ -560,13 +596,13 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         : (dedicatedContra ? @"CONTRA X" : @"GENERALS HUB");
     NSString *subtitleText = dedicatedEnhanced
         ? @"v1.0 + 28/03/2024 patch · iPad"
-        : (dedicatedContra ? @"Beta 2 + Patch 1 · iPad" : @"Zero Hour · Mods · iPad");
+        : (dedicatedContra ? @"Beta 2 + Patch 1 · iPad" : @"Generals Online · Mods · iPad");
 
     UILabel *title = MakeLabel(titleText, 34.0, UIFontWeightBold);
     UILabel *subtitle = MakeLabel(subtitleText, 14.0, UIFontWeightRegular);
     subtitle.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
 
-    UIButton *settings = MakeButton(@"Settings", self, @selector(showSettings));
+    UIButton *settings = MakeButton(@"Hub Settings", self, @selector(showSettings));
     UIButton *diagnostics = MakeButton(@"Diagnostics", self, @selector(showDiagnostics));
     UIButton *mods = MakeButton(@"Mods", self, @selector(showMods));
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
@@ -592,37 +628,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     }
     else
     {
-        UIButton *vanilla = MakeButton(@"Zero Hour 1.04", self, @selector(launchVanilla));
-        [views addObject:vanilla];
-        [buttons addObject:vanilla];
-
-        NSMutableSet<NSString *> *shownProfiles = [NSMutableSet set];
-        for (NSDictionary *entry in HubCombinedEntries())
-        {
-            NSString *profileId = entry[@"profileId"];
-            if (profileId.length == 0 || !ProfileDirectoryExists(profileId))
-                continue;
-            NSString *name = entry[@"name"] ?: profileId;
-            UIButton *profile = MakeButton(name, self, @selector(playHubMod:));
-            profile.accessibilityIdentifier = profileId;
-            [views addObject:profile];
-            [buttons addObject:profile];
-            [shownProfiles addObject:profileId];
-            fprintf(stderr, "[HUB] launcher profile available id='%s'\n", profileId.UTF8String);
-        }
-
-        if (ProfileDirectoryExists(@"enhanced") && ![shownProfiles containsObject:@"enhanced"])
-        {
-            UIButton *enhanced = MakeButton(@"Zero Hour Enhanced", self, @selector(launchEnhanced));
-            [views addObject:enhanced];
-            [buttons addObject:enhanced];
-        }
-        if (ProfileDirectoryExists(@"contra-x") && ![shownProfiles containsObject:@"contra-x"])
-        {
-            UIButton *contra = MakeButton(@"Contra X Beta 2 + Patch 1", self, @selector(launchContra));
-            [views addObject:contra];
-            [buttons addObject:contra];
-        }
+        UIButton *online = MakeButton(@"Generals Online", self, @selector(launchOnline));
+        [views addObject:online];
+        [buttons addObject:online];
 
         [views addObject:mods];
         [buttons addObject:mods];
@@ -795,6 +803,16 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             [actions addArrangedSubview:play];
         }
 
+        BOOL hasDedicatedSettings = [profileId isEqualToString:@"enhanced"] ||
+                                    [profileId isEqualToString:@"contra-x"];
+        if (available && hasDedicatedSettings)
+        {
+            UIButton *settings = MakeButton(@"Settings", self, @selector(showHubModSettings:));
+            settings.accessibilityIdentifier = profileId;
+            [settings.widthAnchor constraintEqualToConstant:140.0].active = YES;
+            [actions addArrangedSubview:settings];
+        }
+
         NSString *packageURL = entry[@"packageURL"];
         if (packageURL.length > 0 && (!externalInstalled || updateAvailable))
         {
@@ -860,6 +878,23 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSString *profileId = sender.accessibilityIdentifier;
     if (profileId.length > 0 && ProfileDirectoryExists(profileId))
         SetSelectedProfile(profileId);
+}
+
+- (void)showHubModSettings:(UIButton *)sender
+{
+    NSString *profileId = sender.accessibilityIdentifier;
+    if (!([profileId isEqualToString:@"enhanced"] || [profileId isEqualToString:@"contra-x"]))
+        return;
+
+    self.settingsProfileId = profileId;
+    [self.settingsView removeFromSuperview];
+    self.settingsView = nil;
+    [self buildSettings];
+    [self loadSettingsControls];
+    self.menuStack.hidden = YES;
+    self.modsView.hidden = YES;
+    self.diagnosticsView.hidden = YES;
+    self.settingsView.hidden = NO;
 }
 
 - (void)downloadHubMod:(UIButton *)sender
@@ -1066,14 +1101,18 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     BOOL dedicatedEnhanced = [bundledProfile isEqualToString:@"enhanced"];
     BOOL dedicatedContra = [bundledProfile isEqualToString:@"contra-x"];
 
-    NSString *settingsTitle = dedicatedEnhanced
+    BOOL hubEnhancedSettings = [self.settingsProfileId isEqualToString:@"enhanced"];
+    BOOL hubContraSettings = [self.settingsProfileId isEqualToString:@"contra-x"];
+    BOOL hubModSettings = hubEnhancedSettings || hubContraSettings;
+
+    NSString *settingsTitle = (dedicatedEnhanced || hubEnhancedSettings)
         ? @"Enhanced settings"
-        : (dedicatedContra ? @"Contra X settings" : @"Game settings");
-    NSString *settingsNote = dedicatedEnhanced
-        ? @"Apple equivalents of the original Enhanced launcher options. Changes apply on the next game launch."
-        : (dedicatedContra
-            ? @"iPad equivalents of the official Contra X launcher options. Changes apply on the next game launch."
-            : @"Profile and engine settings. Changes apply on the next game launch.");
+        : ((dedicatedContra || hubContraSettings) ? @"Contra X settings" : @"Hub settings");
+    NSString *settingsNote = (dedicatedEnhanced || hubEnhancedSettings)
+        ? @"Enhanced-only options. Stored separately from Hub and other mods. Changes apply on the next launch."
+        : ((dedicatedContra || hubContraSettings)
+            ? @"Contra X-only options. Stored separately from Hub and other mods. Changes apply on the next launch."
+            : @"Shared engine, graphics, camera and performance settings for Online and installed mods.");
 
     UILabel *title = MakeLabel(settingsTitle, 26.0, UIFontWeightBold);
     title.textAlignment = NSTextAlignmentLeft;
@@ -1135,8 +1174,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     [self.fpsLimitSwitch addTarget:self action:@selector(fpsLimitChanged:) forControlEvents:UIControlEventValueChanged];
 
     NSMutableArray<UIView *> *controlViews = [NSMutableArray array];
-    BOOL showEnhanced = dedicatedEnhanced || (!dedicatedContra && ProfileDirectoryExists(@"enhanced"));
-    BOOL showContra = dedicatedContra || (!dedicatedEnhanced && ProfileDirectoryExists(@"contra-x"));
+    BOOL showEnhanced = dedicatedEnhanced || hubEnhancedSettings;
+    BOOL showContra = dedicatedContra || hubContraSettings;
+    BOOL showCommonSettings = !hubModSettings;
 
     if (showEnhanced)
     {
@@ -1167,34 +1207,37 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         ]];
     }
 
-    [controlViews addObjectsFromArray:@[
-        [self sectionLabel:@"GRAPHICS"],
-        [self switchRow:@"3D shadows" control:self.shadow3DSwitch],
-        [self switchRow:@"2D shadows" control:self.shadow2DSwitch],
-        [self switchRow:@"Cloud shadows" control:self.cloudShadowsSwitch],
-        [self switchRow:@"Ground lighting" control:self.groundLightingSwitch],
-        [self switchRow:@"Smooth water borders" control:self.softWaterSwitch],
-        [self switchRow:@"Units behind buildings" control:self.buildingOcclusionSwitch],
-        [self switchRow:@"Small props / trees" control:self.showPropsSwitch],
-        [self switchRow:@"Extra animations" control:self.extraAnimationsSwitch],
-        [self switchRow:@"Dynamic LOD" control:self.dynamicLODSwitch],
-        [self switchRow:@"Heat effects" control:self.heatEffectsSwitch],
-        [self segmentedRow:@"Engine texture quality" control:self.textureQualitySegment],
-        [self segmentedRow:@"Particles" control:self.particleQualitySegment],
-        [self segmentedRow:@"Texture filtering" control:self.textureFilterSegment],
-        [self segmentedRow:@"Anisotropy" control:self.anisotropySegment],
-        [self segmentedRow:@"MSAA" control:self.msaaSegment],
+    if (showCommonSettings)
+    {
+        [controlViews addObjectsFromArray:@[
+            [self sectionLabel:@"GRAPHICS"],
+            [self switchRow:@"3D shadows" control:self.shadow3DSwitch],
+            [self switchRow:@"2D shadows" control:self.shadow2DSwitch],
+            [self switchRow:@"Cloud shadows" control:self.cloudShadowsSwitch],
+            [self switchRow:@"Ground lighting" control:self.groundLightingSwitch],
+            [self switchRow:@"Smooth water borders" control:self.softWaterSwitch],
+            [self switchRow:@"Units behind buildings" control:self.buildingOcclusionSwitch],
+            [self switchRow:@"Small props / trees" control:self.showPropsSwitch],
+            [self switchRow:@"Extra animations" control:self.extraAnimationsSwitch],
+            [self switchRow:@"Dynamic LOD" control:self.dynamicLODSwitch],
+            [self switchRow:@"Heat effects" control:self.heatEffectsSwitch],
+            [self segmentedRow:@"Engine texture quality" control:self.textureQualitySegment],
+            [self segmentedRow:@"Particles" control:self.particleQualitySegment],
+            [self segmentedRow:@"Texture filtering" control:self.textureFilterSegment],
+            [self segmentedRow:@"Anisotropy" control:self.anisotropySegment],
+            [self segmentedRow:@"MSAA" control:self.msaaSegment],
 
-        [self sectionLabel:@"CAMERA / PERFORMANCE"],
-        [self sliderRow:@"Maximum camera height" slider:self.maxCameraSlider value:self.maxCameraValue],
-        [self sliderRow:@"Minimum camera height" slider:self.minCameraSlider value:self.minCameraValue],
-        [self sliderRow:@"Camera pitch" slider:self.cameraPitchSlider value:self.cameraPitchValue],
-        [self switchRow:@"Enforce maximum camera height" control:self.enforceMaxSwitch],
-        [self sliderRow:@"Keyboard / edge scroll speed" slider:self.scrollSpeedSlider value:self.scrollSpeedValue],
-        [self sliderRow:@"Terrain draw distance" slider:self.drawDistanceSlider value:self.drawDistanceValue],
-        [self switchRow:@"FPS limit" control:self.fpsLimitSwitch],
-        [self sliderRow:@"Frames per second" slider:self.fpsSlider value:self.fpsValue],
-    ]];
+            [self sectionLabel:@"CAMERA / PERFORMANCE"],
+            [self sliderRow:@"Maximum camera height" slider:self.maxCameraSlider value:self.maxCameraValue],
+            [self sliderRow:@"Minimum camera height" slider:self.minCameraSlider value:self.minCameraValue],
+            [self sliderRow:@"Camera pitch" slider:self.cameraPitchSlider value:self.cameraPitchValue],
+            [self switchRow:@"Enforce maximum camera height" control:self.enforceMaxSwitch],
+            [self sliderRow:@"Keyboard / edge scroll speed" slider:self.scrollSpeedSlider value:self.scrollSpeedValue],
+            [self sliderRow:@"Terrain draw distance" slider:self.drawDistanceSlider value:self.drawDistanceValue],
+            [self switchRow:@"FPS limit" control:self.fpsLimitSwitch],
+            [self sliderRow:@"Frames per second" slider:self.fpsSlider value:self.fpsValue],
+        ]];
+    }
 
     UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:controlViews];
     controls.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1585,6 +1628,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     SetSelectedProfile(@"vanilla");
 }
 
+- (void)launchOnline
+{
+    SetSelectedProfile(@"online");
+}
+
 - (void)launchEnhanced
 {
     SetSelectedProfile(@"enhanced");
@@ -1708,7 +1756,6 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
                            choices:@[@"Default", @"Restrained", @"Skynet"]
                           fallback:0];
 
-    [self loadGraphicsSettingsFromValues:ReadKeyValueFile(EngineOptionsPath())];
 }
 
 - (void)resetContraSettingsControls
@@ -1781,13 +1828,24 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.contraWaterSwitch.on = SettingBoolValue(values, @"WaterEffects", YES);
     self.contraExtraBuildingPropsSwitch.on = SettingBoolValue(values, @"ExtraBuildingProps", YES);
 
-    [self loadGraphicsSettingsFromValues:ReadKeyValueFile(EngineOptionsPath())];
 }
 
 - (void)resetSettingsControls
 {
+    if ([self.settingsProfileId isEqualToString:@"enhanced"])
+    {
+        [self resetEnhancedSettingsControls];
+        return;
+    }
+    if ([self.settingsProfileId isEqualToString:@"contra-x"])
+    {
+        [self resetContraSettingsControls];
+        return;
+    }
+
     [self resetContraSettingsControls];
     [self resetEnhancedSettingsControls];
+    [self loadGraphicsSettingsFromValues:DefaultContraSettings()];
 
     self.maxCameraSlider.value = 550.0f;
     self.minCameraSlider.value = 70.0f;
@@ -1803,26 +1861,26 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
 - (void)loadSettingsControls
 {
-    NSString *bundledProfile = BundledAutoLaunchProfile();
-    if ([bundledProfile isEqualToString:@"enhanced"])
+    if ([self.settingsProfileId isEqualToString:@"enhanced"])
     {
         [self loadEnhancedSettingsControls];
+        self.settingsStatus.text = @"";
+        return;
     }
-    else if ([bundledProfile isEqualToString:@"contra-x"])
+    if ([self.settingsProfileId isEqualToString:@"contra-x"])
     {
         [self loadContraSettingsControls];
+        self.settingsStatus.text = @"";
+        return;
     }
-    else
-    {
-        BOOL hasEnhanced = ProfileDirectoryExists(@"enhanced");
-        BOOL hasContra = ProfileDirectoryExists(@"contra-x");
-        if (hasEnhanced)
-            [self loadEnhancedSettingsControls];
-        if (hasContra)
-            [self loadContraSettingsControls];
-        if (!hasEnhanced && !hasContra)
-            [self loadGraphicsSettingsFromValues:ReadKeyValueFile(EngineOptionsPath())];
-    }
+
+    NSString *bundledProfile = BundledAutoLaunchProfile();
+    if ([bundledProfile isEqualToString:@"enhanced"])
+        [self loadEnhancedSettingsControls];
+    else if ([bundledProfile isEqualToString:@"contra-x"])
+        [self loadContraSettingsControls];
+
+    [self loadGraphicsSettingsFromValues:ReadKeyValueFile(EngineOptionsPath())];
 
     NSError *error = nil;
     NSString *contents = [NSString stringWithContentsOfFile:IPadOverridesPath()
@@ -1864,6 +1922,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
 - (void)showSettings
 {
+    self.settingsProfileId = nil;
+    [self.settingsView removeFromSuperview];
+    self.settingsView = nil;
+    [self buildSettings];
     [self loadSettingsControls];
     self.menuStack.hidden = YES;
     self.modsView.hidden = YES;
@@ -1873,8 +1935,18 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
 - (void)hideSettings
 {
+    BOOL returnToMods = self.settingsProfileId.length > 0;
     self.settingsView.hidden = YES;
-    self.menuStack.hidden = NO;
+    if (returnToMods)
+    {
+        self.settingsProfileId = nil;
+        self.modsView.hidden = NO;
+        [self reloadModsList];
+    }
+    else
+    {
+        self.menuStack.hidden = NO;
+    }
 }
 
 - (void)settingsSliderChanged:(UISlider *)sender
@@ -1960,9 +2032,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     enhanced[@"Cameos"] = cameoModes[MAX(0, MIN(1, self.enhancedCameosSegment.selectedSegmentIndex))];
     enhanced[@"AIScripts"] = aiModes[MAX(0, MIN(2, self.enhancedAIScriptsSegment.selectedSegmentIndex))];
 
-    if (!WriteKeyValueFile(EnhancedSettingsPath(), enhanced, error))
-        return NO;
-    return [self saveGraphicsOptions:error];
+    return WriteKeyValueFile(EnhancedSettingsPath(), enhanced, error);
 }
 
 - (BOOL)saveContraSettingsAndOptions:(NSError **)error
@@ -1987,13 +2057,37 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     contra[@"WaterEffects"] = self.contraWaterSwitch.on ? @"Yes" : @"No";
     contra[@"ExtraBuildingProps"] = self.contraExtraBuildingPropsSwitch.on ? @"Yes" : @"No";
 
-    if (!WriteKeyValueFile(ContraSettingsPath(), contra, error))
-        return NO;
-    return [self saveGraphicsOptions:error];
+    return WriteKeyValueFile(ContraSettingsPath(), contra, error);
 }
 
 - (void)saveSettings
 {
+    NSError *error = nil;
+    if ([self.settingsProfileId isEqualToString:@"enhanced"] ||
+        [self.settingsProfileId isEqualToString:@"contra-x"])
+    {
+        BOOL ok = [self.settingsProfileId isEqualToString:@"enhanced"]
+            ? [self saveEnhancedSettingsAndOptions:&error]
+            : [self saveContraSettingsAndOptions:&error];
+        if (ok)
+        {
+            self.settingsStatus.text = @"Mod settings saved. Changes apply on the next launch.";
+            self.settingsStatus.textColor = [UIColor systemGreenColor];
+            fprintf(stderr,
+                    "[HUB-SETTINGS] saved profile='%s' path='%s'\n",
+                    self.settingsProfileId.UTF8String,
+                    ([self.settingsProfileId isEqualToString:@"enhanced"]
+                        ? EnhancedSettingsPath()
+                        : ContraSettingsPath()).fileSystemRepresentation);
+        }
+        else
+        {
+            self.settingsStatus.text = @"Save failed. See generals-stderr.log.";
+            self.settingsStatus.textColor = [UIColor systemRedColor];
+        }
+        return;
+    }
+
     NSString *contents = [NSString stringWithFormat:
         @"GameData\n"
          "  MaxCameraHeight = %.1f\n"
@@ -2014,46 +2108,23 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         self.fpsLimitSwitch.on ? @"Yes" : @"No",
         self.fpsSlider.value];
 
-    NSError *error = nil;
     BOOL cameraOK = [contents writeToFile:IPadOverridesPath()
                                atomically:YES
                                  encoding:NSUTF8StringEncoding
                                     error:&error];
-    BOOL profileOK = cameraOK;
+    BOOL profileOK = cameraOK && [self saveGraphicsOptions:&error];
     NSString *bundledProfile = BundledAutoLaunchProfile();
     if (profileOK && [bundledProfile isEqualToString:@"enhanced"])
-    {
         profileOK = [self saveEnhancedSettingsAndOptions:&error];
-    }
     else if (profileOK && [bundledProfile isEqualToString:@"contra-x"])
-    {
         profileOK = [self saveContraSettingsAndOptions:&error];
-    }
-    else if (profileOK)
-    {
-        BOOL savedProfile = NO;
-        if (ProfileDirectoryExists(@"enhanced"))
-        {
-            profileOK = [self saveEnhancedSettingsAndOptions:&error];
-            savedProfile = YES;
-        }
-        if (profileOK && ProfileDirectoryExists(@"contra-x"))
-        {
-            profileOK = [self saveContraSettingsAndOptions:&error];
-            savedProfile = YES;
-        }
-        if (profileOK && !savedProfile)
-            profileOK = [self saveGraphicsOptions:&error];
-    }
 
     if (cameraOK && profileOK)
     {
         self.settingsStatus.text = @"Saved. Changes apply on the next game launch.";
         self.settingsStatus.textColor = [UIColor systemGreenColor];
         fprintf(stderr,
-                "[PROFILE-SETTINGS] saved enhanced=%s contra=%s options=%s camera=%s\n",
-                EnhancedSettingsPath().fileSystemRepresentation,
-                ContraSettingsPath().fileSystemRepresentation,
+                "[HUB-SETTINGS] saved shared options=%s camera=%s\n",
                 EngineOptionsPath().fileSystemRepresentation,
                 IPadOverridesPath().fileSystemRepresentation);
     }
