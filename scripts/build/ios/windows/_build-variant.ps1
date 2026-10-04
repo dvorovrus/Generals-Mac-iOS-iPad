@@ -24,8 +24,13 @@ function Resolve-Python {
     throw "Python 3 was not found in PATH."
 }
 
-$Workspace = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..\..")).Path
-$Repo = Join-Path $Workspace "repo"
+$SourceRepo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
+$SourceParent = Split-Path $SourceRepo -Parent
+if ((Split-Path $SourceParent -Leaf) -eq "worktrees") {
+    $Workspace = Split-Path $SourceParent -Parent
+} else {
+    $Workspace = $SourceParent
+}
 $InputDir = Join-Path $Workspace "input"
 $ShellDir = Join-Path $Workspace "shell"
 $OutputDir = Join-Path $Workspace "output"
@@ -37,8 +42,8 @@ $ContraBeta2 = Join-Path $InputDir "ContraXBeta2.zip"
 $ContraPatch1 = Join-Path $InputDir "ContraXBeta2Patch1.zip"
 $Output = Join-Path $OutputDir $OutputName
 
-$Builder = Join-Path $Repo "scripts\build\ios\build-variant-ipa.py"
-$Verifier = Join-Path $Repo "scripts\build\ios\verify-variant-ipa.py"
+$Builder = Join-Path $SourceRepo "scripts\build\ios\build-variant-ipa.py"
+$Verifier = Join-Path $SourceRepo "scripts\build\ios\verify-variant-ipa.py"
 
 Require-Path $Builder "Variant builder"
 Require-Path $Verifier "Variant verifier"

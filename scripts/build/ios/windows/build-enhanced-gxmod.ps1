@@ -1,10 +1,12 @@
 $ErrorActionPreference = "Stop"
-$Workspace = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..\..")).Path
-$Repo = Join-Path $Workspace "repo"
-if (-not (Test-Path (Join-Path $Repo "scripts\build\ios\build-gxmod.py"))) {
-    $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
+$SourceRepo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
+$SourceParent = Split-Path $SourceRepo -Parent
+if ((Split-Path $SourceParent -Leaf) -eq "worktrees") {
+    $Workspace = Split-Path $SourceParent -Parent
+} else {
+    $Workspace = $SourceParent
 }
-$Builder = Join-Path $Repo "scripts\build\ios\build-gxmod.py"
+$Builder = Join-Path $SourceRepo "scripts\build\ios\build-gxmod.py"
 $InputDir = Join-Path $Workspace "input"
 $OutputDir = Join-Path $Workspace "output\mods"
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
