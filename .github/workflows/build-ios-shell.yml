@@ -93,7 +93,7 @@ jobs:
           ./scripts/build/ios/fetch-moltenvk.sh
           ./scripts/build/ios/stage-fonts.sh
 
-      - name: Configure iOS
+      - name: Configure iOS Online Hub
         env:
           VULKAN_SDK: ${{ env.VULKAN_SDK }}
           VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
@@ -102,26 +102,27 @@ jobs:
           CXX: clang++
         run: |
           mkdir -p logs
-          cmake --preset ios-vulkan 2>&1 | tee logs/configure_ios.log
+          cmake --preset ios-vulkan-online -DCMAKE_CXX_FLAGS=-ferror-limit=0 2>&1 | tee logs/configure_ios_hub_online.log
           test ${PIPESTATUS[0]} -eq 0
 
-      - name: Build iOS engine
+      - name: Build iOS Online Hub engine
         run: |
           mkdir -p logs
           NPROC=$(sysctl -n hw.ncpu)
-          cmake --build build/ios-vulkan --target z_generals -j "${NPROC}" 2>&1 | tee logs/build_ios.log
+          cmake --build build/ios-vulkan-online --target z_generals -j "${NPROC}" -- -k 0 2>&1 | tee logs/build_ios_hub_online.log
           test ${PIPESTATUS[0]} -eq 0
 
       - name: Verify binary
         run: |
-          BIN="build/ios-vulkan/GeneralsMD/GeneralsXZH.app/GeneralsXZH"
+          BIN="build/ios-vulkan-online/GeneralsMD/GeneralsXZH.app/GeneralsXZH"
           test -f "${BIN}"
           file "${BIN}" | grep -q "Mach-O"
           lipo -info "${BIN}" | grep -q arm64
 
-      - name: Package unsigned shell
+      - name: Package unsigned Online Hub shell
         env:
-          GX_BUNDLE_ID: com.dvorov.generalszh.launcher
+          GX_BUNDLE_ID: com.dvorov.generalszh.hub
+          GX_BUILD_DIR: ${{ github.workspace }}/build/ios-vulkan-online
         run: |
           chmod +x scripts/build/ios/package-shell.sh
           ./scripts/build/ios/package-shell.sh
@@ -154,9 +155,10 @@ jobs:
       - name: Summary
         if: success()
         run: |
-          echo "## iOS shell" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Engine: GeneralsXZH arm64" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Launcher: native UIKit" >> "${GITHUB_STEP_SUMMARY}"
+          echo "## iOS Online Hub shell" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Engine: GeneralsXZH arm64 + Generals Online" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Deterministic math: enabled" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Launcher: native UIKit Hub" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Retail GameData: not included" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Mod profiles: not included" >> "${GITHUB_STEP_SUMMARY}"
           echo "- Artifact size: ${IPA_SIZE}" >> "${GITHUB_STEP_SUMMARY}"
