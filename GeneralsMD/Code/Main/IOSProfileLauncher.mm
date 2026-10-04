@@ -339,8 +339,17 @@ NSArray<NSDictionary<NSString *, id> *> *HubCombinedEntries()
         NSString *profileId = installed[@"profileId"];
         if (profileId.length == 0)
             continue;
-        NSMutableDictionary *merged = byId[profileId] ?: [NSMutableDictionary dictionary];
-        [merged addEntriesFromDictionary:installed];
+
+        NSDictionary *catalog = byId[profileId];
+        NSMutableDictionary *merged = [installed mutableCopy];
+        if (catalog != nil)
+        {
+            // Catalog metadata describes the currently available release and must
+            // win over installed manifest fields such as version. The installed
+            // version is read separately by the Mods screen when deciding whether
+            // an Update button is needed.
+            [merged addEntriesFromDictionary:catalog];
+        }
         byId[profileId] = merged;
     }
     NSArray *values = byId.allValues;
