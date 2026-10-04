@@ -64,6 +64,7 @@ xcrun --sdk iphoneos clang++ \
   -Wl,-install_name,@rpath/libGeneralsXLauncher.dylib \
   -framework Foundation \
   -framework UIKit \
+  -framework UniformTypeIdentifiers \
   -lobjc \
   "${MOD_MANAGER_SRC}" \
   "${LAUNCHER_SRC}" \
