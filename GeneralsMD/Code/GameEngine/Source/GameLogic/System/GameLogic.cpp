@@ -2756,30 +2756,46 @@ void GameLogic::processCommandList( CommandList *list )
 		{
 #if defined(GENERALS_ONLINE)
 			const UnsignedInt localStateCRC = getCRC(CRC_RECALC);
+			const Int networkPlayerBaseIndex = 2; // neutral/civilian occupy GameLogic player indices 0 and 1
+			const Int localPlayerIndex = ThePlayerList != nullptr && ThePlayerList->getLocalPlayer() != nullptr
+				? ThePlayerList->getLocalPlayer()->getPlayerIndex()
+				: -1;
 			fprintf(stderr,
-			        "[ONLINE-DESYNC] detected frame=%d cached=%lu connected=%d localStateCRC=0x%08X rngBase=0x%08X rngCRC=0x%08X\n",
+			        "[ONLINE-DESYNC] detected frame=%d cached=%lu connected=%d localPlayerIndex=%d localStateCRC=0x%08X rngBase=0x%08X rngCRC=0x%08X\n",
 			        m_frame,
 			        (unsigned long)m_cachedCRCs.size(),
 			        numPlayers,
+			        localPlayerIndex,
 			        localStateCRC,
 			        GetGameLogicRandomSeed(),
 			        GetGameLogicRandomSeedCRC());
 			for (std::map<Int, UnsignedInt>::const_iterator crcIt = m_cachedCRCs.begin();
 			     crcIt != m_cachedCRCs.end(); ++crcIt)
 			{
+				const Int playerIndex = crcIt->first;
+				const Int networkSlot = playerIndex - networkPlayerBaseIndex;
+				const Bool connected = networkSlot >= 0 && networkSlot < MAX_SLOTS
+					? TheNetwork->isPlayerConnected(networkSlot)
+					: FALSE;
+				Player *player = ThePlayerList != nullptr ? ThePlayerList->getNthPlayer(playerIndex) : nullptr;
 				fprintf(stderr,
-				        "[ONLINE-DESYNC] player-crc slot=%d crc=0x%08X connected=%d\n",
-				        crcIt->first,
-				        crcIt->second,
-				        TheNetwork->isPlayerConnected(crcIt->first) ? 1 : 0);
+				        "[ONLINE-DESYNC] player-crc playerIndex=%d networkSlot=%d local=%d connected=%d crc=0x%08X\n",
+				        playerIndex,
+				        networkSlot,
+				        player != nullptr && player->isLocalPlayer() ? 1 : 0,
+				        connected ? 1 : 0,
+				        crcIt->second);
 			}
-			for (Int slot = 0; slot < MAX_SLOTS; ++slot)
+			for (Int networkSlot = 0; networkSlot < MAX_SLOTS; ++networkSlot)
 			{
-				if (TheNetwork->isPlayerConnected(slot) && m_cachedCRCs.find(slot) == m_cachedCRCs.end())
+				const Int expectedPlayerIndex = networkSlot + networkPlayerBaseIndex;
+				if (TheNetwork->isPlayerConnected(networkSlot) &&
+				    m_cachedCRCs.find(expectedPlayerIndex) == m_cachedCRCs.end())
 				{
 					fprintf(stderr,
-					        "[ONLINE-DESYNC] missing-crc slot=%d connected=1\n",
-					        slot);
+					        "[ONLINE-DESYNC] missing-crc networkSlot=%d expectedPlayerIndex=%d connected=1\n",
+					        networkSlot,
+					        expectedPlayerIndex);
 				}
 			}
 #endif
@@ -4267,6 +4283,18 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	// calculate CRCs
 	Object *obj;
 	DEBUG_ASSERTCRASH(this == TheGameLogic, ("Not in GameLogic"));
+#if defined(GENERALS_ONLINE)
+	const Bool onlineCRCTrace = isInGameLogicUpdate() && m_frame <= 200 && (m_frame % 25) == 0;
+	if (onlineCRCTrace)
+	{
+		fprintf(stderr,
+		        "[ONLINE-CRC-TRACE] frame=%d stage=start crc=0x%08X rngBase=0x%08X rngCRC=0x%08X\n",
+		        m_frame,
+		        xferCRC->getCRC(),
+		        GetGameLogicRandomSeed(),
+		        GetGameLogicRandomSeedCRC());
+	}
+#endif
 	if (isInGameLogicUpdate())
 	{
 		CRCGEN_LOG(("CRC at start of frame %d is 0x%8.8X", m_frame, xferCRC->getCRC()));
@@ -4279,6 +4307,59 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 		xferCRC->xferSnapshot( obj );
 	}
 	UnsignedInt seed = GetGameLogicRandomSeedCRC();
+#if defined(GENERALS_ONLINE)
+	if (onlineCRCTrace)
+	{
+		Int objectCount = 0;
+		Int ownerCounts[MAX_PLAYER_COUNT] = { 0 };
+		for (Object *traceObj = m_objList; traceObj != nullptr; traceObj = traceObj->getNextObject())
+		{
+			++objectCount;
+			Player *owner = traceObj->getControllingPlayer();
+			if (owner != nullptr && owner->getPlayerIndex() >= 0 && owner->getPlayerIndex() < MAX_PLAYER_COUNT)
+				++ownerCounts[owner->getPlayerIndex()];
+		}
+		fprintf(stderr,
+		        "[ONLINE-CRC-TRACE] frame=%d stage=objects crc=0x%08X objectCount=%d\n",
+		        m_frame,
+		        xferCRC->getCRC(),
+		        objectCount);
+		if (m_frame == 100)
+		{
+			for (Int playerIndex = 0; playerIndex < MAX_PLAYER_COUNT; ++playerIndex)
+			{
+				Player *tracePlayer = ThePlayerList != nullptr ? ThePlayerList->getNthPlayer(playerIndex) : nullptr;
+				if (tracePlayer == nullptr)
+					continue;
+				fprintf(stderr,
+				        "[ONLINE-STATE] frame=100 playerIndex=%d local=%d type=%d money=%d objects=%d generalNameLen=%d\n",
+				        playerIndex,
+				        tracePlayer->isLocalPlayer() ? 1 : 0,
+				        (int)tracePlayer->getPlayerType(),
+				        (int)tracePlayer->getMoney()->countMoney(),
+				        ownerCounts[playerIndex],
+				        tracePlayer->getGeneralName().getLength());
+			}
+			Int traceObjectIndex = 0;
+			for (Object *traceObj = m_objList;
+			     traceObj != nullptr && traceObjectIndex < 64;
+			     traceObj = traceObj->getNextObject(), ++traceObjectIndex)
+			{
+				Player *owner = traceObj->getControllingPlayer();
+				const Coord3D *pos = traceObj->getPosition();
+				fprintf(stderr,
+				        "[ONLINE-STATE] frame=100 object=%d id=%d owner=%d template='%s' pos=%.6f,%.6f,%.6f\n",
+				        traceObjectIndex,
+				        (int)traceObj->getID(),
+				        owner != nullptr ? owner->getPlayerIndex() : -1,
+				        traceObj->getTemplate() != nullptr ? traceObj->getTemplate()->getName().str() : "<none>",
+				        pos != nullptr ? pos->x : 0.0f,
+				        pos != nullptr ? pos->y : 0.0f,
+				        pos != nullptr ? pos->z : 0.0f);
+			}
+		}
+	}
+#endif
 	if (isInGameLogicUpdate())
 	{
 		CRCGEN_LOG(("CRC after objects for frame %d is 0x%8.8X", m_frame, xferCRC->getCRC()));
@@ -4292,9 +4373,17 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	{
 		xferCRC->xferUnsignedInt( &seed );
 	}
+#if defined(GENERALS_ONLINE)
+	if (onlineCRCTrace)
+		fprintf(stderr, "[ONLINE-CRC-TRACE] frame=%d stage=rng crc=0x%08X rngCRC=0x%08X\n", m_frame, xferCRC->getCRC(), seed);
+#endif
 	marker = "MARKER:ThePartitionManager";
 	xferCRC->xferAsciiString(&marker);
 	xferCRC->xferSnapshot( ThePartitionManager );
+#if defined(GENERALS_ONLINE)
+	if (onlineCRCTrace)
+		fprintf(stderr, "[ONLINE-CRC-TRACE] frame=%d stage=partition crc=0x%08X\n", m_frame, xferCRC->getCRC());
+#endif
 	if (isInGameLogicUpdate())
 	{
 		CRCGEN_LOG(("CRC after partition manager for frame %d is 0x%8.8X", m_frame, xferCRC->getCRC()));
@@ -4317,6 +4406,10 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	marker = "MARKER:ThePlayerList";
 	xferCRC->xferAsciiString(&marker);
 	xferCRC->xferSnapshot( ThePlayerList );
+#if defined(GENERALS_ONLINE)
+	if (onlineCRCTrace)
+		fprintf(stderr, "[ONLINE-CRC-TRACE] frame=%d stage=players crc=0x%08X\n", m_frame, xferCRC->getCRC());
+#endif
 	if (isInGameLogicUpdate())
 	{
 		CRCGEN_LOG(("CRC after PlayerList for frame %d is 0x%8.8X", m_frame, xferCRC->getCRC()));
@@ -4325,6 +4418,10 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	marker = "MARKER:TheAI";
 	xferCRC->xferAsciiString(&marker);
 	xferCRC->xferSnapshot( TheAI );
+#if defined(GENERALS_ONLINE)
+	if (onlineCRCTrace)
+		fprintf(stderr, "[ONLINE-CRC-TRACE] frame=%d stage=ai crc=0x%08X\n", m_frame, xferCRC->getCRC());
+#endif
 	if (isInGameLogicUpdate())
 	{
 		CRCGEN_LOG(("CRC after AI for frame %d is 0x%8.8X", m_frame, xferCRC->getCRC()));
@@ -4340,6 +4437,10 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	xferCRC->close();
 
 	UnsignedInt theCRC = xferCRC->getCRC();
+#if defined(GENERALS_ONLINE)
+	if (onlineCRCTrace)
+		fprintf(stderr, "[ONLINE-CRC-TRACE] frame=%d stage=final crc=0x%08X\n", m_frame, theCRC);
+#endif
 
 	delete xferCRC;
 	xferCRC = nullptr;

@@ -53,6 +53,7 @@ public:
 	virtual void skip( Int dataSize ) override;							///< skip xfer event
 
 	virtual void xferSnapshot( Snapshot *snapshot ) override;		///< entry point for xfering a snapshot
+	virtual void xferUnicodeString( UnicodeString *unicodeStringData ) override; ///< CRC as Windows UTF-16 code units on every platform
 
 	// Xfer CRC methods
 	virtual UnsignedInt getCRC();										///< get computed CRC in network byte order

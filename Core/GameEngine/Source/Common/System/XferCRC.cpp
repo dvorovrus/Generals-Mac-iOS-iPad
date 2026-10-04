@@ -35,6 +35,7 @@
 #include "Common/crc.h"
 #include "Common/Snapshot.h"
 #include "Utility/endian_compat.h"
+#include <vector>
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -115,6 +116,64 @@ void XferCRC::xferSnapshot( Snapshot *snapshot )
 	// run the crc function of the snapshot
 	snapshot->crc( this );
 
+}
+
+// ------------------------------------------------------------------------------------------------
+/** CRC Unicode strings using the same UTF-16 code-unit byte stream as the Windows build.
+ *
+ * Windows uses 16-bit wchar_t while Apple/Linux use 32-bit wchar_t. Hashing the native
+ * wchar_t buffer therefore produces different gameplay CRCs even when the logical string
+ * is identical. The original Windows network checksum is defined by UTF-16 code units, so
+ * non-Windows builds must normalize to that representation before feeding XferCRC.
+ */
+// ------------------------------------------------------------------------------------------------
+void XferCRC::xferUnicodeString( UnicodeString *unicodeStringData )
+{
+	if (unicodeStringData == nullptr || unicodeStringData->getLength() <= 0)
+		return;
+
+	if (sizeof(WideChar) == sizeof(UnsignedShort))
+	{
+		xferImplementation((void *)unicodeStringData->str(),
+		                   sizeof(UnsignedShort) * unicodeStringData->getLength());
+		return;
+	}
+
+	std::vector<UnsignedShort> utf16;
+	utf16.reserve(unicodeStringData->getLength());
+	const WideChar *source = unicodeStringData->str();
+	for (Int i = 0; i < unicodeStringData->getLength(); ++i)
+	{
+		UnsignedInt codePoint = static_cast<UnsignedInt>(source[i]);
+		if (codePoint <= 0xFFFFu)
+		{
+			utf16.push_back(static_cast<UnsignedShort>(codePoint));
+		}
+		else if (codePoint <= 0x10FFFFu)
+		{
+			codePoint -= 0x10000u;
+			utf16.push_back(static_cast<UnsignedShort>(0xD800u + (codePoint >> 10)));
+			utf16.push_back(static_cast<UnsignedShort>(0xDC00u + (codePoint & 0x3FFu)));
+		}
+		else
+		{
+			utf16.push_back(static_cast<UnsignedShort>(0xFFFDu));
+		}
+	}
+
+	if (!utf16.empty())
+		xferImplementation(utf16.data(), static_cast<Int>(utf16.size() * sizeof(UnsignedShort)));
+
+#if defined(GENERALS_ONLINE)
+	static Bool s_loggedWindowsUnicodeCRC = FALSE;
+	if (!s_loggedWindowsUnicodeCRC)
+	{
+		s_loggedWindowsUnicodeCRC = TRUE;
+		fprintf(stderr,
+		        "[ONLINE-CRC-PARITY] Unicode CRC normalized nativeWideCharBytes=%lu windowsCodeUnitBytes=2\n",
+		        (unsigned long)sizeof(WideChar));
+	}
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------
