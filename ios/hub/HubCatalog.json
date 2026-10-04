@@ -7,8 +7,8 @@
       "version": "1.0+2024-03-28",
       "description": "Zero Hour Enhanced v1.0 with 28/03/2024 patch.",
       "packageURL": "",
-      "sha256": "",
-      "packageBytes": 0
+      "sha256": "b85b8f598338d20bad89a545a7ac1dd6780d335725ce02876bf6641dacb4e564",
+      "packageBytes": 3459215360
     },
     {
       "profileId": "contra-x",
@@ -16,8 +16,8 @@
       "version": "Beta2+Patch1",
       "description": "Contra X Beta 2 + Patch 1.",
       "packageURL": "",
-      "sha256": "",
-      "packageBytes": 0
+      "sha256": "8734a960af61a3565992e470ac916ad562f14a992f3ae5dae89f74dbd7a94433",
+      "packageBytes": 2855444480
     }
   ]
 }
