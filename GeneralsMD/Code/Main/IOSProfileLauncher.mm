@@ -461,8 +461,23 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     self.view.backgroundColor = UIColor.blackColor;
     EnsureDefaultIPadOverrides();
-    EnsureDefaultContraSettings();
-    EnsureDefaultEnhancedSettings();
+
+    NSString *bundledProfile = BundledAutoLaunchProfile();
+    if ([bundledProfile isEqualToString:@"enhanced"])
+    {
+        EnsureDefaultEnhancedSettings();
+    }
+    else if ([bundledProfile isEqualToString:@"contra-x"])
+    {
+        EnsureDefaultContraSettings();
+    }
+    else
+    {
+        if (ProfileDirectoryExists(@"enhanced"))
+            EnsureDefaultEnhancedSettings();
+        if (ProfileDirectoryExists(@"contra-x"))
+            EnsureDefaultContraSettings();
+    }
 
     [self buildMenu];
     [self buildSettings];
@@ -878,6 +893,12 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     BOOL settingsExists = [[NSFileManager defaultManager] fileExistsAtPath:settingsPath];
     BOOL enhancedSettingsExists = [[NSFileManager defaultManager] fileExistsAtPath:enhancedSettingsPath];
     BOOL contraSettingsExists = [[NSFileManager defaultManager] fileExistsAtPath:contraSettingsPath];
+    NSString *enhancedSettingsText = enhancedInstalled
+        ? (enhancedSettingsExists ? @"Present" : @"Missing")
+        : @"N/A";
+    NSString *contraSettingsText = contraInstalled
+        ? (contraSettingsExists ? @"Present" : @"Missing")
+        : @"N/A";
 
     NSString *currentLog = DocumentsFilePath(@"generals-stderr.log");
     BOOL currentLogExists = [[NSFileManager defaultManager] fileExistsAtPath:currentLog];
@@ -940,8 +961,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         enhancedInstalled ? @"Installed" : @"Not installed",
         contraInstalled ? @"Installed" : @"Not installed",
         settingsExists ? @"Present" : @"Missing",
-        enhancedSettingsExists ? @"Present" : @"Missing",
-        contraSettingsExists ? @"Present" : @"Missing",
+        enhancedSettingsText,
+        contraSettingsText,
         currentLogText,
         sessionLogsText];
 }

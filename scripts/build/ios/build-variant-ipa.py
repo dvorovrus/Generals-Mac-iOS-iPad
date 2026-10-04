@@ -195,6 +195,17 @@ def main() -> None:
                     shell_app + "Profiles/enhanced/" + b.normalized_rel(rel),
                     out,
                 )
+            ai_archives = b.build_enhanced_ai_archives(entries)
+            for rel, payload in ai_archives.items():
+                target = shell_app + "Profiles/enhanced/" + rel
+                info = zipfile.ZipInfo(target)
+                info.date_time = (2026, 1, 1, 0, 0, 0)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.create_system = 3
+                info.external_attr = 0o100644 << 16
+                out.writestr(info, payload)
+                enhanced_bytes += len(payload)
+            enhanced_count += len(ai_archives)
 
         contra_bytes = 0
         contra_count = 0

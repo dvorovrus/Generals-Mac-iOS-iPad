@@ -92,6 +92,8 @@ def main() -> None:
                 "!zhe8uiqhd_99.zhe",
                 "optional/ai/restrained/scripts/skirmishscripts.scb",
                 "optional/ai/skynet/scripts/skirmishscripts.scb",
+                "!zhe8airestrained_99.zhe",
+                "!zhe8aiskynet_99.zhe",
             }
             enhanced_relative = {
                 n[len(app_l + "profiles/enhanced/"):]

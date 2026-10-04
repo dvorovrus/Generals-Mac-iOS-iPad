@@ -737,6 +737,9 @@ static bool IOSPrepareEnhancedRuntimeProfile(
             const bool uiFHD = lowerName == "!zhe8uifhd_99.big" || lowerName == "!zhe8uifhd_99.zhe";
             const bool uiHD = lowerName == "!zhe8uihd_99.big" || lowerName == "!zhe8uihd_99.zhe";
             const bool uiQHD = lowerName == "!zhe8uiqhd_99.big" || lowerName == "!zhe8uiqhd_99.zhe";
+            const bool defaultAI = lowerName == "scriptszh.big" || lowerName == "scriptszh.zhe";
+            const bool restrainedAI = lowerName == "!zhe8airestrained_99.big" || lowerName == "!zhe8airestrained_99.zhe";
+            const bool skynetAI = lowerName == "!zhe8aiskynet_99.big" || lowerName == "!zhe8aiskynet_99.zhe";
 
             if (baseHD)
                 active = textureResolution == "high";
@@ -746,12 +749,19 @@ static bool IOSPrepareEnhancedRuntimeProfile(
                 active = (uiQuality == "fhd" && uiFHD) ||
                          (uiQuality == "hd" && uiHD) ||
                          (uiQuality == "qhd" && uiQHD);
+            else if (defaultAI)
+                active = aiScripts != "restrained" && aiScripts != "skynet";
+            else if (restrainedAI || skynetAI)
+                active = (aiScripts == "restrained" && restrainedAI) ||
+                         (aiScripts == "skynet" && skynetAI);
 
             targetName.replace_extension(active ? ".big" : ".zhe");
             if (active && (cameoHD || cameoSD))
                 targetName = "zzzz__IOS_Enhanced_Cameos.big";
             else if (active && (uiFHD || uiHD || uiQHD))
                 targetName = "zzzz__IOS_Enhanced_UI.big";
+            else if (active && (restrainedAI || skynetAI))
+                targetName = "zzzz__IOS_Enhanced_AI.big";
 
             if (active)
                 ++activeArchives;

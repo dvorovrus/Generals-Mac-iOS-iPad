@@ -28,6 +28,7 @@ import hashlib
 import io
 import os
 import shutil
+import struct
 import sys
 import time
 import zipfile
@@ -67,6 +68,15 @@ ZHE_PREPARED_AI_PREFIXES = (
     "optional/ai/restrained/scripts/",
     "optional/ai/skynet/scripts/",
 )
+ZHE_AI_ARCHIVES = {
+    "restrained": ("Optional/AI/Restrained/Scripts/", "!ZHE8AIRestrained_99.zhe"),
+    "skynet": ("Optional/AI/Skynet/Scripts/", "!ZHE8AISkynet_99.zhe"),
+}
+ZHE_AI_REQUIRED_FILES = {
+    "multiplayerscripts.scb",
+    "scripts.ini",
+    "skirmishscripts.scb",
+}
 
 # Defaults mirrored from the current official Contra X Beta 2 launcher:
 # base content always on, English language/voices, original English hotkeys,
@@ -384,6 +394,65 @@ def build_enhanced_entries(
     return result
 
 
+def read_source_entry(entry: SourceEntry) -> bytes:
+    with entry.open_stream() as src:
+        return src.read()
+
+
+def build_big_archive(files: dict[str, bytes]) -> bytes:
+    """Build a minimal BIGF archive accepted by the Generals BIG reader."""
+    ordered = sorted(files.items(), key=lambda item: item[0].lower())
+    encoded_names = [(name.replace("/", "\\").encode("ascii"), payload) for name, payload in ordered]
+    directory_end = 16 + sum(8 + len(name) + 1 for name, _ in encoded_names)
+    total_size = directory_end + sum(len(payload) for _, payload in encoded_names)
+
+    out = io.BytesIO()
+    out.write(b"BIGF")
+    out.write(struct.pack("<I", total_size))
+    out.write(struct.pack(">I", len(encoded_names)))
+    out.write(struct.pack(">I", directory_end))
+
+    offset = directory_end
+    for name, payload in encoded_names:
+        out.write(struct.pack(">I", offset))
+        out.write(struct.pack(">I", len(payload)))
+        out.write(name)
+        out.write(b"\0")
+        offset += len(payload)
+
+    for _, payload in encoded_names:
+        out.write(payload)
+
+    data = out.getvalue()
+    if len(data) != total_size:
+        die(f"BIG archive size mismatch: expected {total_size}, got {len(data)}")
+    return data
+
+
+def build_enhanced_ai_archives(
+    enhanced_entries: list[tuple[SourceEntry, str]],
+) -> dict[str, bytes]:
+    archives: dict[str, bytes] = {}
+    for mode, (prefix, archive_name) in ZHE_AI_ARCHIVES.items():
+        files: dict[str, bytes] = {}
+        prefix_lower = prefix.lower()
+        for entry, target in enhanced_entries:
+            normalized = normalized_rel(target)
+            if not normalized.lower().startswith(prefix_lower):
+                continue
+            suffix = normalized[len(prefix):]
+            if not suffix:
+                continue
+            files["Data/Scripts/" + suffix] = read_source_entry(entry)
+
+        present = {PurePosixPath(name).name.lower() for name in files}
+        missing = sorted(ZHE_AI_REQUIRED_FILES - present)
+        if missing:
+            die(f"Enhanced {mode} AI source is incomplete: {', '.join(missing)}")
+        archives[archive_name] = build_big_archive(files)
+    return archives
+
+
 def contra_activate_ctr(rel: str) -> bool:
     lower = rel.lower()
     return any(
@@ -675,6 +744,17 @@ def main() -> None:
             target = shell_app + "Profiles/enhanced/" + normalized_rel(rel)
             enhanced_bytes += write_source_entry(entry, target, out)
 
+        enhanced_ai_archives = build_enhanced_ai_archives(enhanced_entries)
+        for rel, payload in enhanced_ai_archives.items():
+            target = shell_app + "Profiles/enhanced/" + rel
+            info = zipfile.ZipInfo(target)
+            info.date_time = (2026, 1, 1, 0, 0, 0)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
+            info.external_attr = 0o100644 << 16
+            out.writestr(info, payload)
+            enhanced_bytes += len(payload)
+
         contra_entries, _ = build_contra_entries(
             contra_beta_source,
             contra_patch_source,
@@ -692,7 +772,7 @@ def main() -> None:
     print(f"GameData 1.04:  {base_bytes / 1024 / 1024:.1f} MB raw ({base_files} files)")
     print(
         f"Enhanced:       {enhanced_bytes / 1024 / 1024:.1f} MB raw "
-        f"({len(enhanced_entries)} staged files)"
+        f"({len(enhanced_entries) + len(enhanced_ai_archives)} staged files)"
     )
     print(
         f"Contra X:       {contra_bytes / 1024 / 1024:.1f} MB raw "

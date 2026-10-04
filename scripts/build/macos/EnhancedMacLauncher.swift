@@ -249,6 +249,9 @@ final class EnhancedLauncherModel: ObservableObject {
                 let uiFHD = name == "!zhe8uifhd_99.big" || name == "!zhe8uifhd_99.zhe"
                 let uiHD = name == "!zhe8uihd_99.big" || name == "!zhe8uihd_99.zhe"
                 let uiQHD = name == "!zhe8uiqhd_99.big" || name == "!zhe8uiqhd_99.zhe"
+                let defaultAI = name == "scriptszh.big" || name == "scriptszh.zhe"
+                let restrainedAI = name == "!zhe8airestrained_99.big" || name == "!zhe8airestrained_99.zhe"
+                let skynetAI = name == "!zhe8aiskynet_99.big" || name == "!zhe8aiskynet_99.zhe"
 
                 var active = ext == "big"
                 if baseHD {
@@ -260,6 +263,11 @@ final class EnhancedLauncherModel: ObservableObject {
                     active = (uiQuality.lowercased() == "fhd" && uiFHD) ||
                              (uiQuality.lowercased() == "hd" && uiHD) ||
                              (uiQuality.lowercased() == "qhd" && uiQHD)
+                } else if defaultAI {
+                    active = aiScripts.lowercased() != "restrained" && aiScripts.lowercased() != "skynet"
+                } else if restrainedAI || skynetAI {
+                    active = (aiScripts.lowercased() == "restrained" && restrainedAI) ||
+                             (aiScripts.lowercased() == "skynet" && skynetAI)
                 }
 
                 targetName = base + (active ? ".big" : ".zhe")
@@ -267,6 +275,8 @@ final class EnhancedLauncherModel: ObservableObject {
                     targetName = "zzzz__Mac_Enhanced_Cameos.big"
                 } else if active && (uiFHD || uiHD || uiQHD) {
                     targetName = "zzzz__Mac_Enhanced_UI.big"
+                } else if active && (restrainedAI || skynetAI) {
+                    targetName = "zzzz__Mac_Enhanced_AI.big"
                 }
             }
 
