@@ -3,6 +3,7 @@
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
 
 #import <CommonCrypto/CommonDigest.h>
+#import <dispatch/dispatch.h>
 
 #ifndef GX_PROJECT_VERSION
 #define GX_PROJECT_VERSION "0.0.0"
@@ -636,6 +637,115 @@ BOOL GXHubInstallTar(NSURL *packageURL, NSDictionary **installedManifest, NSErro
 }
 } // namespace
 
+static NSURLSession *sGXHubDownloadSession = nil;
+static NSURLSessionDownloadTask *sGXHubDownloadTask = nil;
+static NSDictionary<NSString *, id> *sGXHubDownloadEntry = nil;
+static GXHubDownloadProgress sGXHubDownloadProgress = nil;
+static GXHubInstallCompletion sGXHubDownloadCompletion = nil;
+static dispatch_source_t sGXHubDownloadTimer = nil;
+static NSInteger sGXHubLastProgressPercent = -1;
+
+static void GXHubStopDownloadTimer(void)
+{
+    if (sGXHubDownloadTimer != nil)
+    {
+        dispatch_source_cancel(sGXHubDownloadTimer);
+        sGXHubDownloadTimer = nil;
+    }
+}
+
+static void GXHubCompleteRemoteDownload(
+    NSDictionary<NSString *, id> *manifest,
+    NSError *error)
+{
+    GXHubInstallCompletion completion = [sGXHubDownloadCompletion copy];
+    NSURLSession *session = sGXHubDownloadSession;
+    NSString *profileId = sGXHubDownloadEntry[@"profileId"] ?: @"unknown";
+
+    GXHubStopDownloadTimer();
+    sGXHubDownloadTask = nil;
+    sGXHubDownloadSession = nil;
+    sGXHubDownloadEntry = nil;
+    sGXHubDownloadProgress = nil;
+    sGXHubDownloadCompletion = nil;
+    sGXHubLastProgressPercent = -1;
+
+    [session finishTasksAndInvalidate];
+
+    if (error != nil)
+    {
+        fprintf(stderr,
+                "[HUB-DOWNLOAD] failed profile='%s' domain='%s' code=%ld error='%s'\n",
+                profileId.UTF8String,
+                error.domain.UTF8String,
+                (long)error.code,
+                error.localizedDescription.UTF8String);
+    }
+    else
+    {
+        fprintf(stderr,
+                "[HUB-DOWNLOAD] install-complete profile='%s' version='%s'\n",
+                profileId.UTF8String,
+                [manifest[@"version"] UTF8String]);
+    }
+    fflush(stderr);
+
+    if (completion != nil)
+    {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(manifest, error);
+        });
+    }
+}
+
+static void GXHubStartDownloadProgressTimer(void)
+{
+    GXHubStopDownloadTimer();
+    sGXHubLastProgressPercent = -1;
+    sGXHubDownloadTimer = dispatch_source_create(
+        DISPATCH_SOURCE_TYPE_TIMER,
+        0,
+        0,
+        dispatch_get_main_queue());
+    dispatch_source_set_timer(
+        sGXHubDownloadTimer,
+        dispatch_time(DISPATCH_TIME_NOW, 0),
+        (uint64_t)(0.5 * NSEC_PER_SEC),
+        (uint64_t)(0.1 * NSEC_PER_SEC));
+    dispatch_source_set_event_handler(sGXHubDownloadTimer, ^{
+        NSURLSessionDownloadTask *task = sGXHubDownloadTask;
+        NSDictionary<NSString *, id> *entry = sGXHubDownloadEntry;
+        if (task == nil || entry == nil)
+            return;
+
+        long long received = task.countOfBytesReceived;
+        long long expected = task.countOfBytesExpectedToReceive;
+        if (expected <= 0)
+            expected = [entry[@"packageBytes"] longLongValue];
+
+        double fraction = expected > 0
+            ? MIN(1.0, MAX(0.0, (double)received / (double)expected))
+            : 0.0;
+        NSInteger percent = expected > 0 ? (NSInteger)(fraction * 100.0) : -1;
+        if (percent >= 0 &&
+            (sGXHubLastProgressPercent < 0 || percent >= sGXHubLastProgressPercent + 5 || percent == 100))
+        {
+            sGXHubLastProgressPercent = percent;
+            fprintf(stderr,
+                    "[HUB-DOWNLOAD] progress profile='%s' percent=%ld received=%lld expected=%lld\n",
+                    [entry[@"profileId"] UTF8String],
+                    (long)percent,
+                    received,
+                    expected);
+            fflush(stderr);
+        }
+
+        if (sGXHubDownloadProgress != nil)
+            sGXHubDownloadProgress(received, expected, fraction);
+    });
+    dispatch_resume(sGXHubDownloadTimer);
+}
+
 NSString *GXHubModsRootPath(void)
 {
     return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/Mods"];
@@ -902,61 +1012,135 @@ BOOL GXHubInstallPackageAtURL(
     return GXHubInstallTar(packageURL, installedManifest, error);
 }
 
+BOOL GXHubDownloadBusy(void)
+{
+    return sGXHubDownloadTask != nil || sGXHubDownloadEntry != nil;
+}
+
+NSString *GXHubActiveDownloadProfile(void)
+{
+    return sGXHubDownloadEntry[@"profileId"];
+}
+
 void GXHubDownloadAndInstall(
     NSDictionary<NSString *, id> *catalogEntry,
     GXHubInstallCompletion completion)
 {
+    GXHubDownloadAndInstallWithProgress(catalogEntry, nil, completion);
+}
+
+void GXHubDownloadAndInstallWithProgress(
+    NSDictionary<NSString *, id> *catalogEntry,
+    GXHubDownloadProgress progress,
+    GXHubInstallCompletion completion)
+{
+    NSString *profileId = catalogEntry[@"profileId"] ?: @"unknown";
     NSString *urlText = catalogEntry[@"packageURL"];
     NSString *expected = catalogEntry[@"sha256"];
     NSURL *url = urlText.length > 0 ? [NSURL URLWithString:urlText] : nil;
-    if (url == nil || ![[url scheme] isEqualToString:@"https"])
-    {
-        NSError *error = GXHubError(80, @"This catalog entry has no valid HTTPS package URL.");
+
+    void (^failNow)(NSError *) = ^(NSError *error) {
+        fprintf(stderr,
+                "[HUB-DOWNLOAD] rejected profile='%s' code=%ld error='%s'\n",
+                profileId.UTF8String,
+                (long)error.code,
+                error.localizedDescription.UTF8String);
+        fflush(stderr);
         dispatch_async(dispatch_get_main_queue(), ^{
             completion(nil, error);
         });
+    };
+
+    if (GXHubDownloadBusy())
+    {
+        failNow(GXHubError(
+            84,
+            [NSString stringWithFormat:@"Another mod is already downloading: %@.",
+                GXHubActiveDownloadProfile() ?: @"unknown"]));
+        return;
+    }
+    if (url == nil || ![[url scheme] isEqualToString:@"https"])
+    {
+        failNow(GXHubError(80, @"This catalog entry has no valid HTTPS package URL."));
         return;
     }
     if (expected.length != 64)
     {
-        NSError *error = GXHubError(81, @"Remote packages require a SHA-256 value in the catalog.");
-        dispatch_async(dispatch_get_main_queue(), ^{
-            completion(nil, error);
-        });
+        failNow(GXHubError(81, @"Remote packages require a SHA-256 value in the catalog."));
         return;
     }
 
     NSString *minimumHub = catalogEntry[@"minHubVersion"];
     if (minimumHub.length > 0 && !GXHubVersionSatisfies(GXHubProjectVersion(), minimumHub))
     {
-        NSError *error = GXHubError(
+        failNow(GXHubError(
             83,
             [NSString stringWithFormat:@"This release requires Generals Hub %@ or newer. Installed Hub: %@.",
-                minimumHub, GXHubProjectVersion()]);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            completion(nil, error);
-        });
+                minimumHub, GXHubProjectVersion()]));
+        return;
+    }
+
+    unsigned long long packageBytes = [catalogEntry[@"packageBytes"] unsignedLongLongValue];
+    NSError *spaceError = nil;
+    NSDictionary<NSFileAttributeKey, id> *fsAttributes =
+        [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:&spaceError];
+    if (fsAttributes == nil)
+    {
+        failNow(spaceError ?: GXHubError(85, @"Unable to check free storage."));
+        return;
+    }
+    unsigned long long freeBytes = [fsAttributes[NSFileSystemFreeSize] unsignedLongLongValue];
+    const unsigned long long reserveBytes = 512ULL * 1024ULL * 1024ULL;
+    unsigned long long requiredBytes = packageBytes > 0
+        ? packageBytes * 2ULL + reserveBytes
+        : reserveBytes;
+
+    fprintf(stderr,
+            "[HUB-DOWNLOAD] preflight profile='%s' packageBytes=%llu requiredFreeBytes=%llu availableBytes=%llu\n",
+            profileId.UTF8String,
+            packageBytes,
+            requiredBytes,
+            freeBytes);
+    fflush(stderr);
+
+    if (packageBytes > 0 && freeBytes < requiredBytes)
+    {
+        failNow(GXHubError(
+            86,
+            [NSString stringWithFormat:
+                @"Not enough free space. %@ needs about %.1f GB free while downloading and installing; available %.1f GB.",
+                catalogEntry[@"name"] ?: profileId,
+                (double)requiredBytes / 1024.0 / 1024.0 / 1024.0,
+                (double)freeBytes / 1024.0 / 1024.0 / 1024.0]));
         return;
     }
 
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    configuration.timeoutIntervalForRequest = 120.0;
-    configuration.timeoutIntervalForResource = 60.0 * 60.0 * 6.0;
+    configuration.timeoutIntervalForRequest = 300.0;
+    configuration.timeoutIntervalForResource = 60.0 * 60.0 * 24.0;
     configuration.allowsCellularAccess = YES;
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+    configuration.waitsForConnectivity = YES;
+    configuration.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
 
-    fprintf(stderr, "[HUB] download-start profile='%s' url='%s'\n",
-            [catalogEntry[@"profileId"] UTF8String], [urlText UTF8String]);
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+    sGXHubDownloadSession = session;
+    sGXHubDownloadEntry = [catalogEntry copy];
+    sGXHubDownloadProgress = [progress copy];
+    sGXHubDownloadCompletion = [completion copy];
+
+    fprintf(stderr,
+            "[HUB-DOWNLOAD] start profile='%s' bytes=%llu url='%s'\n",
+            profileId.UTF8String,
+            packageBytes,
+            urlText.UTF8String);
+    fflush(stderr);
 
     NSURLSessionDownloadTask *task =
         [session downloadTaskWithURL:url
                   completionHandler:^(NSURL *location, NSURLResponse *response, NSError *downloadError) {
         if (downloadError != nil)
         {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                completion(nil, downloadError);
-            });
-            [session finishTasksAndInvalidate];
+            GXHubCompleteRemoteDownload(nil, downloadError);
             return;
         }
 
@@ -965,24 +1149,87 @@ void GXHubDownloadAndInstall(
             : nil;
         if (http != nil && (http.statusCode < 200 || http.statusCode >= 300))
         {
-            NSError *error = GXHubError(
-                82,
-                [NSString stringWithFormat:@"Download failed with HTTP %ld.", (long)http.statusCode]);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                completion(nil, error);
-            });
-            [session finishTasksAndInvalidate];
+            GXHubCompleteRemoteDownload(
+                nil,
+                GXHubError(
+                    82,
+                    [NSString stringWithFormat:@"Download failed with HTTP %ld.", (long)http.statusCode]));
             return;
+        }
+        if (location == nil)
+        {
+            GXHubCompleteRemoteDownload(nil, GXHubError(87, @"Download completed without a temporary file."));
+            return;
+        }
+
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *downloadsRoot = GXHubDocumentsPath(@"Downloads");
+        NSError *fileError = nil;
+        if (![fm createDirectoryAtPath:downloadsRoot
+           withIntermediateDirectories:YES
+                            attributes:nil
+                                 error:&fileError])
+        {
+            GXHubCompleteRemoteDownload(nil, fileError);
+            return;
+        }
+
+        NSString *downloadPath = [downloadsRoot stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"%@.download.gxmod", profileId]];
+        [fm removeItemAtPath:downloadPath error:nil];
+        NSURL *downloadURL = [NSURL fileURLWithPath:downloadPath];
+        if (![fm moveItemAtURL:location toURL:downloadURL error:&fileError])
+        {
+            GXHubCompleteRemoteDownload(nil, fileError);
+            return;
+        }
+
+        NSDictionary<NSFileAttributeKey, id> *downloadAttributes =
+            [fm attributesOfItemAtPath:downloadPath error:&fileError];
+        if (downloadAttributes == nil)
+        {
+            [fm removeItemAtURL:downloadURL error:nil];
+            GXHubCompleteRemoteDownload(nil, fileError);
+            return;
+        }
+        unsigned long long actualBytes = [downloadAttributes fileSize];
+        if (packageBytes > 0 && actualBytes != packageBytes)
+        {
+            [fm removeItemAtURL:downloadURL error:nil];
+            GXHubCompleteRemoteDownload(
+                nil,
+                GXHubError(
+                    88,
+                    [NSString stringWithFormat:@"Downloaded file size mismatch. Expected %llu bytes, got %llu.",
+                        packageBytes, actualBytes]));
+            return;
+        }
+
+        fprintf(stderr,
+                "[HUB-DOWNLOAD] download-complete profile='%s' bytes=%llu path='%s'\n",
+                profileId.UTF8String,
+                actualBytes,
+                downloadPath.fileSystemRepresentation);
+        fflush(stderr);
+
+        GXHubDownloadProgress finalProgress = [sGXHubDownloadProgress copy];
+        if (finalProgress != nil)
+        {
+            long long expectedBytes = packageBytes > 0 ? (long long)packageBytes : (long long)actualBytes;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                finalProgress((long long)actualBytes, expectedBytes, 1.0);
+            });
         }
 
         NSError *installError = nil;
         NSDictionary *manifest = nil;
-        BOOL installed = GXHubInstallPackageAtURL(location, expected, &manifest, &installError);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            completion(installed ? manifest : nil, installError);
-        });
-        [session finishTasksAndInvalidate];
+        BOOL installed = GXHubInstallPackageAtURL(downloadURL, expected, &manifest, &installError);
+        [fm removeItemAtURL:downloadURL error:nil];
+        GXHubCompleteRemoteDownload(installed ? manifest : nil, installError);
     }];
+
+    sGXHubDownloadTask = task;
+    GXHubStartDownloadProgressTimer();
     [task resume];
 }
 

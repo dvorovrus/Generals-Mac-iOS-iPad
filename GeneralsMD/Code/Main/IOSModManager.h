@@ -33,14 +33,27 @@ typedef void (^GXHubInstallCompletion)(
     NSDictionary<NSString *, id> * _Nullable installedManifest,
     NSError * _Nullable error);
 
+typedef void (^GXHubDownloadProgress)(
+    long long bytesReceived,
+    long long totalBytes,
+    double fractionCompleted);
+
 typedef void (^GXHubCatalogCompletion)(
     BOOL updated,
     NSError * _Nullable error);
 
 FOUNDATION_EXPORT void GXHubRefreshRemoteCatalog(GXHubCatalogCompletion completion);
 
+FOUNDATION_EXPORT BOOL GXHubDownloadBusy(void);
+FOUNDATION_EXPORT NSString * _Nullable GXHubActiveDownloadProfile(void);
+
 FOUNDATION_EXPORT void GXHubDownloadAndInstall(
     NSDictionary<NSString *, id> *catalogEntry,
+    GXHubInstallCompletion completion);
+
+FOUNDATION_EXPORT void GXHubDownloadAndInstallWithProgress(
+    NSDictionary<NSString *, id> *catalogEntry,
+    GXHubDownloadProgress _Nullable progress,
     GXHubInstallCompletion completion);
 
 NS_ASSUME_NONNULL_END

@@ -877,6 +877,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     }
 
     NSString *channel = GXHubCatalogChannel();
+    BOOL downloadBusy = GXHubDownloadBusy();
+    NSString *activeDownloadProfile = GXHubActiveDownloadProfile();
+    self.modsChannelSegment.enabled = !downloadBusy;
     NSString *currentHubVersion = [NSString stringWithUTF8String:GX_PROJECT_VERSION] ?: @"0.0.0";
     NSDictionary *hubRelease = GXHubHubReleaseForCurrentChannel();
     if (hubRelease != nil)
@@ -1006,9 +1009,14 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         NSString *packageURL = entry[@"packageURL"];
         if (compatible && packageURL.length > 0 && (!externalInstalled || updateAvailable))
         {
-            UIButton *install = MakeButton(externalInstalled ? @"Update" : @"Install", self, @selector(downloadHubMod:));
+            BOOL thisDownloadActive = downloadBusy && [activeDownloadProfile isEqualToString:profileId];
+            NSString *installTitle = thisDownloadActive
+                ? @"Downloading…"
+                : (externalInstalled ? @"Update" : @"Install");
+            UIButton *install = MakeButton(installTitle, self, @selector(downloadHubMod:));
             install.accessibilityIdentifier = profileId;
-            [install.widthAnchor constraintEqualToConstant:140.0].active = YES;
+            install.enabled = !downloadBusy;
+            [install.widthAnchor constraintEqualToConstant:160.0].active = YES;
             [actions addArrangedSubview:install];
         }
 
@@ -1067,6 +1075,13 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
 - (void)modsChannelChanged:(UISegmentedControl *)sender
 {
+    if (GXHubDownloadBusy())
+    {
+        sender.selectedSegmentIndex = [GXHubCatalogChannel() isEqualToString:@"beta"] ? 1 : 0;
+        self.modsStatus.textColor = [UIColor systemYellowColor];
+        self.modsStatus.text = @"Wait for the active mod download to finish before switching channels.";
+        return;
+    }
     NSString *channel = sender.selectedSegmentIndex == 1 ? @"beta" : @"stable";
     GXHubSetCatalogChannel(channel);
     self.modsStatus.textColor = [UIColor colorWithWhite:0.72 alpha:1.0];
@@ -1077,6 +1092,16 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
 - (void)refreshHubCatalog
 {
+    if (GXHubDownloadBusy())
+    {
+        if (!self.modsView.hidden)
+        {
+            self.modsStatus.textColor = [UIColor systemYellowColor];
+            self.modsStatus.text = [NSString stringWithFormat:@"Downloading %@…",
+                GXHubActiveDownloadProfile() ?: @"mod"];
+        }
+        return;
+    }
     NSString *url = GXHubRemoteCatalogURL();
     if (url.length == 0)
     {
@@ -1147,26 +1172,69 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     if (entry == nil)
         return;
 
+    if (GXHubDownloadBusy())
+    {
+        self.modsStatus.textColor = [UIColor systemYellowColor];
+        self.modsStatus.text = [NSString stringWithFormat:@"Another download is already running: %@.",
+            GXHubActiveDownloadProfile() ?: @"mod"];
+        return;
+    }
+
+    NSString *displayName = entry[@"name"] ?: profileId;
     self.modsStatus.textColor = [UIColor systemYellowColor];
-    self.modsStatus.text = [NSString stringWithFormat:@"Downloading %@… Keep Generals Hub open.", entry[@"name"] ?: profileId];
+    self.modsStatus.text = [NSString stringWithFormat:@"Preparing %@ download…", displayName];
     sender.enabled = NO;
 
     __weak GXProfileLauncherViewController *weakSelf = self;
-    GXHubDownloadAndInstall(entry, ^(NSDictionary *manifest, NSError *error) {
-        GXProfileLauncherViewController *strongSelf = weakSelf;
-        if (strongSelf == nil)
-            return;
-        sender.enabled = YES;
-        if (error != nil)
-        {
-            strongSelf.modsStatus.textColor = [UIColor systemRedColor];
-            strongSelf.modsStatus.text = [NSString stringWithFormat:@"Install failed: %@", error.localizedDescription];
-            return;
-        }
-        strongSelf.modsStatus.textColor = [UIColor systemGreenColor];
-        strongSelf.modsStatus.text = [NSString stringWithFormat:@"Installed %@ %@.", manifest[@"name"], manifest[@"version"]];
-        [strongSelf rebuildHubMenuAfterMutation];
-    });
+    GXHubDownloadAndInstallWithProgress(
+        entry,
+        ^(long long bytesReceived, long long totalBytes, double fractionCompleted) {
+            GXProfileLauncherViewController *strongSelf = weakSelf;
+            if (strongSelf == nil)
+                return;
+
+            strongSelf.modsStatus.textColor = [UIColor systemYellowColor];
+            if (fractionCompleted >= 0.999 && totalBytes > 0)
+            {
+                strongSelf.modsStatus.text = [NSString stringWithFormat:
+                    @"Downloaded %@. Verifying SHA-256 and installing…", displayName];
+                return;
+            }
+
+            if (totalBytes > 0)
+            {
+                strongSelf.modsStatus.text = [NSString stringWithFormat:
+                    @"Downloading %@… %ld%% · %.2f / %.2f GB",
+                    displayName,
+                    (long)(fractionCompleted * 100.0 + 0.5),
+                    (double)bytesReceived / 1024.0 / 1024.0 / 1024.0,
+                    (double)totalBytes / 1024.0 / 1024.0 / 1024.0];
+            }
+            else
+            {
+                strongSelf.modsStatus.text = [NSString stringWithFormat:
+                    @"Downloading %@… %.1f MB",
+                    displayName,
+                    (double)bytesReceived / 1024.0 / 1024.0];
+            }
+        },
+        ^(NSDictionary *manifest, NSError *error) {
+            GXProfileLauncherViewController *strongSelf = weakSelf;
+            if (strongSelf == nil)
+                return;
+            if (error != nil)
+            {
+                strongSelf.modsStatus.textColor = [UIColor systemRedColor];
+                strongSelf.modsStatus.text = [NSString stringWithFormat:@"Install failed: %@", error.localizedDescription];
+                [strongSelf reloadModsList];
+                return;
+            }
+            strongSelf.modsStatus.textColor = [UIColor systemGreenColor];
+            strongSelf.modsStatus.text = [NSString stringWithFormat:@"Installed %@ %@.", manifest[@"name"], manifest[@"version"]];
+            [strongSelf rebuildHubMenuAfterMutation];
+        });
+
+    [self reloadModsList];
 }
 
 - (void)removeHubMod:(UIButton *)sender
