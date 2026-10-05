@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 19,
+  "catalogVersion": 20,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.3",
-        "build": 37319539711,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.3/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "99d99b63b161b29b5108d70749716bc06824ea8522bcb38f46868ad0a6d0b5e7",
-        "packageBytes": 45441339,
-        "releaseNotes": "Make Diagnostics recoverable without working web buttons: automatic Files export, Save to Files, fixed iPad share sheet. Disable Generals Online runtime settings for explicit Enhanced/Contra profiles and add ThingFactory crash breadcrumbs."
+        "version": "1.4.4",
+        "build": 37322761071,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.4/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "5623222e80281208346dfd05dd844f18c361a29b519fdf38cd33d77c4182c809",
+        "packageBytes": 45440850,
+        "releaseNotes": "Add iOS fatal-signal backtrace capture directly to retained diagnostics log and per-Object parse phase tracing to isolate Enhanced/Contra startup crash inside Data/INI/Object."
       },
       "beta": {
         "version": "0.1.0",
@@ -94,7 +94,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T13:55:55Z",
+  "updatedAt": "2026-10-05T14:18:43Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.3",
