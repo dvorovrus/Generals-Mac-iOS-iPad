@@ -71,5 +71,15 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T10:29:39Z"
+  "updatedAt": "2026-10-05T10:29:39Z",
+  "launcherWeb": {
+    "stable": {
+      "version": "0.1.0-web.1",
+      "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html"
+    },
+    "beta": {
+      "version": "0.1.0-web.1",
+      "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html"
+    }
+  }
 }

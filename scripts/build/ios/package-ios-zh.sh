@@ -71,6 +71,17 @@ rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 cp -R "${SHELL_APP}" "${OUT_DIR}/"
 APP="${OUT_DIR}/${APP_NAME}.app"
+LAUNCHER_WEB="${PROJECT_ROOT}/launcher_web"
+if [[ -d "${LAUNCHER_WEB}" ]]; then
+    rm -rf "${APP}/Launcher"
+    mkdir -p "${APP}/Launcher"
+    cp -R "${LAUNCHER_WEB}/." "${APP}/Launcher/"
+fi
+
+HUB_CATALOG="${PROJECT_ROOT}/ios/hub/HubCatalog.json"
+if [[ -f "${HUB_CATALOG}" ]]; then
+    cp "${HUB_CATALOG}" "${APP}/HubCatalog.json"
+fi
 
 # Replace stub executable with the engine
 cp "${GAME_BIN}" "${APP}/${APP_NAME}"

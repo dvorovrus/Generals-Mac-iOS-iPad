@@ -17,6 +17,7 @@ LAUNCHER_HEADER="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSProfileLauncher.h"
 MOD_MANAGER_SRC="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSModManager.mm"
 MOD_MANAGER_HEADER="${PROJECT_ROOT}/GeneralsMD/Code/Main/IOSModManager.h"
 HUB_CATALOG="${PROJECT_ROOT}/ios/hub/HubCatalog.json"
+LAUNCHER_WEB="${PROJECT_ROOT}/launcher_web"
 VERSION_FILE="${PROJECT_ROOT}/ios/version.env"
 
 PROJECT_VERSION="0.0.0"
@@ -65,6 +66,7 @@ xcrun --sdk iphoneos clang++ \
   -Wl,-install_name,@rpath/libGeneralsXLauncher.dylib \
   -framework Foundation \
   -framework UIKit \
+  -framework WebKit \
   -framework UniformTypeIdentifiers \
   -lobjc \
   "${MOD_MANAGER_SRC}" \
@@ -96,6 +98,11 @@ echo "==> Replacing libGeneralsXLauncher.dylib"
 cp "${LAUNCHER_LIB}" "${TARGET_LIB}"
 if [[ -f "${HUB_CATALOG}" ]]; then
   cp "${HUB_CATALOG}" "${APP}/HubCatalog.json"
+fi
+if [[ -d "${LAUNCHER_WEB}" ]]; then
+  rm -rf "${APP}/Launcher"
+  mkdir -p "${APP}/Launcher"
+  cp -R "${LAUNCHER_WEB}/." "${APP}/Launcher/"
 fi
 
 PLIST="${APP}/Info.plist"

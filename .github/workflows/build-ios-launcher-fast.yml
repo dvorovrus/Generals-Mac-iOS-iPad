@@ -16,6 +16,7 @@ on:
       - 'GeneralsMD/Code/Main/IOSModManager.mm'
       - 'GeneralsMD/Code/Main/IOSModManager.h'
       - 'ios/hub/HubCatalog.json'
+      - 'launcher_web/**'
       - 'scripts/build/ios/package-launcher-fast.sh'
       - 'ios/version.env'
       - '.github/workflows/build-ios-launcher-fast.yml'
@@ -118,6 +119,10 @@ jobs:
           test -n "${APP}"
           test -f "${APP}/GeneralsXZH"
           test -f "${APP}/Frameworks/libGeneralsXLauncher.dylib"
+          test -f "${APP}/Launcher/index.html"
+          test -f "${APP}/Launcher/app.js"
+          test -f "${APP}/Launcher/styles.css"
+          otool -L "${APP}/Frameworks/libGeneralsXLauncher.dylib" | grep -q '/System/Library/Frameworks/WebKit.framework/WebKit'
 
           file "${APP}/Frameworks/libGeneralsXLauncher.dylib" | grep -q "Mach-O"
           lipo -info "${APP}/Frameworks/libGeneralsXLauncher.dylib" | grep -q arm64

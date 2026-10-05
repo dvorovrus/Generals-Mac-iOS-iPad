@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080b0d">
+  <title>Generals X — Launcher Demo</title>
+  <link rel="icon" type="image/png" href="./assets/logo.png">
+  <link rel="apple-touch-icon" href="./assets/logo.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+    <div class="battlefield" aria-hidden="true">
+      <div class="battlefield__tile battlefield__tile--primary"></div>
+      <div class="battlefield__tile battlefield__tile--secondary"></div>
+      <div class="battlefield__shade"></div>
+      <div class="battlefield__grid"></div>
+      <div class="battlefield__noise"></div>
+    </div>
+
+    <main class="launcher">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand__eyebrow">COMMAND HUB</div>
+          <div class="brand__title">Generals <span>X</span></div>
+        </div>
+
+        <div class="topbar__actions">
+          <button class="icon-button" type="button" data-panel="diagnostics" aria-label="Diagnostics" title="Diagnostics">
+            <svg class="lucide lucide-activity" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero__copy">
+          <div class="hero__kicker">SELECT EXPERIENCE</div>
+          <h1 id="modeTitle" class="is-long-title">Zero Hour + Online</h1>
+          <p id="modeDescription">Classic Zero Hour with online multiplayer integrated into the same profile.</p>
+
+          <div class="hero__meta">
+            <div class="meta-item">
+              <span>PROFILE</span>
+              <strong id="profileLabel">ORIGINAL</strong>
+            </div>
+            <div class="meta-item">
+              <span>STATUS</span>
+              <strong id="statusLabel" class="status-text status-text--ready">READY</strong>
+            </div>
+            <div class="meta-item">
+              <span>PLATFORM</span>
+              <strong>iPad / Mac</strong>
+            </div>
+          </div>
+
+          <div class="hero__actions">
+            <button class="play-button" id="playButton" type="button">
+              <svg class="play-button__icon lucide lucide-play" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 3 14 9-14 9V3z"/>
+              </svg>
+              <strong id="playLabel">PLAY</strong>
+            </button>
+            <button class="hero-settings-button" type="button" data-panel="settings" aria-label="Settings" title="Settings">
+              <svg class="lucide lucide-settings" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+            <a class="hero-source-button" id="modSourceLink" href="#" target="_blank" rel="noopener noreferrer" hidden>
+              <svg class="lucide lucide-external-link" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 3h6v6"/>
+                <path d="M10 14 21 3"/>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              </svg>
+              <span>ModDB</span>
+            </a>
+            <button class="secondary-button" type="button" id="detailsButton">Profile details</button>
+          </div>
+        </div>
+
+        <div class="version-panel">
+          <div class="version-panel__title">SYSTEM STATUS</div>
+          <div class="version-row"><span>Engine</span><strong id="systemEngine">0.1.0</strong></div>
+          <div class="version-row"><span>Launcher</span><strong id="systemLauncher">0.1.0</strong></div>
+          <div class="version-row"><span>Game data</span><strong id="systemGameData" class="good">Ready</strong></div>
+          <div class="version-row"><span>Profiles</span><strong id="systemProfiles">1 ready</strong></div>
+          <div class="version-panel__line"></div>
+          <div class="version-panel__note">Remote-first launcher UI · native bridge · offline fallback.</div>
+        </div>
+      </section>
+
+      <section class="modes" aria-label="Game profiles">
+        <button class="mode-card is-active" type="button" hidden
+          data-id="zero-hour-online"
+          data-title="Zero Hour + Online"
+          data-description="Classic Zero Hour with online multiplayer integrated into the same profile."
+          data-profile="ZERO-HOUR-ONLINE"
+          data-status="READY"
+          data-play="ZERO HOUR + ONLINE">
+          <span class="mode-card__content">
+            <strong>Zero Hour + Online</strong>
+            <small>1.04 · Multiplayer</small>
+          </span>
+        </button>
+
+        <button class="mode-card" type="button" hidden
+          data-id="enhanced"
+          data-title="Enhanced"
+          data-description="A refined Zero Hour experience with expanded visuals and gameplay improvements."
+          data-profile="ENHANCED"
+          data-status="READY"
+          data-play="ENHANCED">
+          <span class="mode-card__content">
+            <strong>Enhanced</strong>
+            <small>Modernized profile</small>
+          </span>
+        </button>
+
+        <button class="mode-card" type="button" hidden
+          data-id="contra-x"
+          data-title="Contra X"
+          data-description="Contra X Beta 2 + Patch 1. Expanded armies, units and a more aggressive battlefield."
+          data-profile="CONTRA-X"
+          data-status="READY"
+          data-play="CONTRA X">
+          <span class="mode-card__content">
+            <strong>Contra X</strong>
+            <small>Beta 2 · Patch 1</small>
+          </span>
+        </button>
+
+        <button class="add-mod-card" type="button" data-panel="mods" aria-label="Add mod">
+          <svg class="lucide lucide-package-plus" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16.5 9.4 7.55 4.24"/>
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/>
+            <path d="M3.29 7 12 12l8.71-5"/>
+            <path d="M12 22V12"/>
+            <path d="M17 18h6M20 15v6"/>
+          </svg>
+          <span>Add Mod</span>
+        </button>
+      </section>
+
+      <footer class="footer">
+        <span>GENERALS X</span>
+        <span class="footer__center">Native launcher concept · visual demo</span>
+        <span id="footerBuild">BUILD DEMO-01</span>
+      </footer>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal__header">
+          <div>
+            <small id="modalEyebrow">GENERALS X</small>
+            <h2 id="modalTitle">Settings</h2>
+          </div>
+          <button class="modal__close" id="modalClose" type="button" aria-label="Close">
+            <svg class="lucide lucide-x" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal__body" id="modalBody"></div>
+      </section>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -6,6 +6,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <WebKit/WebKit.h>
 #include <malloc/malloc.h>
 
 #include <atomic>
@@ -513,7 +514,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 }
 }
 
-@interface GXProfileLauncherViewController : UIViewController <UIDocumentPickerDelegate>
+@interface GXProfileLauncherViewController : UIViewController <UIDocumentPickerDelegate, WKScriptMessageHandler, WKNavigationDelegate>
 @property(nonatomic, strong) UIStackView *menuStack;
 @property(nonatomic, strong) UIButton *modsButton;
 @property(nonatomic, strong) UIView *modsView;
@@ -575,6 +576,10 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UILabel *diagnosticsText;
 @property(nonatomic, strong) UIButton *shareDiagnosticsButton;
 @property(nonatomic, assign) BOOL diagnosticsScanRunning;
+@property(nonatomic, strong) WKWebView *webView;
+@property(nonatomic, copy) NSString *webLauncherHost;
+@property(nonatomic, assign) BOOL webLauncherLoadedRemote;
+@property(nonatomic, assign) BOOL webLauncherActive;
 @end
 
 void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback callback)
@@ -620,6 +625,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     if (BundledAutoLaunchProfile().length == 0)
     {
+        self.menuStack.hidden = YES;
+        self.modsView.hidden = YES;
+        self.settingsView.hidden = YES;
+        self.diagnosticsView.hidden = YES;
+        [self buildWebLauncher];
         [self updateModsUpdatesBadge];
         [self refreshHubCatalog];
     }
@@ -633,6 +643,482 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             "[IOS-MEMORY-WARNING] received relievedMB=%.2f\n",
             (double)relievedBytes / (1024.0 * 1024.0));
     fflush(stderr);
+}
+
+- (NSDictionary<NSString *, id> *)webLauncherState
+{
+    NSBundle *bundle = NSBundle.mainBundle;
+    NSString *projectVersion = [bundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
+    NSString *buildVersion = [bundle objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"unknown";
+    NSString *channel = GXHubCatalogChannel();
+    NSDictionary *catalog = GXHubCatalogDocument();
+
+    NSMutableArray *mods = [NSMutableArray array];
+    for (NSDictionary *entry in GXHubCatalogEntries())
+    {
+        NSString *profileId = entry[@"profileId"] ?: @"";
+        if (profileId.length == 0)
+            continue;
+        NSDictionary *installedManifest = GXHubInstalledManifest(profileId);
+        NSString *installedVersion = installedManifest[@"version"];
+        NSString *availableVersion = entry[@"version"] ?: @"unknown";
+        BOOL installed = GXHubProfileInstalled(profileId);
+        BOOL updateAvailable = installed && installedVersion.length > 0 &&
+            HubVersionDiffers(installedVersion, availableVersion) &&
+            [entry[@"packageURL"] length] > 0;
+
+        NSString *sourceURL = @"";
+        NSString *author = @"";
+        if ([profileId isEqualToString:@"enhanced"])
+        {
+            sourceURL = @"https://www.moddb.com/mods/cc-generals-zero-hour-enhanced";
+            author = @"Acoustic Alpha";
+        }
+        else if ([profileId isEqualToString:@"contra-x"])
+        {
+            sourceURL = @"https://www.moddb.com/mods/contra";
+            author = @"Contra Mod Team";
+        }
+
+        [mods addObject:@{
+            @"profileId": profileId,
+            @"name": entry[@"name"] ?: profileId,
+            @"description": entry[@"description"] ?: @"",
+            @"version": availableVersion,
+            @"installed": @(installed),
+            @"installedVersion": installedVersion ?: @"",
+            @"updateAvailable": @(updateAvailable),
+            @"packageURL": entry[@"packageURL"] ?: @"",
+            @"packageBytes": entry[@"packageBytes"] ?: @0,
+            @"releaseNotes": entry[@"releaseNotes"] ?: @"",
+            @"minHubVersion": entry[@"minHubVersion"] ?: @"",
+            @"sourceURL": sourceURL,
+            @"author": author,
+        }];
+    }
+
+    NSDictionary *hubRelease = GXHubHubReleaseForCurrentChannel() ?: @{};
+    long long currentBuild = buildVersion.longLongValue;
+    long long availableBuild = [hubRelease[@"build"] longLongValue];
+
+    NSDictionary *launcherChannels = [catalog[@"launcherWeb"] isKindOfClass:[NSDictionary class]]
+        ? catalog[@"launcherWeb"] : @{};
+    NSDictionary *launcherRelease = [launcherChannels[channel] isKindOfClass:[NSDictionary class]]
+        ? launcherChannels[channel]
+        : ([launcherChannels[@"stable"] isKindOfClass:[NSDictionary class]] ? launcherChannels[@"stable"] : @{});
+
+    return @{
+        @"projectVersion": projectVersion,
+        @"build": buildVersion,
+        @"engineVersion": [NSString stringWithUTF8String:GX_ENGINE_VERSION] ?: @"unknown",
+        @"launcherVersion": [NSString stringWithUTF8String:GX_LAUNCHER_VERSION] ?: @"unknown",
+        @"launcherWebVersion": launcherRelease[@"version"] ?: @"bundled",
+        @"channel": channel,
+        @"online": @{
+            @"profileId": @"online",
+            @"name": @"Zero Hour + Online",
+            @"description": @"Classic Zero Hour with Generals Online multiplayer integration.",
+            @"installed": @YES,
+            @"version": @"1.4 / network 0x00010004",
+        },
+        @"mods": mods,
+        @"download": @{
+            @"busy": @(GXHubDownloadBusy()),
+            @"profileId": GXHubActiveDownloadProfile() ?: @"",
+        },
+        @"hubUpdate": @{
+            @"available": @(availableBuild > currentBuild),
+            @"version": hubRelease[@"version"] ?: @"",
+            @"build": hubRelease[@"build"] ?: @0,
+            @"packageURL": hubRelease[@"packageURL"] ?: @"",
+            @"releaseNotes": hubRelease[@"releaseNotes"] ?: @"",
+        },
+    };
+}
+
+- (void)sendWebEnvelope:(NSDictionary<NSString *, id> *)envelope
+{
+    if (self.webView == nil || envelope == nil)
+        return;
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:envelope options:0 error:&error];
+    if (data == nil)
+        return;
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if (json.length == 0)
+        return;
+    NSString *script = [NSString stringWithFormat:
+        @"window.GeneralsXNative&&window.GeneralsXNative._receive(%@);", json];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.webView evaluateJavaScript:script completionHandler:nil];
+    });
+}
+
+- (void)sendWebResponse:(NSString *)requestId result:(id)result error:(NSString *)errorText
+{
+    if (requestId.length == 0)
+        return;
+    [self sendWebEnvelope:@{
+        @"type": @"response",
+        @"id": requestId,
+        @"ok": @(errorText.length == 0),
+        @"result": result ?: [NSNull null],
+        @"error": errorText ?: @"",
+    }];
+}
+
+- (void)sendWebEvent:(NSString *)name payload:(id)payload
+{
+    if (name.length == 0)
+        return;
+    [self sendWebEnvelope:@{
+        @"type": @"event",
+        @"name": name,
+        @"payload": payload ?: [NSNull null],
+    }];
+}
+
+- (NSURL *)bundledWebLauncherURL
+{
+    NSString *path = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"Launcher/index.html"];
+    return [[NSFileManager defaultManager] fileExistsAtPath:path] ? [NSURL fileURLWithPath:path] : nil;
+}
+
+- (NSURL *)remoteWebLauncherURL
+{
+    NSDictionary *catalog = GXHubCatalogDocument();
+    NSString *channel = GXHubCatalogChannel();
+    NSDictionary *channels = [catalog[@"launcherWeb"] isKindOfClass:[NSDictionary class]]
+        ? catalog[@"launcherWeb"] : nil;
+    NSDictionary *release = [channels[channel] isKindOfClass:[NSDictionary class]]
+        ? channels[channel]
+        : ([channels[@"stable"] isKindOfClass:[NSDictionary class]] ? channels[@"stable"] : nil);
+    NSString *urlText = [release[@"indexURL"] isKindOfClass:[NSString class]] ? release[@"indexURL"] : nil;
+
+    if (urlText.length == 0)
+    {
+        NSURL *catalogURL = [NSURL URLWithString:GXHubRemoteCatalogURL() ?: @""];
+        if ([catalogURL.scheme isEqualToString:@"https"] && catalogURL.host.length > 0)
+        {
+            NSString *path = [NSString stringWithFormat:@"/launcher/%@/index.html", channel];
+            NSURLComponents *components = [[NSURLComponents alloc] init];
+            components.scheme = @"https";
+            components.host = catalogURL.host;
+            components.path = path;
+            urlText = components.URL.absoluteString;
+        }
+    }
+
+    NSURL *url = urlText.length > 0 ? [NSURL URLWithString:urlText] : nil;
+    return [url.scheme isEqualToString:@"https"] ? url : nil;
+}
+
+- (void)loadBundledWebLauncher
+{
+    NSURL *local = [self bundledWebLauncherURL];
+    if (local == nil)
+        return;
+    self.webLauncherLoadedRemote = NO;
+    self.webLauncherHost = @"";
+    NSURL *root = [local URLByDeletingLastPathComponent];
+    [self.webView loadFileURL:local allowingReadAccessToURL:root];
+    fprintf(stderr, "[HUB-WEB] loading bundled launcher path='%s'\n", local.path.UTF8String);
+}
+
+- (void)buildWebLauncher
+{
+    WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
+    configuration.websiteDataStore = WKWebsiteDataStore.defaultDataStore;
+    [configuration.userContentController addScriptMessageHandler:self name:@"generalsX"];
+
+    self.webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:configuration];
+    self.webView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.webView.navigationDelegate = self;
+    self.webView.backgroundColor = UIColor.blackColor;
+    self.webView.opaque = NO;
+    self.webView.scrollView.bounces = NO;
+    self.webView.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    self.webLauncherActive = YES;
+    [self.view addSubview:self.webView];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.webView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.webView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [self.webView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [self.webView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+    ]];
+
+    NSURL *remote = [self remoteWebLauncherURL];
+    if (remote != nil)
+    {
+        self.webLauncherLoadedRemote = YES;
+        self.webLauncherHost = remote.host ?: @"";
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:remote
+                                                               cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                           timeoutInterval:20.0];
+        [request setValue:@"no-cache" forHTTPHeaderField:@"Cache-Control"];
+        [self.webView loadRequest:request];
+        fprintf(stderr, "[HUB-WEB] loading remote launcher url='%s'\n", remote.absoluteString.UTF8String);
+    }
+    else
+    {
+        [self loadBundledWebLauncher];
+    }
+}
+
+- (BOOL)isTrustedWebMessage:(WKScriptMessage *)message
+{
+    NSURL *url = message.webView.URL;
+    if (url.isFileURL)
+        return YES;
+    return [url.scheme isEqualToString:@"https"] &&
+           self.webLauncherHost.length > 0 &&
+           [url.host isEqualToString:self.webLauncherHost];
+}
+
+- (void)userContentController:(WKUserContentController *)userContentController
+      didReceiveScriptMessage:(WKScriptMessage *)message
+{
+    (void)userContentController;
+    if (![message.name isEqualToString:@"generalsX"] || ![self isTrustedWebMessage:message])
+    {
+        fprintf(stderr, "[HUB-WEB] rejected untrusted bridge message\n");
+        return;
+    }
+    if (![message.body isKindOfClass:[NSDictionary class]])
+        return;
+
+    NSDictionary *body = (NSDictionary *)message.body;
+    NSString *requestId = [body[@"id"] isKindOfClass:[NSString class]] ? body[@"id"] : @"";
+    NSString *action = [body[@"action"] isKindOfClass:[NSString class]] ? body[@"action"] : @"";
+    NSDictionary *payload = [body[@"payload"] isKindOfClass:[NSDictionary class]] ? body[@"payload"] : @{};
+
+    if ([action isEqualToString:@"getState"])
+    {
+        [self sendWebResponse:requestId result:[self webLauncherState] error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"play"])
+    {
+        NSString *profileId = payload[@"profileId"];
+        if ([profileId isEqualToString:@"online"] ||
+            (([profileId isEqualToString:@"enhanced"] || [profileId isEqualToString:@"contra-x"]) && GXHubProfileInstalled(profileId)))
+        {
+            [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                SetSelectedProfile(profileId);
+            });
+        }
+        else
+        {
+            [self sendWebResponse:requestId result:nil error:@"Profile is not installed."];
+        }
+        return;
+    }
+
+    if ([action isEqualToString:@"install"])
+    {
+        NSString *profileId = payload[@"profileId"];
+        NSDictionary *entry = HubEntryForProfile(profileId);
+        if (entry == nil)
+        {
+            [self sendWebResponse:requestId result:nil error:@"Profile is not available in the current catalog channel."];
+            return;
+        }
+        if (GXHubDownloadBusy())
+        {
+            [self sendWebResponse:requestId result:nil error:[NSString stringWithFormat:@"%@ is already downloading.", GXHubActiveDownloadProfile() ?: @"Another mod"]];
+            return;
+        }
+
+        [self sendWebResponse:requestId result:@{ @"accepted": @YES, @"profileId": profileId ?: @"" } error:nil];
+        __weak GXProfileLauncherViewController *weakSelf = self;
+        GXHubDownloadAndInstallWithProgress(
+            entry,
+            ^(long long received, long long total, double fraction) {
+                GXProfileLauncherViewController *strongSelf = weakSelf;
+                if (strongSelf == nil)
+                    return;
+                [strongSelf sendWebEvent:@"downloadProgress" payload:@{
+                    @"profileId": profileId ?: @"",
+                    @"received": @(received),
+                    @"total": @(total),
+                    @"fraction": @(fraction),
+                }];
+            },
+            ^(NSDictionary *manifest, NSError *error) {
+                GXProfileLauncherViewController *strongSelf = weakSelf;
+                if (strongSelf == nil)
+                    return;
+                if (error != nil)
+                {
+                    [strongSelf sendWebEvent:@"installError" payload:@{
+                        @"profileId": profileId ?: @"",
+                        @"error": error.localizedDescription ?: @"Install failed",
+                    }];
+                }
+                else
+                {
+                    [strongSelf sendWebEvent:@"installComplete" payload:@{
+                        @"profileId": profileId ?: @"",
+                        @"manifest": manifest ?: @{},
+                    }];
+                }
+                [strongSelf sendWebEvent:@"stateChanged" payload:[strongSelf webLauncherState]];
+            });
+        return;
+    }
+
+    if ([action isEqualToString:@"remove"])
+    {
+        NSString *profileId = payload[@"profileId"];
+        NSError *error = nil;
+        if (!GXHubRemoveMod(profileId, &error))
+        {
+            [self sendWebResponse:requestId result:nil error:error.localizedDescription ?: @"Remove failed."];
+            return;
+        }
+        [self sendWebResponse:requestId result:[self webLauncherState] error:nil];
+        [self sendWebEvent:@"stateChanged" payload:[self webLauncherState]];
+        return;
+    }
+
+    if ([action isEqualToString:@"refreshCatalog"] || [action isEqualToString:@"setChannel"])
+    {
+        if ([action isEqualToString:@"setChannel"])
+        {
+            NSString *channel = payload[@"channel"];
+            GXHubSetCatalogChannel(channel);
+        }
+        __weak GXProfileLauncherViewController *weakSelf = self;
+        GXHubRefreshRemoteCatalog(^(BOOL updated, NSError *error) {
+            GXProfileLauncherViewController *strongSelf = weakSelf;
+            if (strongSelf == nil)
+                return;
+            if (error != nil)
+                [strongSelf sendWebResponse:requestId result:nil error:error.localizedDescription];
+            else
+                [strongSelf sendWebResponse:requestId result:[strongSelf webLauncherState] error:nil];
+            if (updated)
+                [strongSelf sendWebEvent:@"stateChanged" payload:[strongSelf webLauncherState]];
+        });
+        return;
+    }
+
+    if ([action isEqualToString:@"diagnostics"])
+    {
+        NSString *resourcePath = NSBundle.mainBundle.resourcePath ?: @"";
+        NSString *gameDataPath = [resourcePath stringByAppendingPathComponent:@"GameData"];
+        BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:gameDataPath];
+        __weak GXProfileLauncherViewController *weakSelf = self;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            unsigned long long bytes = exists ? DirectorySizeAtPath(gameDataPath) : 0;
+            NSString *sizeText = exists ? HumanReadableBytes(bytes) : @"n/a";
+            dispatch_async(dispatch_get_main_queue(), ^{
+                GXProfileLauncherViewController *strongSelf = weakSelf;
+                if (strongSelf != nil)
+                    [strongSelf sendWebResponse:requestId
+                                        result:@{ @"report": [strongSelf diagnosticsTextWithGameDataSize:sizeText] ?: @"" }
+                                         error:nil];
+            });
+        });
+        return;
+    }
+
+    if ([action isEqualToString:@"shareDiagnostics"])
+    {
+        [self shareDiagnostics];
+        [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"clearDiagnostics"])
+    {
+        [self clearDiagnosticsLogs];
+        [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"settings"])
+    {
+        NSString *profileId = payload[@"profileId"];
+        self.webView.hidden = YES;
+        if ([profileId isEqualToString:@"enhanced"] || [profileId isEqualToString:@"contra-x"])
+        {
+            UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+            button.accessibilityIdentifier = profileId;
+            [self showHubModSettings:button];
+        }
+        else
+        {
+            [self showSettings];
+        }
+        [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"chooseFile"])
+    {
+        [self importModPackage];
+        [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"openURL"])
+    {
+        NSURL *url = [NSURL URLWithString:[payload[@"url"] isKindOfClass:[NSString class]] ? payload[@"url"] : @""];
+        if ([url.scheme isEqualToString:@"https"])
+        {
+            [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
+            [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
+        }
+        else
+        {
+            [self sendWebResponse:requestId result:nil error:@"Only HTTPS links are allowed."];
+        }
+        return;
+    }
+
+    [self sendWebResponse:requestId result:nil error:[NSString stringWithFormat:@"Unknown bridge action: %@", action]];
+}
+
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error
+{
+    (void)webView;
+    (void)navigation;
+    fprintf(stderr, "[HUB-WEB] navigation-failed remote=%d error='%s'\n",
+            self.webLauncherLoadedRemote ? 1 : 0,
+            error.localizedDescription.UTF8String);
+    if (self.webLauncherLoadedRemote)
+        [self loadBundledWebLauncher];
+}
+
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error
+{
+    [self webView:webView didFailProvisionalNavigation:navigation withError:error];
+}
+
+- (void)webView:(WKWebView *)webView
+decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
+ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
+{
+    (void)webView;
+    NSURL *url = navigationAction.request.URL;
+    if (url == nil)
+    {
+        decisionHandler(WKNavigationActionPolicyCancel);
+        return;
+    }
+    BOOL trusted = url.isFileURL ||
+        ([url.scheme isEqualToString:@"https"] && self.webLauncherHost.length > 0 && [url.host isEqualToString:self.webLauncherHost]);
+    if (trusted)
+    {
+        decisionHandler(WKNavigationActionPolicyAllow);
+        return;
+    }
+    if ([url.scheme isEqualToString:@"https"])
+        [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
+    decisionHandler(WKNavigationActionPolicyCancel);
 }
 
 - (void)buildMenu
@@ -1288,11 +1774,21 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             {
                 strongSelf.modsStatus.textColor = [UIColor systemRedColor];
                 strongSelf.modsStatus.text = [NSString stringWithFormat:@"Import failed: %@", error.localizedDescription];
+                if (strongSelf.webLauncherActive)
+                    [strongSelf sendWebEvent:@"installError" payload:@{ @"profileId": @"file", @"error": error.localizedDescription ?: @"Import failed" }];
                 return;
             }
             strongSelf.modsStatus.textColor = [UIColor systemGreenColor];
             strongSelf.modsStatus.text = [NSString stringWithFormat:@"Installed %@ %@.", manifest[@"name"], manifest[@"version"]];
             [strongSelf rebuildHubMenuAfterMutation];
+            if (strongSelf.webLauncherActive)
+            {
+                [strongSelf sendWebEvent:@"installComplete" payload:@{
+                    @"profileId": manifest[@"profileId"] ?: @"",
+                    @"manifest": manifest ?: @{},
+                }];
+                [strongSelf sendWebEvent:@"stateChanged" payload:[strongSelf webLauncherState]];
+            }
         });
     });
 }
@@ -1804,7 +2300,15 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 - (void)hideDiagnostics
 {
     self.diagnosticsView.hidden = YES;
-    self.menuStack.hidden = NO;
+    if (self.webLauncherActive)
+    {
+        self.menuStack.hidden = YES;
+        self.webView.hidden = NO;
+    }
+    else
+    {
+        self.menuStack.hidden = NO;
+    }
 }
 
 - (void)refreshDiagnostics
@@ -2248,6 +2752,18 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 {
     BOOL returnToMods = self.settingsProfileId.length > 0;
     self.settingsView.hidden = YES;
+
+    if (self.webLauncherActive)
+    {
+        self.settingsProfileId = nil;
+        self.menuStack.hidden = YES;
+        self.modsView.hidden = YES;
+        self.diagnosticsView.hidden = YES;
+        self.webView.hidden = NO;
+        [self sendWebEvent:@"stateChanged" payload:[self webLauncherState]];
+        return;
+    }
+
     if (returnToMods)
     {
         self.settingsProfileId = nil;
