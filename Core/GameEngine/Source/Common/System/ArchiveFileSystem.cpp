@@ -322,6 +322,14 @@ void ArchiveFileSystem::loadMods()
 			        criticalVisualPaths[i],
 			        resolvedArchive != nullptr ? resolvedArchive->getName().str() : "<missing>");
 		}
+
+		const char *onlinePatchProbe =
+			"Data\\INI\\Object\\campaign\\america\\misc\\cine_u04_americaparachute.ini";
+		ArchiveFile *probeArchive = getArchiveFile(onlinePatchProbe, 0);
+		fprintf(stderr,
+		        "[HUB-DATAPACK] archive-resolution file='%s' archive='%s'\n",
+		        onlinePatchProbe,
+		        probeArchive != nullptr ? probeArchive->getName().str() : "<missing>");
 	}
 }
 

@@ -896,10 +896,26 @@ static void LogIOSProfileContents(const char *modPath)
 // never sees Enhanced/Contra archives unless explicitly selected.
 static void InjectIOSProfileModArgument(const char *profileId)
 {
-    if (profileId == nullptr ||
+    const bool baseOrOnlineProfile =
+        profileId == nullptr ||
         strcmp(profileId, "vanilla") == 0 ||
-        strcmp(profileId, "online") == 0)
+        strcmp(profileId, "online") == 0;
+
+    // The downloadable Online base contains the GO community patch below the
+    // primary asset root. StdBIGFileSystem scans that root recursively, which
+    // would otherwise mount the GO data pack before -mod processing. Keep it
+    // visible for Online, but physically exclude it from the primary archive
+    // scan for Enhanced/Contra.
+    if (baseOrOnlineProfile)
+    {
+        unsetenv("GENERALSX_EXCLUDE_ONLINE_DATAPACKS");
         return;
+    }
+
+    setenv("GENERALSX_EXCLUDE_ONLINE_DATAPACKS", "1", 1);
+    fprintf(stderr,
+            "[HUB] excluding GeneralsOnlineGameData from primary asset scan for profile '%s'\n",
+            profileId);
 
     for (int i = 1; i < __argc; ++i)
     {

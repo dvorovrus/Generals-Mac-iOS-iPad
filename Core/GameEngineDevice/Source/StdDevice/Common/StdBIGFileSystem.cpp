@@ -656,6 +656,19 @@ Bool StdBIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString fi
 	Bool actuallyAdded = FALSE;
 	FilenameListIter it = filenameList.begin();
 	while (it != filenameList.end()) {
+		const char *excludeOnlineDataPacks = getenv("GENERALSX_EXCLUDE_ONLINE_DATAPACKS");
+		if (excludeOnlineDataPacks != nullptr && excludeOnlineDataPacks[0] != '\0' && strcmp(excludeOnlineDataPacks, "0") != 0) {
+			AsciiString archivePath = *it;
+			archivePath.toLower();
+			if (archivePath.find("generalsonlinegamedata/") != nullptr ||
+			    archivePath.find("generalsonlinegamedata\\") != nullptr) {
+				fprintf(stderr,
+				        "[HUB-DATAPACK] excluded archive='%s' from primary asset scan\n",
+				        it->str());
+				it++;
+				continue;
+			}
+		}
 #if RTS_ZEROHOUR
 		// TheSuperHackers @bugfix bobtista 18/11/2025 Skip duplicate INIZH.big in Data\INI to prevent CRC mismatches.
 		// English, Chinese, and Korean SKUs shipped with two INIZH.big files (one in Run directory, one in Run\Data\INI).
