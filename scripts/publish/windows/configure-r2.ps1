@@ -19,10 +19,13 @@ function Ensure-AwsCli {
     & py -m pip install --user --disable-pip-version-check awscli
     if ($LASTEXITCODE -ne 0) { throw "Failed to install awscli." }
 
-    $userBase = (& py -m site --user-base).Trim()
-    $scriptsDir = Join-Path $userBase "Scripts"
-    $candidate = Join-Path $scriptsDir "aws.exe"
-    if (-not (Test-Path $candidate)) { throw "aws.exe was not found after installation: $candidate" }
+    $scriptsDir = (& py -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user'))").Trim()
+    $candidate = @(
+        (Join-Path $scriptsDir "aws.cmd"),
+        (Join-Path $scriptsDir "aws.exe"),
+        (Join-Path $scriptsDir "aws")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $candidate) { throw "AWS CLI launcher was not found after installation in: $scriptsDir" }
 
     if (($env:Path -split ';') -notcontains $scriptsDir) {
         $env:Path = "$scriptsDir;$env:Path"

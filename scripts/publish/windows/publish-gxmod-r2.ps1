@@ -28,15 +28,17 @@ if (-not $ProfileId -or -not $Version) { throw "Invalid .gxmod sidecar metadata.
 if (-not $Bucket -or -not $AccountId -or -not $PublicBaseUrl) {
     throw "Set R2_BUCKET, CLOUDFLARE_ACCOUNT_ID and R2_PUBLIC_BASE_URL."
 }
-$Aws = Get-Command aws -ErrorAction SilentlyContinue
-if (-not $Aws) {
-    $userBase = (& py -m site --user-base).Trim()
-    $candidate = Join-Path (Join-Path $userBase "Scripts") "aws.exe"
-    if (Test-Path $candidate) {
-        $Aws = Get-Item $candidate
-    }
+$AwsCommand = Get-Command aws -ErrorAction SilentlyContinue
+$AwsPath = if ($AwsCommand) { $AwsCommand.Source } else { $null }
+if (-not $AwsPath) {
+    $scriptsDir = (& py -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user'))").Trim()
+    $AwsPath = @(
+        (Join-Path $scriptsDir "aws.cmd"),
+        (Join-Path $scriptsDir "aws.exe"),
+        (Join-Path $scriptsDir "aws")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
-if (-not $Aws) { throw "AWS CLI is required. Run .\scripts\publish\windows\configure-r2.ps1 first." }
+if (-not $AwsPath) { throw "AWS CLI is required. Run .\scripts\publish\windows\configure-r2.ps1 first." }
 
 $AwsProfileArgs = @()
 if ($env:AWS_ACCESS_KEY_ID -and $env:AWS_SECRET_ACCESS_KEY) {
@@ -57,7 +59,7 @@ $PackageUrl = "$PublicBaseUrl/$Key"
 $CatalogUrl = "$PublicBaseUrl/catalog.json"
 
 Write-Host "Uploading $ProfileId $Version ($Channel)..." -ForegroundColor Cyan
-& $Aws.Source @AwsProfileArgs s3 cp $PackagePath "s3://$Bucket/$Key" --endpoint-url $Endpoint --region auto --no-progress
+& $AwsPath @AwsProfileArgs s3 cp $PackagePath "s3://$Bucket/$Key" --endpoint-url $Endpoint --region auto --no-progress
 if ($LASTEXITCODE -ne 0) { throw "R2 package upload failed." }
 
 $Hash = (Get-FileHash $PackagePath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -69,7 +71,7 @@ $Bytes = (Get-Item $PackagePath).Length
     --min-hub-version $MinHubVersion --release-notes $ReleaseNotes
 if ($LASTEXITCODE -ne 0) { throw "Catalog update failed." }
 
-& $Aws.Source @AwsProfileArgs s3 cp $Catalog "s3://$Bucket/catalog.json" --endpoint-url $Endpoint --region auto `
+& $AwsPath @AwsProfileArgs s3 cp $Catalog "s3://$Bucket/catalog.json" --endpoint-url $Endpoint --region auto `
     --content-type "application/json; charset=utf-8" --cache-control "no-cache, max-age=60" --no-progress
 if ($LASTEXITCODE -ne 0) { throw "R2 catalog upload failed." }
 
