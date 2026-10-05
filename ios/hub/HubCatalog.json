@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 31,
+  "catalogVersion": 35,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.7",
-        "build": 37360513513,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.7/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "c066d44f26bcc4a783fb5300e979ddc8be4899641fed5c9a213efe5c2bc9574a",
-        "packageBytes": 49320084,
-        "releaseNotes": "Launcher polish and reliability: new app icon, stable fallback for missing beta mod packages, seamless non-repeating background, fixed hero controls and profile-card borders, unified full-width Web settings/diagnostics/mod pages, and animated home-card download progress with percentage."
+        "version": "1.4.8",
+        "build": 37365749775,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.8/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "653295ba66a65e8e274f32ced05ce7a0a98261a7e337403c413136bd0246a55a",
+        "packageBytes": 49324614,
+        "releaseNotes": "Launcher refinement: restored original seamless background scale with decoded preload, Settings actions moved to the header, cleaner Current/New mod version presentation, native Pause/Resume/Cancel downloads with speed and ETA, full-width download progress rows, and subtle border-only home download animation with auto-select after install."
       },
       "beta": {
         "version": "0.1.0",
@@ -94,17 +94,17 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T19:19:34Z",
+  "updatedAt": "2026-10-05T20:06:52Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.2.0-web.6",
+      "version": "0.2.0-web.7",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
-      "bridgeSchema": 5
+      "bridgeSchema": 6
     },
     "beta": {
-      "version": "0.2.0-web.6",
+      "version": "0.2.0-web.7",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
-      "bridgeSchema": 5
+      "bridgeSchema": 6
     }
   }
 }
