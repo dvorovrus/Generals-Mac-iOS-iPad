@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 20,
+  "catalogVersion": 21,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.4",
-        "build": 37322761071,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.4/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "5623222e80281208346dfd05dd844f18c361a29b519fdf38cd33d77c4182c809",
-        "packageBytes": 45440850,
-        "releaseNotes": "Add iOS fatal-signal backtrace capture directly to retained diagnostics log and per-Object parse phase tracing to isolate Enhanced/Contra startup crash inside Data/INI/Object."
+        "version": "1.4.5",
+        "build": 37326669954,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.5/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "6433936668dac75953e159628a0ade99f48f6956fbf3ff93da78e89fff99f211",
+        "packageBytes": 45441369,
+        "releaseNotes": "Fix Enhanced/Contra startup crash by excluding Generals Online community datapacks from the recursive primary BIG scan for explicit mod profiles. Online keeps the datapack enabled."
       },
       "beta": {
         "version": "0.1.0",
@@ -94,7 +94,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T14:18:43Z",
+  "updatedAt": "2026-10-05T14:51:15Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.3",
