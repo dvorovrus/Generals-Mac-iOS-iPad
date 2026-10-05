@@ -1463,6 +1463,208 @@ button {
   }
 }
 
+
+/* Launcher motion, sound feedback and compact profile carousel. */
+.icon-button.is-muted {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.icon-button.is-muted svg {
+  opacity: 0.58;
+}
+
+.hero h1,
+.hero p {
+  transition: opacity 220ms ease, transform 260ms cubic-bezier(.2,.8,.2,1), filter 220ms ease;
+}
+
+.hero.is-switching h1,
+.hero.is-switching p {
+  opacity: 0;
+  transform: translateY(8px);
+  filter: blur(2px);
+}
+
+.play-button,
+.hero-settings-button,
+.hero-source-button,
+.icon-button,
+.secondary-button,
+.mode-card,
+.add-mod-card,
+.mod-install-button,
+.settings-action,
+.diagnostics-action,
+.segment-control button,
+.switch-control,
+.modal__close {
+  transform-origin: center;
+}
+
+.play-button.is-pressed,
+.hero-settings-button.is-pressed,
+.icon-button.is-pressed,
+.secondary-button.is-pressed,
+.add-mod-card.is-pressed,
+.mod-install-button.is-pressed,
+.settings-action.is-pressed,
+.diagnostics-action.is-pressed,
+.segment-control button.is-pressed,
+.switch-control.is-pressed,
+.modal__close.is-pressed {
+  transform: scale(0.965);
+}
+
+.hero-source-button.is-pressed {
+  transform: translateY(0) scale(0.97);
+}
+
+.mode-card.is-pressed {
+  transform: translateY(0) scale(0.985);
+}
+
+.modes {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0 7px;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 0 108px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+
+.modes::-webkit-scrollbar {
+  display: none;
+}
+
+.mode-card,
+.mode-card.is-active {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 235px;
+  max-width: 370px;
+  min-height: 70px;
+  padding: 13px 16px;
+  scroll-snap-align: start;
+  scroll-margin-right: 110px;
+}
+
+.mode-card__content {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.mode-card__content strong,
+.mode-card__content small {
+  display: inline;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.mode-card__content strong {
+  flex: 0 0 auto;
+  font-size: clamp(15px, 1.4vw, 18px);
+}
+
+.mode-card__content small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.43);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.mode-card__content small::before {
+  content: "·";
+  margin-right: 10px;
+  color: rgba(212, 173, 84, 0.72);
+}
+
+.add-mod-card {
+  flex: 0 0 96px;
+  width: 96px;
+  min-height: 70px;
+  align-self: stretch;
+  scroll-snap-align: end;
+}
+
+.modes.is-overflowing .add-mod-card {
+  position: sticky;
+  right: 0;
+  z-index: 7;
+  border-color: rgba(212, 173, 84, 0.30);
+  background: rgba(9, 11, 11, 0.94);
+  box-shadow: -22px 0 28px rgba(5, 7, 8, 0.92), -1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.modes.is-overflowing .add-mod-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -28px;
+  width: 28px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(5, 7, 8, 0.82));
+}
+
+.modal-backdrop {
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.modal-backdrop.is-visible {
+  opacity: 1;
+}
+
+.modal {
+  opacity: 0;
+  transform: translateY(16px) scale(0.986);
+  transition: opacity 220ms ease, transform 280ms cubic-bezier(.18,.82,.2,1);
+}
+
+.modal-backdrop.is-visible .modal {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.modal__body > * {
+  animation: panel-content-in 300ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes panel-content-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .mode-card,
+  .mode-card.is-active {
+    min-width: 215px;
+    min-height: 66px;
+    padding: 12px 14px;
+  }
+
+  .add-mod-card {
+    flex-basis: 86px;
+    width: 86px;
+    min-height: 66px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .battlefield__tile {
     animation: none !important;

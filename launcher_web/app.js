@@ -191,6 +191,9 @@ const modalTitle = document.querySelector("#modalTitle");
 const modalEyebrow = document.querySelector("#modalEyebrow");
 const modalBody = document.querySelector("#modalBody");
 const modSourceLink = document.querySelector("#modSourceLink");
+const modesRail = document.querySelector(".modes");
+const addModCard = document.querySelector(".add-mod-card");
+const audioToggle = document.querySelector("#audioToggle");
 
 const backgroundPrimary = document.querySelector(".battlefield__tile--primary");
 const backgroundSecondary = document.querySelector(".battlefield__tile--secondary");
@@ -211,6 +214,70 @@ let backgroundFadeFrame = null;
 
 let activeCard = cards[0];
 let toastTimer;
+let modalCloseTimer = null;
+let uiAudioContext = null;
+let uiSoundEnabled = (() => {
+  try { return localStorage.getItem("generals-x-ui-sound") !== "off"; }
+  catch { return true; }
+})();
+
+const uiSoundProfiles = {
+  tap: [[310, 250, 0.045, 0.020]],
+  select: [[390, 520, 0.070, 0.026], [690, 760, 0.045, 0.012]],
+  open: [[260, 390, 0.085, 0.020], [520, 650, 0.070, 0.010]],
+  close: [[410, 275, 0.075, 0.018]],
+  play: [[180, 230, 0.095, 0.032], [520, 690, 0.090, 0.016]],
+  confirm: [[470, 660, 0.080, 0.024]]
+};
+
+function ensureUIAudio() {
+  if (!uiSoundEnabled) return null;
+  if (!uiAudioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    uiAudioContext = new AudioContextClass();
+  }
+  if (uiAudioContext.state === "suspended") uiAudioContext.resume().catch(() => {});
+  return uiAudioContext;
+}
+
+function playUISound(name = "tap") {
+  if (!uiSoundEnabled) return;
+  const context = ensureUIAudio();
+  if (!context) return;
+  const profile = uiSoundProfiles[name] || uiSoundProfiles.tap;
+  const now = context.currentTime;
+  profile.forEach(([from, to, duration, volume], index) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = index === 0 ? "triangle" : "sine";
+    oscillator.frequency.setValueAtTime(from, now);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, to), now + duration);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + duration + 0.01);
+  });
+}
+
+function syncAudioToggle() {
+  if (!audioToggle) return;
+  audioToggle.classList.toggle("is-muted", !uiSoundEnabled);
+  audioToggle.setAttribute("aria-pressed", String(!uiSoundEnabled));
+  audioToggle.setAttribute("aria-label", uiSoundEnabled ? "Mute interface sounds" : "Enable interface sounds");
+  audioToggle.title = uiSoundEnabled ? "Mute interface sounds" : "Enable interface sounds";
+}
+
+function animateInteraction(target) {
+  if (!target) return;
+  target.classList.remove("is-pressed");
+  void target.offsetWidth;
+  target.classList.add("is-pressed");
+  window.setTimeout(() => target.classList.remove("is-pressed"), 180);
+}
 
 const modCatalog = [
   {
@@ -252,6 +319,28 @@ function isModInstalled(modId) {
   return installedMods.includes(modId);
 }
 
+function updateModesOverflow() {
+  if (!modesRail) return;
+  window.requestAnimationFrame(() => {
+    const overflowing = modesRail.scrollWidth > modesRail.clientWidth + 2;
+    modesRail.classList.toggle("is-overflowing", overflowing);
+  });
+}
+
+function syncModeCardVersions() {
+  const baseCard = cards.find(item => item.dataset.id === "zero-hour-online");
+  const baseVersion = nativeState?.online?.installedVersion || nativeState?.online?.version || "1.04";
+  const baseSmall = baseCard?.querySelector("small");
+  if (baseSmall) baseSmall.textContent = `${baseVersion} · Multiplayer`;
+
+  modCatalog.forEach(mod => {
+    const card = cards.find(item => item.dataset.id === mod.id);
+    const small = card?.querySelector("small");
+    if (!small) return;
+    small.textContent = mod.installedVersion || mod.version || (mod.id === "contra-x" ? "Beta 2 · Patch 1" : "Installed");
+  });
+}
+
 function syncInstalledModCards() {
   const hasInstalledMods = installedMods.length > 0;
   const baseCard = cards.find(item => item.dataset.id === "zero-hour-online");
@@ -261,6 +350,9 @@ function syncInstalledModCards() {
     const card = cards.find(item => item.dataset.id === mod.id);
     if (card) card.hidden = !isModInstalled(mod.id);
   });
+
+  syncModeCardVersions();
+  updateModesOverflow();
 }
 
 function syncActiveModSourceLink() {
@@ -382,7 +474,8 @@ function setActiveCard(card) {
     if (hasNativeBridge) syncNativeSystemStatus();
 
     hero.classList.remove("is-switching");
-  }, 125);
+    card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, 155);
 }
 
 cards.forEach(card => {
@@ -433,15 +526,18 @@ detailsButton.addEventListener("click", () => {
 });
 
 function openPanel(type) {
+  if (type === "settings" && hasNativeBridge) {
+    const profileId = nativeProfileIdForCard();
+    nativeRequest("settings", { profileId }).catch(error => showToast(error.message || "Settings failed"));
+    return;
+  }
+
+  window.clearTimeout(modalCloseTimer);
   modalBackdrop.hidden = false;
+  window.requestAnimationFrame(() => modalBackdrop.classList.add("is-visible"));
 
   if (type === "settings") {
     const profileId = nativeProfileIdForCard();
-    if (hasNativeBridge) {
-      modalBackdrop.hidden = true;
-      nativeRequest("settings", { profileId }).catch(error => showToast(error.message || "Settings failed"));
-      return;
-    }
 
     modalEyebrow.textContent = activeCard.dataset.profile;
     modalTitle.textContent =
@@ -1100,8 +1196,56 @@ document.querySelectorAll("[data-panel]").forEach(button => {
   button.addEventListener("click", () => openPanel(button.dataset.panel));
 });
 
+if (audioToggle) {
+  syncAudioToggle();
+  audioToggle.addEventListener("click", () => {
+    uiSoundEnabled = !uiSoundEnabled;
+    try { localStorage.setItem("generals-x-ui-sound", uiSoundEnabled ? "on" : "off"); } catch {}
+    syncAudioToggle();
+    if (uiSoundEnabled) playUISound("confirm");
+    showToast(uiSoundEnabled ? "Interface sounds on" : "Interface sounds off");
+  });
+}
+
+document.addEventListener("pointerdown", event => {
+  const target = event.target.closest("button, a");
+  if (!target || target.disabled) return;
+  animateInteraction(target);
+  const sound = target === playButton
+    ? "play"
+    : target.classList.contains("mode-card")
+      ? "select"
+      : target === modalClose
+        ? "close"
+        : target.matches("[data-panel]")
+          ? "open"
+          : "tap";
+  playUISound(sound);
+}, { passive: true });
+
+if (modesRail) {
+  modesRail.addEventListener("wheel", event => {
+    if (!modesRail.classList.contains("is-overflowing")) return;
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    event.preventDefault();
+    modesRail.scrollBy({ left: event.deltaY, behavior: "smooth" });
+  }, { passive: false });
+
+  if (window.ResizeObserver) {
+    const railObserver = new ResizeObserver(updateModesOverflow);
+    railObserver.observe(modesRail);
+  } else {
+    window.addEventListener("resize", updateModesOverflow, { passive: true });
+  }
+}
+
 function closePanel() {
-  modalBackdrop.hidden = true;
+  if (modalBackdrop.hidden) return;
+  modalBackdrop.classList.remove("is-visible");
+  window.clearTimeout(modalCloseTimer);
+  modalCloseTimer = window.setTimeout(() => {
+    modalBackdrop.hidden = true;
+  }, 220);
 }
 
 modalClose.addEventListener("click", closePanel);
@@ -1126,6 +1270,7 @@ window.addEventListener("keydown", event => {
 
 syncInstalledModCards();
 syncActiveModSourceLink();
+updateModesOverflow();
 
 startBackgroundMotion();
 
