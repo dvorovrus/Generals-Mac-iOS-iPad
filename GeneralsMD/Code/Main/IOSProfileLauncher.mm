@@ -834,10 +834,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             @"fallbackChannel": onlineEntry[@"fallbackChannel"] ?: @"",
         },
         @"mods": mods,
-        @"download": @{
-            @"busy": @(GXHubDownloadBusy()),
-            @"profileId": GXHubActiveDownloadProfile() ?: @"",
-        },
+        @"download": GXHubDownloadStatus(),
         @"hubUpdate": @{
             @"available": @(availableBuild > currentBuild),
             @"version": hubRelease[@"version"] ?: @"",
@@ -905,9 +902,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSDictionary *release = [channels[channel] isKindOfClass:[NSDictionary class]]
         ? channels[channel]
         : ([channels[@"stable"] isKindOfClass:[NSDictionary class]] ? channels[@"stable"] : nil);
-    // Bridge schema 5 adds Web-owned settings pages, download fallback metadata and
-    // richer home-card progress. Older Hub binaries fail closed to bundled UI.
-    if ([release[@"bridgeSchema"] integerValue] != 5)
+    // Bridge schema 6 adds native pause/resume/cancel download controls plus
+    // richer download telemetry for the Web Launcher.
+    if ([release[@"bridgeSchema"] integerValue] != 6)
     {
         fprintf(stderr, "[HUB-WEB] remote launcher bridge schema is incompatible; using bundled launcher\n");
         return nil;
@@ -1100,12 +1097,12 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
                 GXProfileLauncherViewController *strongSelf = weakSelf;
                 if (strongSelf == nil)
                     return;
-                [strongSelf sendWebEvent:@"downloadProgress" payload:@{
-                    @"profileId": profileId ?: @"",
-                    @"received": @(received),
-                    @"total": @(total),
-                    @"fraction": @(fraction),
-                }];
+                NSMutableDictionary *downloadPayload = [GXHubDownloadStatus() mutableCopy];
+                downloadPayload[@"profileId"] = profileId ?: @"";
+                downloadPayload[@"received"] = @(received);
+                downloadPayload[@"total"] = @(total);
+                downloadPayload[@"fraction"] = @(fraction);
+                [strongSelf sendWebEvent:@"downloadProgress" payload:downloadPayload];
             },
             ^(NSDictionary *manifest, NSError *error) {
                 GXProfileLauncherViewController *strongSelf = weakSelf;
@@ -1113,9 +1110,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
                     return;
                 if (error != nil)
                 {
-                    [strongSelf sendWebEvent:@"installError" payload:@{
+                    BOOL cancelled = [error.domain isEqualToString:@"GeneralsXHub"] && error.code == 189;
+                    [strongSelf sendWebEvent:cancelled ? @"downloadCancelled" : @"installError" payload:@{
                         @"profileId": profileId ?: @"",
-                        @"error": error.localizedDescription ?: @"Install failed",
+                        @"error": error.localizedDescription ?: (cancelled ? @"Download cancelled" : @"Install failed"),
                     }];
                 }
                 else
@@ -1127,6 +1125,33 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
                 }
                 [strongSelf sendWebEvent:@"stateChanged" payload:[strongSelf webLauncherState]];
             });
+        return;
+    }
+
+    if ([action isEqualToString:@"pauseDownload"] ||
+        [action isEqualToString:@"resumeDownload"] ||
+        [action isEqualToString:@"cancelDownload"])
+    {
+        NSString *profileId = [payload[@"profileId"] isKindOfClass:[NSString class]]
+            ? payload[@"profileId"] : @"";
+        NSError *downloadError = nil;
+        BOOL ok = NO;
+        if ([action isEqualToString:@"pauseDownload"])
+            ok = GXHubPauseDownload(profileId, &downloadError);
+        else if ([action isEqualToString:@"resumeDownload"])
+            ok = GXHubResumeDownload(profileId, &downloadError);
+        else
+            ok = GXHubCancelDownload(profileId, &downloadError);
+
+        if (!ok)
+        {
+            [self sendWebResponse:requestId result:nil
+                           error:downloadError.localizedDescription ?: @"Download action failed."];
+            return;
+        }
+        NSDictionary *state = [self webLauncherState];
+        [self sendWebResponse:requestId result:state error:nil];
+        [self sendWebEvent:@"stateChanged" payload:state];
         return;
     }
 

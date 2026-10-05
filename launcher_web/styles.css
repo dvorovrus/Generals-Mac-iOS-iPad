@@ -67,9 +67,9 @@ button {
 .battlefield__tile {
   position: absolute;
   inset: -90px;
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: cover;
+  background-repeat: repeat;
+  background-position: 0 0;
+  background-size: var(--tile) var(--tile);
   opacity: 0;
   filter: saturate(0.84) contrast(1.04) brightness(0.65);
   transition: none;
@@ -1272,21 +1272,6 @@ button {
   stroke-linejoin: round;
 }
 
-.mod-download-progress {
-  width: 130px;
-  height: 3px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.mod-download-progress span {
-  display: block;
-  width: 0;
-  height: 100%;
-  background: var(--accent);
-  transition: width 140ms linear;
-}
-
 .mod-file-input {
   display: none;
 }
@@ -1883,12 +1868,6 @@ button {
 
 
 /* Web launcher v6: stable hero geometry, full-width pages and home download progress. */
-.battlefield__tile {
-  inset: -7%;
-  background-repeat: no-repeat !important;
-  background-size: cover !important;
-  background-position: center center;
-}
 
 .hero__copy {
   max-width: 760px;
@@ -1977,40 +1956,7 @@ button {
 .mode-card__content {
   position: relative;
   z-index: 3;
-  padding-right: 46px;
-}
-
-.mode-card__download-fill {
-  position: absolute;
-  z-index: 1;
-  inset: 0 auto 0 0;
-  width: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(212, 173, 84, 0.13), rgba(212, 173, 84, 0.30)),
-    rgba(212, 173, 84, 0.05);
-  transition: width 260ms cubic-bezier(.2,.8,.2,1);
-}
-
-.mode-card__download-percent {
-  position: absolute;
-  z-index: 4;
-  top: 50%;
-  right: 13px;
-  transform: translateY(-50%);
-  color: #efd88f;
-  font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: 0.03em;
-  pointer-events: none;
-}
-
-.mode-card.is-downloading {
-  border-color: rgba(212, 173, 84, 0.58);
-  background: rgba(14, 14, 11, 0.86);
-}
-
-.mode-card.is-download-complete {
-  box-shadow: inset 0 0 0 1px rgba(141, 205, 122, 0.56), 0 0 30px rgba(141, 205, 122, 0.12);
+  padding-right: 0;
 }
 
 .mode-card.is-download-error {
@@ -2072,4 +2018,311 @@ button {
   .hero__actions { min-height: 127px; }
   .hero p { min-height: 4.6em; }
   .modes { padding-left: 7px; }
+}
+
+
+/* Web launcher v7: decoded seamless backgrounds, header actions and controllable downloads. */
+.modal__header {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.modal__close {
+  justify-self: start;
+}
+
+.modal__header-actions {
+  min-width: 48px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: stretch;
+  gap: 8px;
+}
+
+.page-header-action {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.68);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.page-header-action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.065);
+  color: var(--text);
+}
+
+.page-header-action--primary {
+  border-color: rgba(212, 173, 84, 0.44);
+  background: rgba(212, 173, 84, 0.10);
+  color: #ecd38e;
+}
+
+.settings-actions {
+  display: none !important;
+}
+
+/* Preserve the exact active/inactive card surfaces; download is border-only. */
+.mode-card.is-downloading::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 5;
+  padding: 1.5px;
+  pointer-events: none;
+  opacity: 0.58;
+  background:
+    conic-gradient(
+      from var(--gx-download-angle, 0deg),
+      rgba(212, 173, 84, 0.03) 0deg,
+      rgba(212, 173, 84, 0.10) 72deg,
+      rgba(235, 202, 124, 0.58) 118deg,
+      rgba(212, 173, 84, 0.16) 156deg,
+      rgba(212, 173, 84, 0.03) 236deg,
+      rgba(224, 190, 106, 0.38) 302deg,
+      rgba(212, 173, 84, 0.03) 360deg
+    );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: gx-download-border 4.2s linear infinite, gx-download-breathe 2.8s ease-in-out infinite alternate;
+}
+
+@property --gx-download-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes gx-download-border {
+  to { --gx-download-angle: 360deg; }
+}
+
+@keyframes gx-download-breathe {
+  from { opacity: 0.38; }
+  to { opacity: 0.68; }
+}
+
+.mode-card.is-download-complete::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 5;
+  padding: 1.5px;
+  pointer-events: none;
+  background: rgba(139, 201, 154, 0.58);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: gx-download-finish 650ms ease both;
+}
+
+@keyframes gx-download-finish {
+  0% { opacity: 0.2; }
+  40% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+
+.mod-library-card {
+  padding: 0;
+  display: block;
+  overflow: hidden;
+}
+
+.mod-library-card__main {
+  min-height: 118px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.mod-library-card__copy > strong {
+  display: block;
+  font-size: 18px;
+  letter-spacing: -0.025em;
+}
+
+.mod-library-card__copy > span:not(.mod-channel-note) {
+  display: block;
+  margin-top: 5px;
+  max-width: 720px;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mod-version-summary {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.mod-version-summary span {
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: baseline;
+  gap: 6px;
+  max-width: none !important;
+  color: rgba(255, 255, 255, 0.58) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.mod-version-summary em {
+  color: rgba(255, 255, 255, 0.33);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.mod-version-summary strong {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.mod-version-summary .has-update strong {
+  color: #ecd38e;
+}
+
+.mod-channel-note {
+  width: fit-content;
+  margin-top: 8px !important;
+  padding: 3px 6px;
+  border: 1px solid rgba(212, 173, 84, 0.18);
+  background: rgba(212, 173, 84, 0.055);
+  color: rgba(212, 173, 84, 0.66) !important;
+  font-size: 9px !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.mod-library-card__actions {
+  justify-content: flex-end;
+}
+
+.mod-download-panel {
+  position: relative;
+  padding: 13px 18px 15px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "track track"
+    "status controls";
+  align-items: center;
+  gap: 7px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.065);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.mod-download-track {
+  grid-area: track;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.mod-download-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(184, 144, 60, 0.82), rgba(229, 195, 111, 0.88));
+  transition: width 180ms linear;
+}
+
+.mod-download-status {
+  grid-area: status;
+  min-height: 16px;
+  color: rgba(255, 255, 255, 0.52);
+  font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-download-controls {
+  grid-area: controls;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.mod-download-control {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.68);
+  cursor: pointer;
+}
+
+.mod-download-control:hover {
+  border-color: rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.mod-download-control--cancel {
+  border-color: rgba(197, 93, 93, 0.22);
+  color: rgba(238, 177, 177, 0.72);
+}
+
+@media (max-width: 720px) {
+  .mod-library-card__main {
+    grid-template-columns: 1fr;
+  }
+
+  .mod-library-card__actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .mod-download-panel {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "track"
+      "status"
+      "controls";
+  }
+
+  .mod-download-controls {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal__header {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .modal__header-actions {
+    min-width: 44px;
+    gap: 5px;
+  }
+
+  .page-header-action {
+    min-height: 36px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-card.is-downloading::after {
+    animation: gx-download-breathe 2.8s ease-in-out infinite alternate;
+  }
 }

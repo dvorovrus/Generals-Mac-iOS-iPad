@@ -673,6 +673,11 @@ static GXHubDownloadProgress sGXHubDownloadProgress = nil;
 static GXHubInstallCompletion sGXHubDownloadCompletion = nil;
 static dispatch_source_t sGXHubDownloadTimer = nil;
 static NSInteger sGXHubLastProgressPercent = -1;
+static BOOL sGXHubDownloadPaused = NO;
+static BOOL sGXHubDownloadCancelling = NO;
+static long long sGXHubDownloadLastSampleBytes = 0;
+static NSTimeInterval sGXHubDownloadLastSampleTime = 0.0;
+static double sGXHubDownloadSpeedBytesPerSecond = 0.0;
 
 static void GXHubStopDownloadTimer(void)
 {
@@ -698,6 +703,11 @@ static void GXHubCompleteRemoteDownload(
     sGXHubDownloadProgress = nil;
     sGXHubDownloadCompletion = nil;
     sGXHubLastProgressPercent = -1;
+    sGXHubDownloadPaused = NO;
+    sGXHubDownloadCancelling = NO;
+    sGXHubDownloadLastSampleBytes = 0;
+    sGXHubDownloadLastSampleTime = 0.0;
+    sGXHubDownloadSpeedBytesPerSecond = 0.0;
 
     [session finishTasksAndInvalidate];
 
@@ -755,6 +765,28 @@ static void GXHubStartDownloadProgressTimer(void)
         double fraction = expected > 0
             ? MIN(1.0, MAX(0.0, (double)received / (double)expected))
             : 0.0;
+
+        NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+        if (!sGXHubDownloadPaused)
+        {
+            if (sGXHubDownloadLastSampleTime > 0.0 && now > sGXHubDownloadLastSampleTime &&
+                received >= sGXHubDownloadLastSampleBytes)
+            {
+                double instantaneous =
+                    (double)(received - sGXHubDownloadLastSampleBytes) /
+                    (now - sGXHubDownloadLastSampleTime);
+                sGXHubDownloadSpeedBytesPerSecond = sGXHubDownloadSpeedBytesPerSecond > 0.0
+                    ? (sGXHubDownloadSpeedBytesPerSecond * 0.72 + instantaneous * 0.28)
+                    : instantaneous;
+            }
+            sGXHubDownloadLastSampleBytes = received;
+            sGXHubDownloadLastSampleTime = now;
+        }
+        else
+        {
+            sGXHubDownloadSpeedBytesPerSecond = 0.0;
+        }
+
         NSInteger percent = expected > 0 ? (NSInteger)(fraction * 100.0) : -1;
         if (percent >= 0 &&
             (sGXHubLastProgressPercent < 0 || percent >= sGXHubLastProgressPercent + 5 || percent == 100))
@@ -1051,6 +1083,112 @@ NSString *GXHubActiveDownloadProfile(void)
     return sGXHubDownloadEntry[@"profileId"];
 }
 
+NSDictionary<NSString *, id> *GXHubDownloadStatus(void)
+{
+    NSURLSessionDownloadTask *task = sGXHubDownloadTask;
+    NSDictionary<NSString *, id> *entry = sGXHubDownloadEntry;
+    if (task == nil || entry == nil)
+    {
+        return @{
+            @"busy": @NO,
+            @"profileId": @"",
+            @"paused": @NO,
+            @"received": @0,
+            @"total": @0,
+            @"fraction": @0.0,
+            @"speedBytesPerSecond": @0.0,
+            @"etaSeconds": @0.0,
+        };
+    }
+
+    long long received = task.countOfBytesReceived;
+    long long total = task.countOfBytesExpectedToReceive;
+    if (total <= 0)
+        total = [entry[@"packageBytes"] longLongValue];
+    double fraction = total > 0
+        ? MIN(1.0, MAX(0.0, (double)received / (double)total))
+        : 0.0;
+    double speed = sGXHubDownloadPaused ? 0.0 : MAX(0.0, sGXHubDownloadSpeedBytesPerSecond);
+    double eta = (speed > 1024.0 && total > received)
+        ? (double)(total - received) / speed
+        : 0.0;
+
+    return @{
+        @"busy": @YES,
+        @"profileId": entry[@"profileId"] ?: @"",
+        @"paused": @(sGXHubDownloadPaused),
+        @"received": @(MAX((long long)0, received)),
+        @"total": @(MAX((long long)0, total)),
+        @"fraction": @(fraction),
+        @"speedBytesPerSecond": @(speed),
+        @"etaSeconds": @(eta),
+    };
+}
+
+static BOOL GXHubDownloadProfileMatches(NSString *profileId, NSError **error)
+{
+    if (!GXHubDownloadBusy())
+    {
+        if (error != nullptr)
+            *error = GXHubError(89, @"There is no active download.");
+        return NO;
+    }
+    NSString *active = GXHubActiveDownloadProfile() ?: @"";
+    if (profileId.length > 0 && ![active isEqualToString:profileId])
+    {
+        if (error != nullptr)
+            *error = GXHubError(89, [NSString stringWithFormat:@"%@ is not the active download.", profileId]);
+        return NO;
+    }
+    return YES;
+}
+
+BOOL GXHubPauseDownload(NSString *profileId, NSError **error)
+{
+    if (!GXHubDownloadProfileMatches(profileId, error))
+        return NO;
+    if (!sGXHubDownloadPaused)
+    {
+        [sGXHubDownloadTask suspend];
+        sGXHubDownloadPaused = YES;
+        sGXHubDownloadSpeedBytesPerSecond = 0.0;
+        fprintf(stderr, "[HUB-DOWNLOAD] paused profile='%s'\n",
+                (GXHubActiveDownloadProfile() ?: @"unknown").UTF8String);
+        fflush(stderr);
+    }
+    return YES;
+}
+
+BOOL GXHubResumeDownload(NSString *profileId, NSError **error)
+{
+    if (!GXHubDownloadProfileMatches(profileId, error))
+        return NO;
+    if (sGXHubDownloadPaused)
+    {
+        sGXHubDownloadPaused = NO;
+        sGXHubDownloadLastSampleBytes = sGXHubDownloadTask.countOfBytesReceived;
+        sGXHubDownloadLastSampleTime = [NSDate timeIntervalSinceReferenceDate];
+        sGXHubDownloadSpeedBytesPerSecond = 0.0;
+        [sGXHubDownloadTask resume];
+        fprintf(stderr, "[HUB-DOWNLOAD] resumed profile='%s'\n",
+                (GXHubActiveDownloadProfile() ?: @"unknown").UTF8String);
+        fflush(stderr);
+    }
+    return YES;
+}
+
+BOOL GXHubCancelDownload(NSString *profileId, NSError **error)
+{
+    if (!GXHubDownloadProfileMatches(profileId, error))
+        return NO;
+    sGXHubDownloadCancelling = YES;
+    [sGXHubDownloadTask cancel];
+    fprintf(stderr, "[HUB-DOWNLOAD] cancelling profile='%s'\n",
+            (GXHubActiveDownloadProfile() ?: @"unknown").UTF8String);
+    fflush(stderr);
+    return YES;
+}
+
 void GXHubDownloadAndInstall(
     NSDictionary<NSString *, id> *catalogEntry,
     GXHubInstallCompletion completion)
@@ -1156,6 +1294,11 @@ void GXHubDownloadAndInstallWithProgress(
     sGXHubDownloadEntry = [catalogEntry copy];
     sGXHubDownloadProgress = [progress copy];
     sGXHubDownloadCompletion = [completion copy];
+    sGXHubDownloadPaused = NO;
+    sGXHubDownloadCancelling = NO;
+    sGXHubDownloadLastSampleBytes = 0;
+    sGXHubDownloadLastSampleTime = [NSDate timeIntervalSinceReferenceDate];
+    sGXHubDownloadSpeedBytesPerSecond = 0.0;
 
     fprintf(stderr,
             "[HUB-DOWNLOAD] start profile='%s' bytes=%llu url='%s'\n",
@@ -1169,7 +1312,16 @@ void GXHubDownloadAndInstallWithProgress(
                   completionHandler:^(NSURL *location, NSURLResponse *response, NSError *downloadError) {
         if (downloadError != nil)
         {
-            GXHubCompleteRemoteDownload(nil, downloadError);
+            if (sGXHubDownloadCancelling &&
+                [downloadError.domain isEqualToString:NSURLErrorDomain] &&
+                downloadError.code == NSURLErrorCancelled)
+            {
+                GXHubCompleteRemoteDownload(nil, GXHubError(189, @"Download cancelled."));
+            }
+            else
+            {
+                GXHubCompleteRemoteDownload(nil, downloadError);
+            }
             return;
         }
 

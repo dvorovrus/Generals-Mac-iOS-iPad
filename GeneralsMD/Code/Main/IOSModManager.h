@@ -46,6 +46,10 @@ FOUNDATION_EXPORT void GXHubRefreshRemoteCatalog(GXHubCatalogCompletion completi
 
 FOUNDATION_EXPORT BOOL GXHubDownloadBusy(void);
 FOUNDATION_EXPORT NSString * _Nullable GXHubActiveDownloadProfile(void);
+FOUNDATION_EXPORT NSDictionary<NSString *, id> *GXHubDownloadStatus(void);
+FOUNDATION_EXPORT BOOL GXHubPauseDownload(NSString *profileId, NSError **error);
+FOUNDATION_EXPORT BOOL GXHubResumeDownload(NSString *profileId, NSError **error);
+FOUNDATION_EXPORT BOOL GXHubCancelDownload(NSString *profileId, NSError **error);
 
 FOUNDATION_EXPORT void GXHubDownloadAndInstall(
     NSDictionary<NSString *, id> *catalogEntry,

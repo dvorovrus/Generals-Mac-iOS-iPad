@@ -4,6 +4,7 @@ let nativeRequestCounter = 0;
 let nativeState = null;
 let nativeDiagnosticsText = "";
 const homeDownloadState = new Map();
+const downloadMetrics = new Map();
 
 window.GeneralsXNative = {
   request(action, payload = {}, timeoutMs = 20000) {
@@ -90,6 +91,15 @@ function applyNativeState(state) {
     if (item.author) mod.author = item.author;
   });
 
+  if (state.download?.busy && state.download.profileId) {
+    const profileId = state.download.profileId;
+    downloadMetrics.set(profileId, {
+      ...downloadMetrics.get(profileId),
+      ...state.download
+    });
+    setHomeDownloadProgress(profileId, Number(state.download.fraction || 0), true);
+  }
+
   syncInstalledModCards();
   syncActiveModSourceLink();
   syncNativeSystemStatus();
@@ -141,13 +151,16 @@ async function syncNativeState() {
 }
 
 function updateNativeProgress(payload) {
-  const modId = payload.profileId;
-  const progress = document.querySelector(`[data-mod-progress="${modId}"]`);
-  const bar = progress?.querySelector("span");
-  const fraction = Math.max(0, Math.min(1, Number(payload.fraction || 0)));
-  if (progress) progress.style.display = "block";
-  if (bar) bar.style.width = `${Math.round(fraction * 100)}%`;
-  setHomeDownloadProgress(modId, fraction, true);
+  const profileId = payload.profileId;
+  if (!profileId) return;
+  const metrics = {
+    ...downloadMetrics.get(profileId),
+    ...payload,
+    busy: true
+  };
+  downloadMetrics.set(profileId, metrics);
+  setHomeDownloadProgress(profileId, Number(metrics.fraction || 0), true);
+  updateDownloadPanel(profileId);
 }
 
 function handleNativeEvent(name, payload) {
@@ -162,15 +175,26 @@ function handleNativeEvent(name, payload) {
   if (name === "installComplete") {
     const title = modCatalog.find(item => item.id === payload.profileId)?.title ||
       (payload.profileId === "online" ? "Zero Hour + Online" : payload.profileId);
-    setHomeDownloadProgress(payload.profileId, 1, true);
-    finishHomeDownload(payload.profileId, true);
+    downloadMetrics.delete(payload.profileId);
+    finishHomeDownload(payload.profileId, "complete");
     triggerHaptic("success");
     showToast(`${title} installed`);
+    syncNativeState().then(() => {
+      const installedCard = cardForProfileId(payload.profileId);
+      if (installedCard) setActiveCard(installedCard);
+    });
+    return;
+  }
+  if (name === "downloadCancelled") {
+    downloadMetrics.delete(payload.profileId);
+    finishHomeDownload(payload.profileId, "cancel");
+    showToast("Download cancelled");
     syncNativeState();
     return;
   }
   if (name === "installError") {
-    finishHomeDownload(payload.profileId, false);
+    downloadMetrics.delete(payload.profileId);
+    finishHomeDownload(payload.profileId, "error");
     showToast(payload.error || "Install failed");
     syncNativeState();
   }
@@ -191,6 +215,7 @@ const modalClose = document.querySelector("#modalClose");
 const modalTitle = document.querySelector("#modalTitle");
 const modalEyebrow = document.querySelector("#modalEyebrow");
 const modalBody = document.querySelector("#modalBody");
+const modalHeaderActions = document.querySelector("#modalHeaderActions");
 const modSourceLink = document.querySelector("#modSourceLink");
 const modesRail = document.querySelector(".modes");
 const addModCard = document.querySelector(".add-mod-card");
@@ -330,65 +355,31 @@ function cardForProfileId(profileId) {
   return cards.find(card => card.dataset.id === cardId) || null;
 }
 
-function ensureHomeDownloadUI(card) {
-  if (!card) return null;
-  let fill = card.querySelector(".mode-card__download-fill");
-  let percent = card.querySelector(".mode-card__download-percent");
-  if (!fill) {
-    fill = document.createElement("span");
-    fill.className = "mode-card__download-fill";
-    card.prepend(fill);
-  }
-  if (!percent) {
-    percent = document.createElement("span");
-    percent.className = "mode-card__download-percent";
-    card.append(percent);
-  }
-  return { fill, percent };
-}
-
 function setHomeDownloadProgress(profileId, fraction = 0, active = true) {
   const value = Math.max(0, Math.min(1, Number(fraction || 0)));
   homeDownloadState.set(profileId, { active, fraction: value });
   const card = cardForProfileId(profileId);
   if (!card) return;
-  const ui = ensureHomeDownloadUI(card);
   card.hidden = false;
   card.classList.toggle("is-downloading", active);
   card.classList.remove("is-download-error", "is-download-complete");
-  card.style.setProperty("--download-progress", `${Math.round(value * 100)}%`);
-  if (ui) {
-    ui.fill.style.width = `${Math.round(value * 100)}%`;
-    ui.percent.textContent = active ? `${Math.round(value * 100)}%` : "";
-  }
   updateModesOverflow();
 }
 
-function finishHomeDownload(profileId, ok) {
+function finishHomeDownload(profileId, outcome) {
   const card = cardForProfileId(profileId);
-  const state = homeDownloadState.get(profileId);
-  if (card) {
-    const ui = ensureHomeDownloadUI(card);
-    if (ok) {
-      card.style.setProperty("--download-progress", "100%");
-      if (ui) { ui.fill.style.width = "100%"; ui.percent.textContent = "100%"; }
-      card.classList.add("is-download-complete");
-      window.setTimeout(() => {
-        card.classList.remove("is-downloading", "is-download-complete");
-        if (ui) ui.percent.textContent = "";
-        homeDownloadState.delete(profileId);
-        syncInstalledModCards();
-      }, 700);
-    } else {
-      card.classList.remove("is-downloading");
-      card.classList.add("is-download-error");
-      if (ui) ui.percent.textContent = "";
-      homeDownloadState.delete(profileId);
-      window.setTimeout(() => { card.classList.remove("is-download-error"); syncInstalledModCards(); }, 900);
-    }
-  } else if (state) {
-    homeDownloadState.delete(profileId);
+  homeDownloadState.delete(profileId);
+  if (!card) return;
+
+  card.classList.remove("is-downloading", "is-download-complete", "is-download-error");
+  if (outcome === "complete") {
+    card.classList.add("is-download-complete");
+    window.setTimeout(() => card.classList.remove("is-download-complete"), 650);
+  } else if (outcome === "error") {
+    card.classList.add("is-download-error");
+    window.setTimeout(() => card.classList.remove("is-download-error"), 850);
   }
+  syncInstalledModCards();
 }
 
 function updateModesOverflow() {
@@ -570,15 +561,25 @@ playButton.addEventListener("click", async () => {
   if (!installed || updateAvailable) {
     try {
       if (profile?.packageURL) {
+        downloadMetrics.set(profileId, {
+          busy: true,
+          profileId,
+          paused: false,
+          received: 0,
+          total: Number(profile.packageBytes || 0),
+          fraction: 0
+        });
         setHomeDownloadProgress(profileId, 0, true);
         showToast(`${updateAvailable ? "Updating" : "Downloading"} ${activeCard.dataset.title}…`);
         await nativeRequest("install", { profileId });
+        await syncNativeState();
       } else {
         await nativeRequest("chooseFile", { profileId });
         showToast(`Choose the ${activeCard.dataset.title} package`);
       }
     } catch (error) {
-      finishHomeDownload(profileId, false);
+      downloadMetrics.delete(profileId);
+      finishHomeDownload(profileId, "error");
       showToast(error.message || "Install failed");
     }
     return;
@@ -603,6 +604,7 @@ detailsButton.addEventListener("click", () => {
 
 async function openPanel(type) {
   window.clearTimeout(modalCloseTimer);
+  if (modalHeaderActions) modalHeaderActions.innerHTML = "";
   modalBackdrop.hidden = false;
   window.requestAnimationFrame(() => modalBackdrop.classList.add("is-visible"));
 
@@ -661,32 +663,98 @@ function humanSize(bytes) {
   return `${Math.round(value / 1024)} KB`;
 }
 
+function formatBytesCompact(bytes) {
+  const value = Number(bytes || 0);
+  if (!value) return "";
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GB`;
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(0)} MB`;
+  return `${Math.max(1, Math.round(value / 1024))} KB`;
+}
+
+function formatSpeed(bytesPerSecond) {
+  const value = Number(bytesPerSecond || 0);
+  if (value < 1024) return "";
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(value >= 10 * 1024 ** 2 ? 1 : 2)} MB/s`;
+  return `${(value / 1024).toFixed(0)} KB/s`;
+}
+
+function formatEta(seconds) {
+  const value = Math.max(0, Math.round(Number(seconds || 0)));
+  if (!value || value > 24 * 60 * 60) return "";
+  if (value < 60) return `~${value}s`;
+  if (value < 3600) return `~${Math.ceil(value / 60)}m`;
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.ceil((value % 3600) / 60);
+  return `~${hours}h ${minutes}m`;
+}
+
+function currentDownloadMetrics(profileId) {
+  if (downloadMetrics.has(profileId)) return downloadMetrics.get(profileId);
+  if (nativeState?.download?.busy && nativeState.download.profileId === profileId) {
+    return nativeState.download;
+  }
+  return null;
+}
+
+function downloadStatusText(profileId) {
+  const metrics = currentDownloadMetrics(profileId);
+  if (!metrics) return "";
+  const parts = [];
+  const percent = Math.round(Math.max(0, Math.min(1, Number(metrics.fraction || 0))) * 100);
+  parts.push(metrics.paused ? `Paused · ${percent}%` : `${percent}%`);
+  const received = formatBytesCompact(metrics.received);
+  const total = formatBytesCompact(metrics.total);
+  if (received && total) parts.push(`${received} / ${total}`);
+  else if (received) parts.push(received);
+  const speed = formatSpeed(metrics.speedBytesPerSecond);
+  if (!metrics.paused && speed) parts.push(speed);
+  const eta = formatEta(metrics.etaSeconds);
+  if (!metrics.paused && eta) parts.push(eta);
+  return parts.join(" · ");
+}
+
+function modVersionSummary(mod) {
+  const nativeMod = nativeModState(mod.id);
+  const installed = isModInstalled(mod.id);
+  const current = nativeMod?.installedVersion || mod.installedVersion || "";
+  const available = nativeMod?.version || mod.version || "";
+  const updateAvailable = Boolean(nativeMod?.updateAvailable || mod.updateAvailable) &&
+    Boolean(available) && available !== current;
+
+  if (!installed) {
+    return `
+      <div class="mod-version-summary">
+        <span><em>Version</em><strong>${available || "Unknown"}</strong></span>
+        ${mod.packageBytes ? `<span><em>Download</em><strong>${humanSize(mod.packageBytes)}</strong></span>` : ""}
+      </div>`;
+  }
+
+  return `
+    <div class="mod-version-summary">
+      <span><em>Current</em><strong>${current || "Unknown"}</strong></span>
+      ${updateAvailable ? `<span class="has-update"><em>New</em><strong>${available}</strong></span>` : ""}
+    </div>`;
+}
+
 function modInstallActions(mod) {
   const nativeMod = nativeModState(mod.id);
   const installed = isModInstalled(mod.id);
+  const download = currentDownloadMetrics(mod.id);
+  const activeDownload = Boolean(download?.busy);
   const busy = Boolean(nativeState?.download?.busy);
-  const activeDownload = nativeState?.download?.profileId === mod.id;
-  const updateAvailable = Boolean(nativeMod?.updateAvailable || mod.updateAvailable);
+  const updateAvailable = Boolean(nativeMod?.updateAvailable || mod.updateAvailable) &&
+    Boolean(nativeMod?.version || mod.version) &&
+    (nativeMod?.version || mod.version) !== (nativeMod?.installedVersion || mod.installedVersion || "");
 
-  const progress = `
-    <div class="mod-download-progress" data-mod-progress="${mod.id}" style="${activeDownload ? "display:block" : "display:none"}"><span></span></div>
-  `;
+  if (activeDownload) return "";
 
   if (installed) {
     return `
-      <div class="mod-installed">
-        <svg class="lucide lucide-circle-check" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="m9 12 2 2 4-4"/>
-        </svg>
-        ${updateAvailable ? `Installed ${mod.installedVersion || ""} · update ${mod.version || ""}` : `Installed ${mod.installedVersion || mod.version || ""}`}
-      </div>
       ${updateAvailable ? `
         <button type="button" class="mod-install-button mod-install-button--primary" data-mod-download="${mod.id}" ${busy ? "disabled" : ""}>
           Update
         </button>` : ""}
       <button type="button" class="mod-install-button" data-mod-remove="${mod.id}" ${busy ? "disabled" : ""}>Remove</button>
-      ${progress}
     `;
   }
 
@@ -696,7 +764,7 @@ function modInstallActions(mod) {
         <path d="M12 13v8M8 17l4 4 4-4"/>
         <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
       </svg>
-      ${activeDownload ? "Downloading…" : "Download"}
+      Download
     </button>
     <button type="button" class="mod-install-button" data-mod-file="${mod.id}" ${busy ? "disabled" : ""}>
       <svg class="lucide lucide-file-up" viewBox="0 0 24 24" aria-hidden="true">
@@ -707,8 +775,43 @@ function modInstallActions(mod) {
       Choose File
     </button>
     <input class="mod-file-input" type="file" data-mod-file-input="${mod.id}">
-    ${progress}
   `;
+}
+
+function modDownloadPanel(mod) {
+  const metrics = currentDownloadMetrics(mod.id);
+  if (!metrics?.busy) return "";
+  const fraction = Math.max(0, Math.min(1, Number(metrics.fraction || 0)));
+  return `
+    <div class="mod-download-panel" data-mod-progress="${mod.id}">
+      <div class="mod-download-track" aria-label="Download progress">
+        <span style="width:${Math.round(fraction * 100)}%"></span>
+      </div>
+      <div class="mod-download-status" data-download-status="${mod.id}">${downloadStatusText(mod.id)}</div>
+      <div class="mod-download-controls">
+        <button type="button" class="mod-download-control" data-download-toggle="${mod.id}">
+          ${metrics.paused ? "Resume" : "Pause"}
+        </button>
+        <button type="button" class="mod-download-control mod-download-control--cancel" data-download-cancel="${mod.id}">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function updateDownloadPanel(profileId) {
+  const metrics = currentDownloadMetrics(profileId);
+  const panel = document.querySelector(`[data-mod-progress="${profileId}"]`);
+  if (!panel || !metrics) {
+    if (!modalBackdrop.hidden && modalTitle.textContent === "Add Mod") renderModLibrary();
+    return;
+  }
+  const bar = panel.querySelector(".mod-download-track span");
+  const status = panel.querySelector(`[data-download-status="${profileId}"]`);
+  const toggle = panel.querySelector(`[data-download-toggle="${profileId}"]`);
+  const fraction = Math.max(0, Math.min(1, Number(metrics.fraction || 0)));
+  if (bar) bar.style.width = `${Math.round(fraction * 100)}%`;
+  if (status) status.textContent = downloadStatusText(profileId);
+  if (toggle) toggle.textContent = metrics.paused ? "Resume" : "Pause";
 }
 
 function renderModLibrary() {
@@ -724,22 +827,26 @@ function renderModLibrary() {
       <p class="mod-library__intro">Install or update profiles from the Generals X catalog. Only one large package is downloaded at a time.</p>
       ${modCatalog.map(mod => `
         <div class="mod-library-card" data-mod-card="${mod.id}">
-          <div class="mod-library-card__copy">
-            <strong>${mod.title}</strong>
-            <span>${mod.description}</span>
-            <span class="mod-version-line">${mod.version ? `Version ${mod.version}` : ""}${mod.packageBytes ? ` · ${humanSize(mod.packageBytes)}` : ""}${mod.fallbackChannel ? ` · ${mod.fallbackChannel.toUpperCase()} package fallback` : ""}</span>
-            <a class="mod-author-link" href="${mod.moddbUrl}" target="_blank" rel="noopener noreferrer">
-              <svg class="lucide lucide-external-link" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M15 3h6v6"/>
-                <path d="M10 14 21 3"/>
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-              </svg>
-              Original mod by ${mod.author} · ModDB
-            </a>
+          <div class="mod-library-card__main">
+            <div class="mod-library-card__copy">
+              <strong>${mod.title}</strong>
+              <span>${mod.description}</span>
+              ${modVersionSummary(mod)}
+              ${mod.fallbackChannel ? `<span class="mod-channel-note">${mod.fallbackChannel.toUpperCase()} package fallback</span>` : ""}
+              <a class="mod-author-link" href="${mod.moddbUrl}" target="_blank" rel="noopener noreferrer">
+                <svg class="lucide lucide-external-link" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M15 3h6v6"/>
+                  <path d="M10 14 21 3"/>
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                </svg>
+                Original mod by ${mod.author} · ModDB
+              </a>
+            </div>
+            <div class="mod-library-card__actions">
+              ${modInstallActions(mod)}
+            </div>
           </div>
-          <div class="mod-library-card__actions">
-            ${modInstallActions(mod)}
-          </div>
+          ${modDownloadPanel(mod)}
         </div>
       `).join("")}
     </div>
@@ -760,6 +867,37 @@ function renderModLibrary() {
         showToast("Mod removed");
       } catch (error) {
         showToast(error.message || "Remove failed");
+      }
+    });
+  });
+
+  modalBody.querySelectorAll("[data-download-toggle]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const profileId = button.dataset.downloadToggle;
+      const metrics = currentDownloadMetrics(profileId);
+      if (!metrics) return;
+      try {
+        const action = metrics.paused ? "resumeDownload" : "pauseDownload";
+        applyNativeState(await nativeRequest(action, { profileId }));
+        const latest = nativeState?.download;
+        if (latest?.profileId === profileId) downloadMetrics.set(profileId, latest);
+        updateDownloadPanel(profileId);
+        showToast(metrics.paused ? "Download resumed" : "Download paused");
+      } catch (error) {
+        showToast(error.message || "Download control failed");
+      }
+    });
+  });
+
+  modalBody.querySelectorAll("[data-download-cancel]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const profileId = button.dataset.downloadCancel;
+      try {
+        await nativeRequest("cancelDownload", { profileId });
+        button.disabled = true;
+        showToast("Cancelling download…");
+      } catch (error) {
+        showToast(error.message || "Cancel failed");
       }
     });
   });
@@ -812,13 +950,16 @@ async function installNativeMod(modId, button) {
   if (!mod) return;
 
   button.disabled = true;
+  downloadMetrics.set(modId, { busy: true, profileId: modId, paused: false, received: 0, total: mod.packageBytes || 0, fraction: 0 });
   setHomeDownloadProgress(modId, 0, true);
   const fallbackNote = mod.fallbackChannel ? ` · using ${mod.fallbackChannel.toUpperCase()} package` : "";
   showToast(`Downloading ${mod.title}${fallbackNote}…`);
   try {
     await nativeRequest("install", { profileId: modId });
+    await syncNativeState();
   } catch (error) {
-    finishHomeDownload(modId, false);
+    downloadMetrics.delete(modId);
+    finishHomeDownload(modId, "error");
     button.disabled = false;
     showToast(error.message || "Download failed");
   }
@@ -1093,12 +1234,14 @@ function renderSettings(profileId = "zero-hour-online") {
     <div class="settings-content">
       ${content}
     </div>
-
-    <div class="settings-actions">
-      <button type="button" class="settings-action settings-action--primary" data-settings-save>Save</button>
-      <button type="button" class="settings-action" data-settings-reset>Reset defaults</button>
-    </div>
   `;
+
+  if (modalHeaderActions) {
+    modalHeaderActions.innerHTML = `
+      <button type="button" class="page-header-action" data-settings-reset>Reset</button>
+      <button type="button" class="page-header-action page-header-action--primary" data-settings-save>Save</button>
+    `;
+  }
 
   modalBody.querySelectorAll(".segment-control button").forEach(button => {
     button.addEventListener("click", () => {
@@ -1129,7 +1272,7 @@ function renderSettings(profileId = "zero-hour-online") {
     });
   });
 
-  modalBody.querySelector("[data-settings-save]").addEventListener("click", async () => {
+  modalHeaderActions?.querySelector("[data-settings-save]")?.addEventListener("click", async () => {
     try {
       if (hasNativeBridge) {
         await nativeRequest("settingsSave", { profileId, values: settingsState[scope] });
@@ -1143,22 +1286,41 @@ function renderSettings(profileId = "zero-hour-online") {
     }
   });
 
-  modalBody.querySelector("[data-settings-reset]").addEventListener("click", () => {
+  modalHeaderActions?.querySelector("[data-settings-reset]")?.addEventListener("click", () => {
     settingsState[scope] = { ...settingsDefaults[scope] };
     renderSettings(profileId);
     showToast("Default settings loaded");
   });
 }
 
+const backgroundImageCache = new Map();
+
+function preloadBackgroundSlide(src) {
+  if (backgroundImageCache.has(src)) return backgroundImageCache.get(src);
+  const promise = new Promise(resolve => {
+    const image = new Image();
+    let settled = false;
+    const finish = async () => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (typeof image.decode === "function") await image.decode();
+      } catch {
+        // A completed load is still usable even when decode() rejects.
+      }
+      resolve(src);
+    };
+    image.onload = finish;
+    image.onerror = finish;
+    image.src = src;
+    if (image.complete) finish();
+  });
+  backgroundImageCache.set(src, promise);
+  return promise;
+}
+
 function preloadBackgroundSlides() {
-  return Promise.all(
-    backgroundSlides.map(src => new Promise(resolve => {
-      const image = new Image();
-      image.onload = () => resolve(src);
-      image.onerror = () => resolve(src);
-      image.src = src;
-    }))
-  );
+  return Promise.all(backgroundSlides.map(preloadBackgroundSlide));
 }
 
 function randomBackgroundIndex(excludeIndex = -1) {
@@ -1175,10 +1337,11 @@ function scheduleNextBackgroundSlide() {
   backgroundSlideTimer = window.setTimeout(showNextBackgroundSlide, delay);
 }
 
-function showNextBackgroundSlide() {
+async function showNextBackgroundSlide() {
   if (!backgroundPrimary || !backgroundSecondary) return;
 
   const nextIndex = randomBackgroundIndex(activeBackgroundIndex);
+  await preloadBackgroundSlide(backgroundSlides[nextIndex]);
   const nextLayerIndex = activeBackgroundLayer === 0 ? 1 : 0;
   const currentLayer = backgroundLayers[activeBackgroundLayer];
   const nextLayer = backgroundLayers[nextLayerIndex];
@@ -1223,11 +1386,7 @@ async function startBackgroundMotion() {
 
   activeBackgroundIndex = randomBackgroundIndex();
   const firstSource = backgroundSlides[activeBackgroundIndex];
-  await new Promise(resolve => {
-    const image = new Image();
-    image.onload = image.onerror = resolve;
-    image.src = firstSource;
-  });
+  await preloadBackgroundSlide(firstSource);
   backgroundPrimary.style.backgroundImage = 'url("' + firstSource + '")';
   backgroundPrimary.style.opacity = "1";
   backgroundSecondary.style.opacity = "0";
@@ -1258,18 +1417,15 @@ async function startBackgroundMotion() {
     parallaxX += (targetX - parallaxX) * 0.014;
     parallaxY += (targetY - parallaxY) * 0.014;
 
-    // Keep motion bounded so a non-repeating cover image can never drift far
-    // enough to expose an edge. The overscanned background layer absorbs this
-    // slow cinematic movement plus the small pointer parallax.
-    const driftX = Math.sin(elapsed / 18000) * 24;
-    const driftY = Math.cos(elapsed / 22000) * 14;
-    const waveX = Math.sin(elapsed / 7600) * 8;
-    const waveY = Math.cos(elapsed / 9200) * 4;
+    const driftX = elapsed * 0.0088;
+    const driftY = elapsed * 0.0034;
+    const waveX = Math.sin(elapsed / 7600) * 9;
+    const waveY = Math.cos(elapsed / 9200) * 5;
 
     const primaryX = driftX + waveX + parallaxX;
     const primaryY = driftY + waveY + parallaxY;
-    const secondaryX = driftX * 0.84 + waveX * 0.82 + parallaxX * 0.8 + 20;
-    const secondaryY = driftY * 0.84 + waveY * 0.82 + parallaxY * 0.8 + 12;
+    const secondaryX = driftX + waveX * 0.82 + parallaxX * 0.8 + 34;
+    const secondaryY = driftY + waveY * 0.82 + parallaxY * 0.8 + 18;
 
     backgroundPrimary.style.backgroundPosition =
       primaryX + "px " + primaryY + "px";
