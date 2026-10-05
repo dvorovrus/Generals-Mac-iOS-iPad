@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 3,
+  "catalogVersion": 4,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -8,10 +8,11 @@
     "channels": {
       "stable": {
         "version": "0.1.0",
-        "build": 1,
-        "packageURL": "",
-        "sha256": "",
-        "releaseNotes": "Current stable Hub build."
+        "build": 37289183725,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/0.1.0/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "16dfa7b2714a33ee1c14c32208a7af9b99162913e9a2933e55e47a8ad0ea6f35",
+        "packageBytes": 2113794581,
+        "releaseNotes": "Online packet/map-transfer fixes; Stable/Beta Mods & Updates; automatic update checks."
       },
       "beta": {
         "version": "0.1.0",
@@ -70,5 +71,5 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T09:47:44Z"
+  "updatedAt": "2026-10-05T09:52:04Z"
 }
