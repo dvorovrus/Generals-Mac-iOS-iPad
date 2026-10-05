@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 26,
+  "catalogVersion": 31,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.6",
-        "build": 37355226710,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.6/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "3271039148265da967a1def354f50b323d1fb2d276b0b7da507f416f56266ea8",
-        "packageBytes": 45445130,
-        "releaseNotes": "Launcher interaction refresh: top notifications, full-screen internal pages, native iPad haptics, active profile emphasis, and restored stacked mod versions."
+        "version": "1.4.7",
+        "build": 37360513513,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.7/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "c066d44f26bcc4a783fb5300e979ddc8be4899641fed5c9a213efe5c2bc9574a",
+        "packageBytes": 49320084,
+        "releaseNotes": "Launcher polish and reliability: new app icon, stable fallback for missing beta mod packages, seamless non-repeating background, fixed hero controls and profile-card borders, unified full-width Web settings/diagnostics/mod pages, and animated home-card download progress with percentage."
       },
       "beta": {
         "version": "0.1.0",
@@ -94,17 +94,17 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T18:32:22Z",
+  "updatedAt": "2026-10-05T19:19:34Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.2.0-web.5",
+      "version": "0.2.0-web.6",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
-      "bridgeSchema": 4
+      "bridgeSchema": 5
     },
     "beta": {
-      "version": "0.2.0-web.5",
+      "version": "0.2.0-web.6",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
-      "bridgeSchema": 4
+      "bridgeSchema": 5
     }
   }
 }
