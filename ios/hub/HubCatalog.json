@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 23,
+  "catalogVersion": 26,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.5",
-        "build": 37326669954,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.5/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "6433936668dac75953e159628a0ade99f48f6956fbf3ff93da78e89fff99f211",
-        "packageBytes": 45441369,
-        "releaseNotes": "Fix Enhanced/Contra startup crash by excluding Generals Online community datapacks from the recursive primary BIG scan for explicit mod profiles. Online keeps the datapack enabled."
+        "version": "1.4.6",
+        "build": 37355226710,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.6/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "3271039148265da967a1def354f50b323d1fb2d276b0b7da507f416f56266ea8",
+        "packageBytes": 45445130,
+        "releaseNotes": "Launcher interaction refresh: top notifications, full-screen internal pages, native iPad haptics, active profile emphasis, and restored stacked mod versions."
       },
       "beta": {
         "version": "0.1.0",
@@ -94,17 +94,17 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T18:10:30Z",
+  "updatedAt": "2026-10-05T18:32:22Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.2.0-web.4",
+      "version": "0.2.0-web.5",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
-      "bridgeSchema": 3
+      "bridgeSchema": 4
     },
     "beta": {
-      "version": "0.2.0-web.4",
+      "version": "0.2.0-web.5",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
-      "bridgeSchema": 3
+      "bridgeSchema": 4
     }
   }
 }
