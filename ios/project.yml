@@ -31,7 +31,8 @@ targets:
     info:
       path: Stub/Info.plist
       properties:
-        CFBundleDisplayName: Generals ZH
+        CFBundleDisplayName: Generals X
+        CFBundleName: Generals X
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "10"
         UIFileSharingEnabled: true
