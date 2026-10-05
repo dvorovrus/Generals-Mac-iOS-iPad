@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 21,
+  "catalogVersion": 23,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -94,15 +94,15 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T14:51:15Z",
+  "updatedAt": "2026-10-05T18:10:30Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.2.0-web.3",
+      "version": "0.2.0-web.4",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
       "bridgeSchema": 3
     },
     "beta": {
-      "version": "0.2.0-web.3",
+      "version": "0.2.0-web.4",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
       "bridgeSchema": 3
     }
