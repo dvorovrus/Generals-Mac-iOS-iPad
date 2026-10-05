@@ -660,8 +660,8 @@ Bool StdBIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString fi
 		if (excludeOnlineDataPacks != nullptr && excludeOnlineDataPacks[0] != '\0' && strcmp(excludeOnlineDataPacks, "0") != 0) {
 			AsciiString archivePath = *it;
 			archivePath.toLower();
-			if (archivePath.find("generalsonlinegamedata/") != nullptr ||
-			    archivePath.find("generalsonlinegamedata\\") != nullptr) {
+			if (strstr(archivePath.str(), "generalsonlinegamedata/") != nullptr ||
+			    strstr(archivePath.str(), "generalsonlinegamedata\\") != nullptr) {
 				fprintf(stderr,
 				        "[HUB-DATAPACK] excluded archive='%s' from primary asset scan\n",
 				        it->str());
