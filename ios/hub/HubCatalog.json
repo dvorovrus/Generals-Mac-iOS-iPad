@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 1,
+  "catalogVersion": 3,
   "defaultChannel": "stable",
-  "remoteCatalogURL": "https://raw.githubusercontent.com/dvorovrus/Generals-Mac-iOS-iPad/feature/generals-hub-online/ios/hub/HubCatalog.json",
+  "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
@@ -30,11 +30,11 @@
       "channels": {
         "stable": {
           "version": "1.0+2024-03-28",
-          "packageURL": "",
+          "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/enhanced/stable/1.0+2024-03-28.gxmod",
           "sha256": "b85b8f598338d20bad89a545a7ac1dd6780d335725ce02876bf6641dacb4e564",
           "packageBytes": 3459215360,
           "minHubVersion": "0.1.0",
-          "releaseNotes": "Enhanced v1.0 + 28/03/2024 patch."
+          "releaseNotes": "Zero Hour Enhanced v1.0 + 28/03/2024 patch."
         },
         "beta": {
           "version": "1.0+2024-03-28",
@@ -53,7 +53,7 @@
       "channels": {
         "stable": {
           "version": "Beta2+Patch1",
-          "packageURL": "",
+          "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/contra-x/stable/Beta2+Patch1.gxmod",
           "sha256": "8734a960af61a3565992e470ac916ad562f14a992f3ae5dae89f74dbd7a94433",
           "packageBytes": 2855444480,
           "minHubVersion": "0.1.0",
@@ -69,5 +69,6 @@
         }
       }
     }
-  ]
+  ],
+  "updatedAt": "2026-10-05T09:47:44Z"
 }

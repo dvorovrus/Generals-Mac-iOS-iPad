@@ -95,7 +95,7 @@ try {
     Write-Host "Public URL OK: $probeUrl" -ForegroundColor Green
 }
 finally {
-    & $Aws s3 rm "s3://$Bucket/$probeName" --endpoint-url $Endpoint --region auto --profile $AwsProfile --no-progress | Out-Null
+    & $Aws s3 rm "s3://$Bucket/$probeName" --endpoint-url $Endpoint --region auto --profile $AwsProfile | Out-Null
     Remove-Item $probeFile -Force -ErrorAction SilentlyContinue
 }
 
