@@ -515,6 +515,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 
 @interface GXProfileLauncherViewController : UIViewController <UIDocumentPickerDelegate>
 @property(nonatomic, strong) UIStackView *menuStack;
+@property(nonatomic, strong) UIButton *modsButton;
 @property(nonatomic, strong) UIView *modsView;
 @property(nonatomic, strong) UIStackView *modsListStack;
 @property(nonatomic, strong) UILabel *modsStatus;
@@ -616,6 +617,12 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     [self buildMods];
     [self buildSettings];
     [self buildDiagnostics];
+
+    if (BundledAutoLaunchProfile().length == 0)
+    {
+        [self updateModsUpdatesBadge];
+        [self refreshHubCatalog];
+    }
 }
 
 - (void)handleMemoryWarning:(NSNotification *)notification
@@ -648,6 +655,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     UIButton *settings = MakeButton(@"Hub Settings", self, @selector(showSettings));
     UIButton *diagnostics = MakeButton(@"Diagnostics", self, @selector(showDiagnostics));
     UIButton *mods = MakeButton(@"Mods & Updates", self, @selector(showMods));
+    self.modsButton = mods;
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
     diagnostics.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
     mods.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
@@ -807,8 +815,61 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     [self reloadModsList];
 }
 
+- (NSInteger)availableHubUpdateCount
+{
+    NSInteger count = 0;
+    NSString *currentHubVersion = [NSString stringWithUTF8String:GX_PROJECT_VERSION] ?: @"0.0.0";
+    NSInteger currentHubBuild = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] integerValue];
+
+    NSDictionary *hubRelease = GXHubHubReleaseForCurrentChannel();
+    if (hubRelease != nil)
+    {
+        NSString *availableHubVersion = hubRelease[@"version"] ?: currentHubVersion;
+        NSInteger availableHubBuild = [hubRelease[@"build"] integerValue];
+        NSString *hubURL = hubRelease[@"packageURL"];
+        BOOL hubUpdateAvailable = HubVersionIsNewer(currentHubVersion, availableHubVersion) ||
+            ([currentHubVersion isEqualToString:availableHubVersion] && availableHubBuild > currentHubBuild);
+        if (hubUpdateAvailable && hubURL.length > 0)
+            ++count;
+    }
+
+    for (NSDictionary<NSString *, id> *entry in GXHubCatalogEntries())
+    {
+        NSString *profileId = entry[@"profileId"];
+        NSDictionary *installed = profileId.length > 0 ? GXHubInstalledManifest(profileId) : nil;
+        NSString *installedVersion = installed[@"version"];
+        NSString *availableVersion = entry[@"version"];
+        NSString *packageURL = entry[@"packageURL"];
+        NSString *minimumHub = entry[@"minHubVersion"];
+        if (installedVersion.length > 0 &&
+            availableVersion.length > 0 &&
+            packageURL.length > 0 &&
+            HubVersionAtLeast(currentHubVersion, minimumHub) &&
+            HubVersionDiffers(installedVersion, availableVersion))
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+- (void)updateModsUpdatesBadge
+{
+    if (self.modsButton == nil)
+        return;
+    NSInteger count = [self availableHubUpdateCount];
+    NSString *title = count > 0
+        ? [NSString stringWithFormat:@"Mods & Updates · %ld", (long)count]
+        : @"Mods & Updates";
+    [self.modsButton setTitle:title forState:UIControlStateNormal];
+    self.modsButton.accessibilityLabel = count > 0
+        ? [NSString stringWithFormat:@"Mods and Updates, %ld updates available", (long)count]
+        : @"Mods and Updates";
+}
+
 - (void)reloadModsList
 {
+    [self updateModsUpdatesBadge];
     for (UIView *view in [self.modsListStack.arrangedSubviews copy])
     {
         [self.modsListStack removeArrangedSubview:view];
@@ -984,6 +1045,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.settingsView.hidden = YES;
 
     [self reloadModsList];
+    [self updateModsUpdatesBadge];
 }
 
 - (void)showMods
