@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 13,
+  "catalogVersion": 16,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.1",
-        "build": 37306183589,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.1/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "9ffbac21033cac0e0d99138488329c486262215d89e86561565b40caccc52283",
-        "packageBytes": 45436833,
-        "releaseNotes": "Lightweight Generals Hub shell with downloadable Zero Hour + Online base content and bridge schema 2."
+        "version": "1.4.2",
+        "build": 37314156047,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.2/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "a1a75d809c2c37ff7c4385fc0f4baead350e84d09267f9159078c6005132440b",
+        "packageBytes": 45439618,
+        "releaseNotes": "Disable launcher zoom; isolate Generals Online community patch from Enhanced/Contra; add Online math/object CRC and replay diagnostics."
       },
       "beta": {
         "version": "0.1.0",
@@ -94,15 +94,15 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T12:19:29Z",
+  "updatedAt": "2026-10-05T13:19:59Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.2.0-web.1",
+      "version": "0.2.0-web.2",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
       "bridgeSchema": 2
     },
     "beta": {
-      "version": "0.2.0-web.1",
+      "version": "0.2.0-web.2",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
       "bridgeSchema": 2
     }
