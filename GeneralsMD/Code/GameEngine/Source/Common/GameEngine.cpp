@@ -1077,7 +1077,7 @@ void GameEngine::resetSubsystems()
 {
 	// TheSuperHackers @fix xezon 09/06/2025 Reset GameLogic first to purge all world objects early.
 	// This avoids potentially catastrophic issues when objects and subsystems have cross dependencies.
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	malloc_statistics_t gameLogicBeforeStats = {};
 	malloc_zone_statistics(nullptr, &gameLogicBeforeStats);
 	const double gameLogicBeforeMB = (double)gameLogicBeforeStats.size_in_use / (1024.0 * 1024.0);
@@ -1085,7 +1085,7 @@ void GameEngine::resetSubsystems()
 
 	TheGameLogic->reset();
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	malloc_statistics_t gameLogicAfterStats = {};
 	malloc_zone_statistics(nullptr, &gameLogicAfterStats);
 	const double gameLogicAfterMB = (double)gameLogicAfterStats.size_in_use / (1024.0 * 1024.0);
@@ -1097,20 +1097,11 @@ void GameEngine::resetSubsystems()
 	TheSubsystemList->resetAll();
 
 #if defined(__APPLE__)
-	malloc_statistics_t trimBeforeStats = {};
-	malloc_zone_statistics(nullptr, &trimBeforeStats);
-	Int poolBytes = 0;
+	// Keep the actual post-match memory cleanup, but avoid production allocator
+	// sampling/logging around it. Those probes caused visible transition hitches.
 	if (TheMemoryPoolFactory != nullptr)
-		poolBytes = TheMemoryPoolFactory->releaseEmpties();
-	const size_t mallocBytes = malloc_zone_pressure_relief(nullptr, 0);
-	malloc_statistics_t trimAfterStats = {};
-	malloc_zone_statistics(nullptr, &trimAfterStats);
-	fprintf(stderr,
-	        "[MEMORY-GC] phase=post-reset beforeMB=%.1f afterMB=%.1f poolReleasedMB=%.1f mallocReliefMB=%.1f\n",
-	        (double)trimBeforeStats.size_in_use / (1024.0 * 1024.0),
-	        (double)trimAfterStats.size_in_use / (1024.0 * 1024.0),
-	        (double)poolBytes / (1024.0 * 1024.0),
-	        (double)mallocBytes / (1024.0 * 1024.0));
+		TheMemoryPoolFactory->releaseEmpties();
+	malloc_zone_pressure_relief(nullptr, 0);
 #endif
 }
 
@@ -1241,7 +1232,8 @@ void GameEngine::update()
 			TheScriptEngine->UPDATE();
 		}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
+		// Opt-in only: allocator/pool scans are intentionally disabled in production.
 		// Long iOS matches can be terminated by memory pressure without a useful
 		// in-process crash stack. Keep a lightweight footprint trail in stderr so
 		// retained session logs show whether memory is climbing before an exit.

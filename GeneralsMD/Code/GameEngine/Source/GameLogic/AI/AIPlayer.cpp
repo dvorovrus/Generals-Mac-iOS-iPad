@@ -64,6 +64,13 @@
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/PartitionManager.h"
 
+#if defined(GENERALSX_HEAVY_DIAGNOSTICS)
+#define GX_HEAVY_DIAG_PRINT(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define GX_HEAVY_DIAG_PRINT(...) ((void)0)
+#endif
+
+
 
 #define SUPPLY_CENTER_CLOSE_DIST (20*PATHFIND_CELL_SIZE_F)
 
@@ -653,7 +660,7 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 	if (isSkirmishAI() && s_stockBuildResultDiagBudget > 0)
 	{
 		--s_stockBuildResultDiagBudget;
-		fprintf(stderr,
+		GX_HEAVY_DIAG_PRINT(
 		        "[AI-STOCK-BUILD] template='%s' dozer=%u commandSet='%s' result=%s objectID=%u\n",
 		        bldgPlan->getName().str(),
 		        (unsigned)dozer->getID(),
@@ -1805,14 +1812,14 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 	if (traceFactories)
 		--factoryTraceBudget;
 	if (traceUpgrade)
-		fprintf(stderr,
+		GX_HEAVY_DIAG_PRINT(
 		        "[AI-UPGRADE] frame=%u playerIndex=%d upgrade='%s' stage=request\n",
 		        (unsigned)TheGameLogic->getFrame(), (int)m_player->getPlayerIndex(), upgrade.str());
 
 	const UpgradeTemplate *curUpgrade = TheUpgradeCenter->findUpgrade(upgrade);
 	if (curUpgrade==nullptr) {
 		if (traceUpgrade)
-			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=missing-template\n", upgrade.str());
+			GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] upgrade='%s' result=missing-template\n", upgrade.str());
 		AsciiString msg = "Upgrade ";
 		msg.concat(upgrade);
 		msg.concat(" does not exist.  Ignoring request.");
@@ -1821,7 +1828,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 	}
  	if (curUpgrade->getUpgradeType()==UPGRADE_TYPE_OBJECT) {
 		if (traceUpgrade)
-			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=object-upgrade\n", upgrade.str());
+			GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] upgrade='%s' result=object-upgrade\n", upgrade.str());
 		AsciiString msg = "Player build upgrade: Upgrade ";
 		msg.concat(upgrade);
 		msg.concat(" is an object, not a player upgrade.  Ignoring request.");
@@ -1831,7 +1838,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 	// See if it is in progress.
 	if (m_player->hasUpgradeInProduction(curUpgrade)) {
 		if (traceUpgrade)
-			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=already-queued\n", upgrade.str());
+			GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] upgrade='%s' result=already-queued\n", upgrade.str());
 		AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 		msg.concat(" already has upgrade ");
 		msg.concat(upgrade);
@@ -1842,7 +1849,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 	// See if it is in progress.
 	if (m_player->hasUpgradeComplete(curUpgrade)) {
 		if (traceUpgrade)
-			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=already-complete\n", upgrade.str());
+			GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] upgrade='%s' result=already-complete\n", upgrade.str());
 		AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 		msg.concat(" already has upgrade ");
 		msg.concat(upgrade);
@@ -1855,7 +1862,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 	// No money.
 	if( TheUpgradeCenter->canAffordUpgrade( m_player, curUpgrade ) == FALSE ) {
 		if (traceUpgrade)
-			fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=cannot-afford money=%d\n",
+			GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] upgrade='%s' result=cannot-afford money=%d\n",
 			        upgrade.str(), (int)m_player->getMoney()->countMoney());
 		AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 		msg.concat(" lacks money to build upgrade ");
@@ -1873,14 +1880,14 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			if( factory->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 			{
 				if (traceFactories)
-					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=under-construction\n",
+					GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] factory=%u template='%s' result=under-construction\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;
 			}
 			if( factory->getStatusBits().test( OBJECT_STATUS_SOLD ) )
 			{
 				if (traceFactories)
-					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=sold\n",
+					GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] factory=%u template='%s' result=sold\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;
 			}
@@ -1889,7 +1896,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			if( commandSet == nullptr)
 			{
 				if (traceFactories)
-					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' result=missing-command-set\n",
+					GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' result=missing-command-set\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(),
 					        factory->getCommandSetString().str());
 				continue;
@@ -1908,7 +1915,7 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			if (!canUpgradeHere)
 			{
 				if (traceFactories)
-					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' upgrade='%s' result=no-command\n",
+					GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] factory=%u template='%s' commandSet='%s' upgrade='%s' result=no-command\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(),
 					        factory->getCommandSetString().str(), upgrade.str());
 				continue;
@@ -1918,14 +1925,14 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 			if (!pu)
 			{
 				if (traceFactories)
-					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' result=no-production-update\n",
+					GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] factory=%u template='%s' result=no-production-update\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str());
 				continue;
 			}
 			// Try to queue it.
 			if (pu->queueUpgrade(curUpgrade)) {
 				if (traceUpgrade)
-					fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' upgrade='%s' result=queued\n",
+					GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] factory=%u template='%s' upgrade='%s' result=queued\n",
 					        (unsigned)factory->getID(), factory->getTemplate()->getName().str(), upgrade.str());
 				AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 				msg.concat(" queues ");
@@ -1936,12 +1943,12 @@ void AIPlayer::buildUpgrade(const AsciiString &upgrade)
 				return;
 			}
 			if (traceUpgrade)
-				fprintf(stderr, "[AI-UPGRADE] factory=%u template='%s' upgrade='%s' result=queue-rejected\n",
+				GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] factory=%u template='%s' upgrade='%s' result=queue-rejected\n",
 				        (unsigned)factory->getID(), factory->getTemplate()->getName().str(), upgrade.str());
 		}
 	}
 	if (traceUpgrade)
-		fprintf(stderr, "[AI-UPGRADE] upgrade='%s' result=no-factory\n", upgrade.str());
+		GX_HEAVY_DIAG_PRINT( "[AI-UPGRADE] upgrade='%s' result=no-factory\n", upgrade.str());
 
 	AsciiString msg = TheNameKeyGenerator->keyToName(m_player->getPlayerNameKey());
 	msg.concat(" lacks factory to build upgrade ");

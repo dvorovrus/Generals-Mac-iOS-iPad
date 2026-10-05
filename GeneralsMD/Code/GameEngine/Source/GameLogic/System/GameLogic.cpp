@@ -4257,6 +4257,20 @@ void GameLogic::destroyObject( Object *obj )
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 Bool inCRCGen = FALSE;
+#if defined(GENERALS_ONLINE)
+// Diagnostic probe only: current production CRC normalizes Unicode to Windows UTF-16.
+// This variant intentionally restores the legacy/native WideChar hashing so one online
+// match can prove or eliminate Unicode representation as the remaining Windows mismatch.
+class OnlineLegacyWideXferCRC : public XferCRC
+{
+public:
+	virtual void xferUnicodeString(UnicodeString *unicodeStringData) override
+	{
+		Xfer::xferUnicodeString(unicodeStringData);
+	}
+};
+#endif
+
 UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 {
 	if (mode != CRC_RECALC)
@@ -4341,6 +4355,7 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 		        m_frame,
 		        xferCRC->getCRC(),
 		        objectCount);
+#if defined(GENERALSX_HEAVY_DIAGNOSTICS)
 		if (m_frame == 100)
 		{
 			for (Int playerIndex = 0; playerIndex < MAX_PLAYER_COUNT; ++playerIndex)
@@ -4380,6 +4395,7 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 				        objectCRC.getCRC());
 			}
 		}
+#endif
 	}
 #endif
 	if (isInGameLogicUpdate())
@@ -4462,6 +4478,44 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 #if defined(GENERALS_ONLINE)
 	if (onlineCRCTrace)
 		fprintf(stderr, "[ONLINE-CRC-TRACE] frame=%d stage=final crc=0x%08X\n", m_frame, theCRC);
+
+	if (isInGameLogicUpdate() && m_frame == 100 && deepCRCFileName.isEmpty())
+	{
+		OnlineLegacyWideXferCRC legacyWideCRC;
+		legacyWideCRC.open("OnlineLegacyWideProbe");
+
+		AsciiString probeMarker = "MARKER:Objects";
+		legacyWideCRC.xferAsciiString(&probeMarker);
+		for (Object *probeObject = m_objList; probeObject != nullptr; probeObject = probeObject->getNextObject())
+			legacyWideCRC.xferSnapshot(probeObject);
+		fprintf(stderr, "[ONLINE-CRC-PROBE] frame=100 variant=legacy-wide stage=objects crc=0x%08X\n",
+		        legacyWideCRC.getCRC());
+
+		UnsignedInt probeSeed = GetGameLogicRandomSeedCRC();
+		legacyWideCRC.xferUnsignedInt(&probeSeed);
+		fprintf(stderr, "[ONLINE-CRC-PROBE] frame=100 variant=legacy-wide stage=rng crc=0x%08X\n",
+		        legacyWideCRC.getCRC());
+
+		probeMarker = "MARKER:ThePartitionManager";
+		legacyWideCRC.xferAsciiString(&probeMarker);
+		legacyWideCRC.xferSnapshot(ThePartitionManager);
+		fprintf(stderr, "[ONLINE-CRC-PROBE] frame=100 variant=legacy-wide stage=partition crc=0x%08X\n",
+		        legacyWideCRC.getCRC());
+
+		probeMarker = "MARKER:ThePlayerList";
+		legacyWideCRC.xferAsciiString(&probeMarker);
+		legacyWideCRC.xferSnapshot(ThePlayerList);
+		fprintf(stderr, "[ONLINE-CRC-PROBE] frame=100 variant=legacy-wide stage=players crc=0x%08X\n",
+		        legacyWideCRC.getCRC());
+
+		probeMarker = "MARKER:TheAI";
+		legacyWideCRC.xferAsciiString(&probeMarker);
+		legacyWideCRC.xferSnapshot(TheAI);
+		legacyWideCRC.close();
+		fprintf(stderr,
+		        "[ONLINE-CRC-PROBE] frame=100 variant=legacy-wide stage=final crc=0x%08X current=0x%08X\n",
+		        legacyWideCRC.getCRC(), theCRC);
+	}
 #endif
 
 	delete xferCRC;

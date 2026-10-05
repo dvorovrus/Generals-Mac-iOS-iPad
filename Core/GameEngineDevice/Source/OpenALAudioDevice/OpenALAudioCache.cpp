@@ -12,6 +12,13 @@ extern "C" {
 #include <cstring>
 #include <limits>
 
+#if defined(GENERALSX_HEAVY_DIAGNOSTICS)
+#define GX_HEAVY_DIAG_PRINT(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define GX_HEAVY_DIAG_PRINT(...) ((void)0)
+#endif
+
+
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
@@ -186,7 +193,7 @@ ALuint OpenALAudioFileCache::getBufferForFile(const OpenFileInfo &fileInfo)
 	}
 
 	m_openFiles[strToFind] = openedAudioFile;
-	fprintf(stderr,
+	GX_HEAVY_DIAG_PRINT(
 	        "[AUDIO-CACHE] event=load name=%s entries=%zu samplePCM_KB=%.1f usedPCM_MB=%.2f limitMB=%.2f\n",
 	        strToFind.str(),
 	        m_openFiles.size(),
@@ -330,7 +337,7 @@ Bool OpenALAudioFileCache::freeEnoughSpaceForSample(const OpenAudioFile& sampleT
 		}
 	}
 
-	fprintf(stderr,
+	GX_HEAVY_DIAG_PRINT(
 	        "[AUDIO-CACHE] event=evict evicted=%u evictedPCM_MB=%.2f entries=%zu usedPCM_MB=%.2f limitMB=%.2f\n",
 	        (unsigned)evictedCount,
 	        (double)evictedBytes / (1024.0 * 1024.0),

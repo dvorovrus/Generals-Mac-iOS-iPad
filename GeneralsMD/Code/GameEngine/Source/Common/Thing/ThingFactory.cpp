@@ -379,7 +379,7 @@ AsciiString TheThingTemplateBeingParsedName;
 #if defined(RTS_DEBUG) || defined(DEBUG_CRASHING)
 	TheThingTemplateBeingParsedName = name;
 #endif
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	fprintf(stderr,
 	        "[OBJECT-DIAG] begin file='%s' line=%d name='%s' reskin='%s' loadType=%d\n",
 	        ini->getFilename().str(),
@@ -417,7 +417,7 @@ AsciiString TheThingTemplateBeingParsedName;
 		thingTemplate = TheThingFactory->newOverride( thingTemplate );
 	}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	fprintf(stderr,
 	        "[OBJECT-DIAG] template-ready file='%s' line=%d name='%s' ptr=%p\n",
 	        ini->getFilename().str(), ini->getLineNum(), name.str(), (void *)thingTemplate);
@@ -432,12 +432,12 @@ AsciiString TheThingTemplateBeingParsedName;
 			thingTemplate->copyFrom(reskinTmpl);
 			thingTemplate->setCopiedFromDefault();
 			thingTemplate->setReskinnedFrom(reskinTmpl);
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 			fprintf(stderr, "[OBJECT-DIAG] fields-begin name='%s' mode=reskin\n", name.str());
 			fflush(stderr);
 #endif
 			ini->initFromINI( thingTemplate, thingTemplate->getReskinFieldParse() );
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 			fprintf(stderr, "[OBJECT-DIAG] fields-complete name='%s' mode=reskin\n", name.str());
 			fflush(stderr);
 #endif
@@ -450,23 +450,23 @@ AsciiString TheThingTemplateBeingParsedName;
 	}
 	else
 	{
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 		fprintf(stderr, "[OBJECT-DIAG] fields-begin name='%s' mode=normal\n", name.str());
 		fflush(stderr);
 #endif
 		ini->initFromINI( thingTemplate, thingTemplate->getFieldParse() );
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 		fprintf(stderr, "[OBJECT-DIAG] fields-complete name='%s' mode=normal\n", name.str());
 		fflush(stderr);
 #endif
 	}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	fprintf(stderr, "[OBJECT-DIAG] validate-begin name='%s'\n", name.str());
 	fflush(stderr);
 #endif
 	thingTemplate->validate();
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	fprintf(stderr, "[OBJECT-DIAG] validate-complete name='%s'\n", name.str());
 	fflush(stderr);
 #endif
@@ -476,7 +476,7 @@ AsciiString TheThingTemplateBeingParsedName;
 		thingTemplate->resolveNames();
 	}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	fprintf(stderr,
 	        "[OBJECT-DIAG] complete file='%s' line=%d name='%s'\n",
 	        ini->getFilename().str(), ini->getLineNum(), name.str());

@@ -58,6 +58,13 @@
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/ParkingPlaceBehavior.h"
 
+#if defined(GENERALSX_HEAVY_DIAGNOSTICS)
+#define GX_HEAVY_DIAG_PRINT(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define GX_HEAVY_DIAG_PRINT(...) ((void)0)
+#endif
+
+
 // PUBLIC DATA ////////////////////////////////////////////////////////////////////////////////////
 BuildAssistant *TheBuildAssistant = nullptr;
 
@@ -1302,7 +1309,7 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 		if( s_commandSetMissDiagBudget > 0 && diagPlayer && diagPlayer->isSkirmishAIPlayer() )
 		{
 			--s_commandSetMissDiagBudget;
-			fprintf(stderr,
+			GX_HEAVY_DIAG_PRINT(
 			        "[AI-COMMANDSET] result=missing builder=%u builderTemplate='%s' commandSet='%s' target='%s'\n",
 			        (unsigned)builder->getID(),
 			        builder->getTemplate()->getName().str(),
@@ -1320,7 +1327,7 @@ Bool BuildAssistant::isPossibleToMakeUnit( Object *builder, const ThingTemplate 
 		if( s_commandSetPrereqDiagBudget > 0 && player && player->isSkirmishAIPlayer() )
 		{
 			--s_commandSetPrereqDiagBudget;
-			fprintf(stderr,
+			GX_HEAVY_DIAG_PRINT(
 			        "[AI-COMMANDSET] result=prereq builder=%u commandSet='%s' target='%s' matched='%s'\n",
 			        (unsigned)builder->getID(),
 			        builder->getCommandSetString().str(),

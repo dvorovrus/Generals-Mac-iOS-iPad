@@ -88,6 +88,13 @@
 #include "GameLogic/VictoryConditions.h"
 #include "GameLogic/AIPathfind.h"
 
+#if defined(GENERALSX_HEAVY_DIAGNOSTICS)
+#define GX_HEAVY_DIAG_PRINT(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define GX_HEAVY_DIAG_PRINT(...) ((void)0)
+#endif
+
+
 
 // Kind of hacky, but we need to dance on the guts of the terrain.
 extern void oversizeTheTerrain(Int amount);
@@ -1129,7 +1136,7 @@ void ScriptActions::doBuildObjectNearestTeam( const AsciiString& playerName, con
 void ScriptActions::doBuildUpgrade(const AsciiString& player, const AsciiString& upgrade)
 {
 	Player* thePlayer = TheScriptEngine->getPlayerFromAsciiString(player);
-	fprintf(stderr,
+	GX_HEAVY_DIAG_PRINT(
 	        "[AI-UPGRADE-ACTION] frame=%u player='%s' upgrade='%s' resolved=%d playerIndex=%d skirmish=%d\n",
 	        (unsigned)TheGameLogic->getFrame(), player.str(), upgrade.str(),
 	        thePlayer ? 1 : 0,

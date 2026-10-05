@@ -26,6 +26,15 @@
 // ----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 
+
+#if defined(GENERALSX_HEAVY_DIAGNOSTICS)
+#define GX_HEAVY_DIAG_LOG(...) fprintf(stderr, __VA_ARGS__)
+#define GX_HEAVY_DIAG_FLUSH() fflush(stderr)
+#else
+#define GX_HEAVY_DIAG_LOG(...) ((void)0)
+#define GX_HEAVY_DIAG_FLUSH() ((void)0)
+#endif
+
 #include "Common/SubsystemInterface.h"
 #include "Common/Xfer.h"
 
@@ -167,35 +176,35 @@ void SubsystemInterfaceList::initSubsystem(SubsystemInterface* sys, const char* 
 
 	// GeneralsX @feature BenderAI 20/02/2026 Debug traces for hang investigation
 	fprintf(stderr, "[SUBSYS] initSubsystem('%s') START\n", name.str());
-	fflush(stderr);
+	GX_HEAVY_DIAG_FLUSH();
 
 	sys->setName(name);
 	
 	fprintf(stderr, "[SUBSYS] initSubsystem('%s') - About to call sys->init()\n", name.str());
-	fflush(stderr);
+	GX_HEAVY_DIAG_FLUSH();
 	sys->init();
 	fprintf(stderr, "[SUBSYS] initSubsystem('%s') - sys->init() completed\n", name.str());
-	fflush(stderr);
+	GX_HEAVY_DIAG_FLUSH();
 
 	INI ini;
 	if (path1) {
-		fprintf(stderr, "[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') START\n", name.str(), path1);
-		fflush(stderr);
+		GX_HEAVY_DIAG_LOG("[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') START\n", name.str(), path1);
+		GX_HEAVY_DIAG_FLUSH();
 		ini.loadFileDirectory(path1, INI_LOAD_OVERWRITE, pXfer );
-		fprintf(stderr, "[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') DONE\n", name.str(), path1);
-		fflush(stderr);
+		GX_HEAVY_DIAG_LOG("[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') DONE\n", name.str(), path1);
+		GX_HEAVY_DIAG_FLUSH();
 	}
 	if (path2) {
-		fprintf(stderr, "[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') START\n", name.str(), path2);
-		fflush(stderr);
+		GX_HEAVY_DIAG_LOG("[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') START\n", name.str(), path2);
+		GX_HEAVY_DIAG_FLUSH();
 		ini.loadFileDirectory(path2, INI_LOAD_OVERWRITE, pXfer );
-		fprintf(stderr, "[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') DONE\n", name.str(), path2);
-		fflush(stderr);
+		GX_HEAVY_DIAG_LOG("[SUBSYS] initSubsystem('%s') - loadFileDirectory('%s') DONE\n", name.str(), path2);
+		GX_HEAVY_DIAG_FLUSH();
 	}
 
 	m_subsystems.push_back(sys);
-	fprintf(stderr, "[SUBSYS] initSubsystem('%s') END\n", name.str());
-	fflush(stderr);
+	GX_HEAVY_DIAG_LOG("[SUBSYS] initSubsystem('%s') END\n", name.str());
+	GX_HEAVY_DIAG_FLUSH();
 }
 
 //-----------------------------------------------------------------------------
@@ -210,7 +219,7 @@ void SubsystemInterfaceList::postProcessLoadAll()
 //-----------------------------------------------------------------------------
 void SubsystemInterfaceList::resetAll()
 {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	malloc_statistics_t resetStartStats = {};
 	malloc_zone_statistics(nullptr, &resetStartStats);
 	const double resetStartMB = (double)resetStartStats.size_in_use / (1024.0 * 1024.0);
@@ -222,7 +231,7 @@ void SubsystemInterfaceList::resetAll()
 	for (SubsystemList::reverse_iterator it = m_subsystems.rbegin(); it != m_subsystems.rend(); ++it)
 	{
 		SubsystemInterface *sys = *it;
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 		malloc_statistics_t beforeStats = {};
 		malloc_zone_statistics(nullptr, &beforeStats);
 		const double beforeMB = (double)beforeStats.size_in_use / (1024.0 * 1024.0);
@@ -230,7 +239,7 @@ void SubsystemInterfaceList::resetAll()
 
 		sys->reset();
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 		malloc_statistics_t afterStats = {};
 		malloc_zone_statistics(nullptr, &afterStats);
 		const double afterMB = (double)afterStats.size_in_use / (1024.0 * 1024.0);
@@ -241,7 +250,7 @@ void SubsystemInterfaceList::resetAll()
 #endif
 	}
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	malloc_statistics_t resetEndStats = {};
 	malloc_zone_statistics(nullptr, &resetEndStats);
 	const double resetEndMB = (double)resetEndStats.size_in_use / (1024.0 * 1024.0);

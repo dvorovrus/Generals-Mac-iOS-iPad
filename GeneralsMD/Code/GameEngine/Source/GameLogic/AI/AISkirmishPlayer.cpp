@@ -957,6 +957,7 @@ void AISkirmishPlayer::update()
 {
 	AIPlayer::update();
 
+#if defined(GENERALSX_HEAVY_DIAGNOSTICS)
 	const UnsignedInt frame = TheGameLogic != nullptr ? TheGameLogic->getFrame() : 0;
 	if (frame != 0 && (frame % (5 * LOGICFRAMES_PER_SECOND)) == 0)
 	{
@@ -982,6 +983,7 @@ void AISkirmishPlayer::update()
 		        m_readyToBuildStructure ? 1 : 0,
 		        m_readyToBuildTeam ? 1 : 0);
 	}
+#endif
 }
 
 //----------------------------------------------------------------------------------------------------------
