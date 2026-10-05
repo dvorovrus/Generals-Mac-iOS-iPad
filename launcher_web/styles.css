@@ -29,6 +29,11 @@ body {
   color: var(--text);
 }
 
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   min-height: 100vh;
   overflow-x: hidden;

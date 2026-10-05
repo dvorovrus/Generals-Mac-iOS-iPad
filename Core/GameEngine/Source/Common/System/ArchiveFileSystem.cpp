@@ -221,7 +221,9 @@ void ArchiveFileSystem::loadMods()
 	// The official Windows client loads this data patch from user data. Apple
 	// full builds additionally carry it below the configured asset root so the
 	// same deterministic INI set is available on iPad/macOS.
-	if (NGMP_OnlineServicesManager::Settings.DataPacks_UseCommunityPatch())
+	const Bool explicitModActive = TheGlobalData != nullptr &&
+		(TheGlobalData->m_modBIG.isNotEmpty() || TheGlobalData->m_modDir.isNotEmpty());
+	if (!explicitModActive && NGMP_OnlineServicesManager::Settings.DataPacks_UseCommunityPatch())
 	{
 		AsciiString userPatch;
 		userPatch.format("%sGeneralsOnlineGameData/500_900_CommunityPatch_CoreINI.big",
@@ -254,6 +256,11 @@ void ArchiveFileSystem::loadMods()
 			NetworkLog(ELogVerbosity::LOG_RELEASE,
 				"Generals Online community patch missing; Windows lobby INI parity will be unavailable");
 		}
+	}
+	else if (explicitModActive)
+	{
+		NetworkLog(ELogVerbosity::LOG_RELEASE,
+			"Skipping Generals Online community patch because an explicit mod profile is active");
 	}
 #endif
 

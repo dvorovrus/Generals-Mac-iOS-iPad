@@ -40,6 +40,7 @@
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/BuildAssistant.h"
 #include "Common/CRCDebug.h"
+#include "Common/Diagnostic/SimulationMathCrc.h"
 #include "Common/FramePacer.h"
 #include "Common/GameAudio.h"
 #include "Common/GameEngine.h"
@@ -413,6 +414,22 @@ void GameLogic::init()
 {
 
 	setFPMode();
+#if defined(GENERALS_ONLINE)
+	const UnsignedInt simulationMathCRC = SimulationMathCrc::calculate();
+	fprintf(stderr, "[ONLINE-MATH-CRC] value=0x%08X platform=%s\n",
+	        simulationMathCRC,
+#if defined(__APPLE__)
+	        "apple"
+#elif defined(_WIN32)
+	        "windows"
+#else
+	        "other"
+#endif
+	);
+	// SimulationMathCrc restores the default FP environment; restore the game's
+	// deterministic baseline before any gameplay systems are initialized.
+	setFPMode();
+#endif
 
 	// create the partition manager
 	ThePartitionManager = NEW PartitionManager;
@@ -4347,15 +4364,20 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 			{
 				Player *owner = traceObj->getControllingPlayer();
 				const Coord3D *pos = traceObj->getPosition();
+				XferCRC objectCRC;
+				objectCRC.open("OnlineObjectTrace");
+				objectCRC.xferSnapshot(traceObj);
+				objectCRC.close();
 				fprintf(stderr,
-				        "[ONLINE-STATE] frame=100 object=%d id=%d owner=%d template='%s' pos=%.6f,%.6f,%.6f\n",
+				        "[ONLINE-STATE] frame=100 object=%d id=%d owner=%d template='%s' pos=%.6f,%.6f,%.6f objectCRC=0x%08X\n",
 				        traceObjectIndex,
 				        (int)traceObj->getID(),
 				        owner != nullptr ? owner->getPlayerIndex() : -1,
 				        traceObj->getTemplate() != nullptr ? traceObj->getTemplate()->getName().str() : "<none>",
 				        pos != nullptr ? pos->x : 0.0f,
 				        pos != nullptr ? pos->y : 0.0f,
-				        pos != nullptr ? pos->z : 0.0f);
+				        pos != nullptr ? pos->z : 0.0f,
+				        objectCRC.getCRC());
 			}
 		}
 	}

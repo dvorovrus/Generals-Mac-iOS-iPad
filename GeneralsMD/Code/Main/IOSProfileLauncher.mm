@@ -72,6 +72,27 @@ NSArray<NSString *> *DiagnosticSessionLogNames()
     return names;
 }
 
+NSArray<NSString *> *DiagnosticReplayPaths()
+{
+    NSString *userData = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/GeneralsX/GeneralsZH/Replays"];
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    NSArray<NSString *> *names = [fileManager contentsOfDirectoryAtPath:userData error:nil] ?: @[];
+    NSMutableArray<NSString *> *paths = [NSMutableArray array];
+    for (NSString *name in names)
+    {
+        if ([[name.pathExtension lowercaseString] isEqualToString:@"rep"])
+            [paths addObject:[userData stringByAppendingPathComponent:name]];
+    }
+    [paths sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        NSDate *dateA = [[fileManager attributesOfItemAtPath:a error:nil] fileModificationDate] ?: NSDate.distantPast;
+        NSDate *dateB = [[fileManager attributesOfItemAtPath:b error:nil] fileModificationDate] ?: NSDate.distantPast;
+        return [dateB compare:dateA];
+    }];
+    if (paths.count > 3)
+        [paths removeObjectsInRange:NSMakeRange(3, paths.count - 3)];
+    return paths;
+}
+
 unsigned long long FileSizeAtPath(NSString *path)
 {
     NSDictionary<NSFileAttributeKey, id> *attributes =
@@ -860,6 +881,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.webView.backgroundColor = UIColor.blackColor;
     self.webView.opaque = NO;
     self.webView.scrollView.bounces = NO;
+    self.webView.scrollView.minimumZoomScale = 1.0;
+    self.webView.scrollView.maximumZoomScale = 1.0;
+    self.webView.scrollView.pinchGestureRecognizer.enabled = NO;
     self.webView.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     self.webLauncherActive = YES;
     [self.view addSubview:self.webView];
@@ -2429,6 +2453,12 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
         if ([[NSFileManager defaultManager] fileExistsAtPath:path])
             [items addObject:[NSURL fileURLWithPath:path]];
     }
+
+    // Include the newest replay(s), especially useful after an Online CRC mismatch.
+    // The replay captures the exact command stream and lets the same match be replayed
+    // on Windows and iPad for deterministic CRC comparison.
+    for (NSString *path in DiagnosticReplayPaths())
+        [items addObject:[NSURL fileURLWithPath:path]];
 
     UIActivityViewController *activity =
         [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
