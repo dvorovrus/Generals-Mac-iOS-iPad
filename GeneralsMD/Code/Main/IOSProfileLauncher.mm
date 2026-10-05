@@ -409,6 +409,27 @@ NSDictionary<NSString *, id> *HubEntryForProfile(NSString *profileId)
     return nil;
 }
 
+BOOL HubVersionAtLeast(NSString *current, NSString *minimum)
+{
+    if (minimum.length == 0)
+        return YES;
+    if (current.length == 0)
+        return NO;
+    return [current compare:minimum options:NSNumericSearch] != NSOrderedAscending;
+}
+
+BOOL HubVersionDiffers(NSString *current, NSString *available)
+{
+    return current.length > 0 && available.length > 0 && ![current isEqualToString:available];
+}
+
+BOOL HubVersionIsNewer(NSString *current, NSString *available)
+{
+    if (current.length == 0 || available.length == 0)
+        return NO;
+    return [available compare:current options:NSNumericSearch] == NSOrderedDescending;
+}
+
 NSString *DefaultIPadOverrides()
 {
     // GeneralsX @feature dvorovrus 26/09/2026 Default shared iPad tuning.
@@ -497,6 +518,7 @@ UIButton *MakeButton(NSString *title, id target, SEL action)
 @property(nonatomic, strong) UIView *modsView;
 @property(nonatomic, strong) UIStackView *modsListStack;
 @property(nonatomic, strong) UILabel *modsStatus;
+@property(nonatomic, strong) UISegmentedControl *modsChannelSegment;
 @property(nonatomic, strong) UIView *settingsView;
 @property(nonatomic, strong) UILabel *settingsStatus;
 @property(nonatomic, copy) NSString *settingsProfileId;
@@ -625,7 +647,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     UIButton *settings = MakeButton(@"Hub Settings", self, @selector(showSettings));
     UIButton *diagnostics = MakeButton(@"Diagnostics", self, @selector(showDiagnostics));
-    UIButton *mods = MakeButton(@"Mods", self, @selector(showMods));
+    UIButton *mods = MakeButton(@"Mods & Updates", self, @selector(showMods));
     settings.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
     diagnostics.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
     mods.backgroundColor = [UIColor colorWithWhite:0.06 alpha:1.0];
@@ -698,11 +720,30 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     UILabel *title = MakeLabel(@"MODS", 28.0, UIFontWeightBold);
     title.textAlignment = NSTextAlignmentLeft;
     UILabel *note = MakeLabel(
-        @"Install .gxmod packages without reinstalling the app. Remote installs require HTTPS + SHA-256; local packages can be imported from Files.",
+        @"Install and update mods without reinstalling Generals Hub. Choose Stable for normal use or Beta for test releases.",
         13.0,
         UIFontWeightRegular);
     note.textAlignment = NSTextAlignmentLeft;
     note.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+
+    UILabel *channelLabel = MakeLabel(@"Update channel", 14.0, UIFontWeightSemibold);
+    channelLabel.textAlignment = NSTextAlignmentLeft;
+    self.modsChannelSegment = [[UISegmentedControl alloc] initWithItems:@[@"Stable", @"Beta"]];
+    self.modsChannelSegment.translatesAutoresizingMaskIntoConstraints = NO;
+    self.modsChannelSegment.selectedSegmentIndex = [GXHubCatalogChannel() isEqualToString:@"beta"] ? 1 : 0;
+    [self.modsChannelSegment addTarget:self action:@selector(modsChannelChanged:) forControlEvents:UIControlEventValueChanged];
+
+    UIButton *refreshButton = MakeButton(@"Refresh", self, @selector(refreshHubCatalog));
+    [refreshButton.widthAnchor constraintEqualToConstant:140.0].active = YES;
+
+    UIStackView *channelRow = [[UIStackView alloc] initWithArrangedSubviews:@[
+        channelLabel, self.modsChannelSegment, refreshButton
+    ]];
+    channelRow.translatesAutoresizingMaskIntoConstraints = NO;
+    channelRow.axis = UILayoutConstraintAxisHorizontal;
+    channelRow.alignment = UIStackViewAlignmentCenter;
+    channelRow.spacing = 12.0;
+    [self.modsChannelSegment.widthAnchor constraintEqualToConstant:220.0].active = YES;
 
     self.modsListStack = [[UIStackView alloc] init];
     self.modsListStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -732,6 +773,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     [self.modsView addSubview:title];
     [self.modsView addSubview:note];
+    [self.modsView addSubview:channelRow];
     [self.modsView addSubview:scroll];
     [self.modsView addSubview:buttons];
     [self.modsView addSubview:self.modsStatus];
@@ -743,9 +785,12 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [note.leadingAnchor constraintEqualToAnchor:self.modsView.leadingAnchor],
         [note.trailingAnchor constraintEqualToAnchor:self.modsView.trailingAnchor],
         [note.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:4.0],
+        [channelRow.leadingAnchor constraintEqualToAnchor:self.modsView.leadingAnchor],
+        [channelRow.trailingAnchor constraintLessThanOrEqualToAnchor:self.modsView.trailingAnchor],
+        [channelRow.topAnchor constraintEqualToAnchor:note.bottomAnchor constant:10.0],
         [scroll.leadingAnchor constraintEqualToAnchor:self.modsView.leadingAnchor],
         [scroll.trailingAnchor constraintEqualToAnchor:self.modsView.trailingAnchor],
-        [scroll.topAnchor constraintEqualToAnchor:note.bottomAnchor constant:12.0],
+        [scroll.topAnchor constraintEqualToAnchor:channelRow.bottomAnchor constant:12.0],
         [scroll.bottomAnchor constraintEqualToAnchor:buttons.topAnchor constant:-12.0],
         [self.modsListStack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
         [self.modsListStack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
@@ -770,6 +815,61 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         [view removeFromSuperview];
     }
 
+    NSString *channel = GXHubCatalogChannel();
+    NSString *currentHubVersion = [NSString stringWithUTF8String:GX_PROJECT_VERSION] ?: @"0.0.0";
+    NSDictionary *hubRelease = GXHubHubReleaseForCurrentChannel();
+    if (hubRelease != nil)
+    {
+        NSString *availableHubVersion = hubRelease[@"version"] ?: currentHubVersion;
+        NSInteger currentHubBuild = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] integerValue];
+        NSInteger availableHubBuild = [hubRelease[@"build"] integerValue];
+        BOOL hubUpdateAvailable = HubVersionIsNewer(currentHubVersion, availableHubVersion) ||
+            ([currentHubVersion isEqualToString:availableHubVersion] && availableHubBuild > currentHubBuild);
+        UILabel *hubName = MakeLabel(@"Generals Hub", 17.0, UIFontWeightSemibold);
+        hubName.textAlignment = NSTextAlignmentLeft;
+        NSString *hubStatusText = hubUpdateAvailable
+            ? [NSString stringWithFormat:@"Installed %@ (%ld) · %@ %@ (%ld) available",
+                currentHubVersion, (long)currentHubBuild, [channel uppercaseString],
+                availableHubVersion, (long)availableHubBuild]
+            : [NSString stringWithFormat:@"Installed %@ (%ld) · %@ · up to date",
+                currentHubVersion, (long)currentHubBuild, [channel uppercaseString]];
+        UILabel *hubDetail = MakeLabel(hubStatusText, 12.0, UIFontWeightRegular);
+        hubDetail.textAlignment = NSTextAlignmentLeft;
+        hubDetail.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+
+        NSMutableArray<UIView *> *hubViews = [NSMutableArray arrayWithObjects:hubName, hubDetail, nil];
+        NSString *hubNotes = hubRelease[@"releaseNotes"];
+        if (hubUpdateAvailable && hubNotes.length > 0)
+        {
+            UILabel *notes = MakeLabel(hubNotes, 12.0, UIFontWeightRegular);
+            notes.textAlignment = NSTextAlignmentLeft;
+            notes.textColor = [UIColor colorWithWhite:0.72 alpha:1.0];
+            [hubViews addObject:notes];
+        }
+
+        NSString *hubURL = hubRelease[@"packageURL"];
+        if (hubUpdateAvailable && hubURL.length > 0)
+        {
+            UIButton *updateHub = MakeButton(@"Get Hub Update", self, @selector(openHubUpdate:));
+            updateHub.accessibilityIdentifier = hubURL;
+            [updateHub.widthAnchor constraintEqualToConstant:190.0].active = YES;
+            UIStackView *hubActions = [[UIStackView alloc] initWithArrangedSubviews:@[updateHub]];
+            hubActions.axis = UILayoutConstraintAxisHorizontal;
+            hubActions.alignment = UIStackViewAlignmentCenter;
+            [hubViews addObject:hubActions];
+        }
+
+        UIStackView *hubRow = [[UIStackView alloc] initWithArrangedSubviews:hubViews];
+        hubRow.axis = UILayoutConstraintAxisVertical;
+        hubRow.alignment = UIStackViewAlignmentFill;
+        hubRow.spacing = 6.0;
+        hubRow.layoutMargins = UIEdgeInsetsMake(10.0, 14.0, 10.0, 14.0);
+        hubRow.layoutMarginsRelativeArrangement = YES;
+        hubRow.backgroundColor = [UIColor colorWithWhite:0.075 alpha:1.0];
+        hubRow.layer.cornerRadius = 9.0;
+        [self.modsListStack addArrangedSubview:hubRow];
+    }
+
     NSArray<NSDictionary<NSString *, id> *> *entries = HubCombinedEntries();
     if (entries.count == 0)
     {
@@ -788,8 +888,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         BOOL externalInstalled = GXHubProfileInstalled(profileId);
         BOOL available = ProfileDirectoryExists(profileId);
         NSString *installedVersion = installed[@"version"];
+        NSString *minimumHub = entry[@"minHubVersion"];
+        BOOL compatible = HubVersionAtLeast(currentHubVersion, minimumHub);
         BOOL updateAvailable = externalInstalled && installedVersion.length > 0 &&
-            ![installedVersion isEqualToString:catalogVersion] && [entry[@"packageURL"] length] > 0;
+            HubVersionDiffers(installedVersion, catalogVersion) &&
+            [entry[@"packageURL"] length] > 0 && compatible;
 
         UILabel *nameLabel = MakeLabel(name, 17.0, UIFontWeightSemibold);
         nameLabel.textAlignment = NSTextAlignmentLeft;
@@ -802,6 +905,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             statusText = [NSString stringWithFormat:@"Built in · %@", catalogVersion];
         else
             statusText = [NSString stringWithFormat:@"Not installed · %@", catalogVersion];
+
+        statusText = [statusText stringByAppendingFormat:@" · %@",
+            [channel uppercaseString]];
+        if (!compatible)
+            statusText = [statusText stringByAppendingFormat:@" · Requires Hub %@", minimumHub];
 
         NSNumber *sizeBytes = entry[@"packageBytes"];
         if (sizeBytes.unsignedLongLongValue > 0)
@@ -835,7 +943,7 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         }
 
         NSString *packageURL = entry[@"packageURL"];
-        if (packageURL.length > 0 && (!externalInstalled || updateAvailable))
+        if (compatible && packageURL.length > 0 && (!externalInstalled || updateAvailable))
         {
             UIButton *install = MakeButton(externalInstalled ? @"Update" : @"Install", self, @selector(downloadHubMod:));
             install.accessibilityIdentifier = profileId;
@@ -886,12 +994,64 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     self.modsView.hidden = NO;
     self.modsStatus.text = @"";
     [self reloadModsList];
+    [self refreshHubCatalog];
 }
 
 - (void)hideMods
 {
     self.modsView.hidden = YES;
     self.menuStack.hidden = NO;
+}
+
+- (void)modsChannelChanged:(UISegmentedControl *)sender
+{
+    NSString *channel = sender.selectedSegmentIndex == 1 ? @"beta" : @"stable";
+    GXHubSetCatalogChannel(channel);
+    self.modsStatus.textColor = [UIColor colorWithWhite:0.72 alpha:1.0];
+    self.modsStatus.text = [NSString stringWithFormat:@"Using %@ channel.", [channel uppercaseString]];
+    [self reloadModsList];
+    [self refreshHubCatalog];
+}
+
+- (void)refreshHubCatalog
+{
+    NSString *url = GXHubRemoteCatalogURL();
+    if (url.length == 0)
+    {
+        self.modsStatus.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+        self.modsStatus.text = @"Remote catalog is not configured yet. Bundled catalog is active.";
+        return;
+    }
+
+    self.modsStatus.textColor = [UIColor systemYellowColor];
+    self.modsStatus.text = [NSString stringWithFormat:@"Checking %@ updates…", [GXHubCatalogChannel() uppercaseString]];
+    __weak GXProfileLauncherViewController *weakSelf = self;
+    GXHubRefreshRemoteCatalog(^(BOOL updated, NSError *error) {
+        GXProfileLauncherViewController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
+        if (error != nil)
+        {
+            strongSelf.modsStatus.textColor = [UIColor colorWithWhite:0.62 alpha:1.0];
+            strongSelf.modsStatus.text = [NSString stringWithFormat:@"Catalog refresh failed; using cached data: %@",
+                error.localizedDescription];
+            [strongSelf reloadModsList];
+            return;
+        }
+        strongSelf.modsStatus.textColor = [UIColor systemGreenColor];
+        strongSelf.modsStatus.text = updated
+            ? [NSString stringWithFormat:@"%@ catalog updated.", [GXHubCatalogChannel() uppercaseString]]
+            : @"Catalog is up to date.";
+        [strongSelf reloadModsList];
+    });
+}
+
+- (void)openHubUpdate:(UIButton *)sender
+{
+    NSURL *url = [NSURL URLWithString:sender.accessibilityIdentifier ?: @""];
+    if (url == nil || ![[url scheme] isEqualToString:@"https"])
+        return;
+    [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
 }
 
 - (void)playHubMod:(UIButton *)sender

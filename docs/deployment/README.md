@@ -125,6 +125,7 @@ Existing `input/`, `shell/` and `output/` paths are intentionally preserved so o
 
 iPad:
 - `docs/deployment/ipad/hub.md`
+- `docs/deployment/ipad/hub-updates.md` — Stable/Beta catalog, Cloudflare R2 publishing and update flow
 - `docs/deployment/ipad/original.md`
 - `docs/deployment/ipad/contra.md`
 - `docs/deployment/ipad/enhanced.md`

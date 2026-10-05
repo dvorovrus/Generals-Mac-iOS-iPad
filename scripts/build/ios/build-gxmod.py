@@ -45,6 +45,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--contra-beta2", type=Path)
     p.add_argument("--contra-patch1", type=Path)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--version", help="Override package version written to manifest.json.")
+    p.add_argument("--channel", choices=("stable", "beta"), default="stable")
+    p.add_argument("--min-hub-version", default="0.1.0")
     p.add_argument("--skip-md5", action="store_true")
     return p.parse_args()
 
@@ -110,7 +113,9 @@ def main() -> None:
                 "schemaVersion": 1,
                 "profileId": "enhanced",
                 "name": "Zero Hour Enhanced",
-                "version": "1.0+2024-03-28",
+                "version": args.version or "1.0+2024-03-28",
+                "channel": args.channel,
+                "minHubVersion": args.min_hub_version,
                 "runtimeAdapter": "enhanced",
                 "profileFiles": len(entries) + len(generated),
             }
@@ -139,7 +144,9 @@ def main() -> None:
                 "schemaVersion": 1,
                 "profileId": "contra-x",
                 "name": "Contra X",
-                "version": "Beta2+Patch1",
+                "version": args.version or "Beta2+Patch1",
+                "channel": args.channel,
+                "minHubVersion": args.min_hub_version,
                 "runtimeAdapter": "contra",
                 "profileFiles": len(entries),
             }

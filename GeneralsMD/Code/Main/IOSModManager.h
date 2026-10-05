@@ -14,8 +14,13 @@ FOUNDATION_EXPORT NSString *GXHubModsRootPath(void);
 FOUNDATION_EXPORT NSString *GXHubInstalledProfilePath(NSString *profileId);
 FOUNDATION_EXPORT BOOL GXHubProfileInstalled(NSString *profileId);
 FOUNDATION_EXPORT NSDictionary<NSString *, id> * _Nullable GXHubInstalledManifest(NSString *profileId);
+FOUNDATION_EXPORT NSString *GXHubCatalogChannel(void);
+FOUNDATION_EXPORT void GXHubSetCatalogChannel(NSString *channel);
+FOUNDATION_EXPORT NSDictionary<NSString *, id> *GXHubCatalogDocument(void);
 FOUNDATION_EXPORT NSArray<NSDictionary<NSString *, id> *> *GXHubCatalogEntries(void);
 FOUNDATION_EXPORT NSArray<NSDictionary<NSString *, id> *> *GXHubInstalledModEntries(void);
+FOUNDATION_EXPORT NSDictionary<NSString *, id> * _Nullable GXHubHubReleaseForCurrentChannel(void);
+FOUNDATION_EXPORT NSString * _Nullable GXHubRemoteCatalogURL(void);
 FOUNDATION_EXPORT BOOL GXHubRemoveMod(NSString *profileId, NSError **error);
 
 FOUNDATION_EXPORT BOOL GXHubInstallPackageAtURL(

@@ -18,6 +18,7 @@ VERSION_FILE="${IOS_DIR}/version.env"
 PROJECT_VERSION="0.0.0"
 ENGINE_VERSION="0.0.0"
 LAUNCHER_VERSION="0.0.0"
+BUILD_NUMBER="${GX_BUILD_NUMBER:-1}"
 if [[ -f "${VERSION_FILE}" ]]; then
   # shellcheck disable=SC1090
   source "${VERSION_FILE}"
@@ -68,6 +69,7 @@ APP="${OUT_DIR}/${APP_NAME}.app"
 PLIST="${APP}/Info.plist"
 if [[ -f "${PLIST}" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${PROJECT_VERSION}" "${PLIST}"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${PLIST}"
 fi
 
 cp "${GAME_BIN}" "${APP}/${APP_NAME}"

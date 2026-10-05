@@ -4,6 +4,10 @@
 
 #import <CommonCrypto/CommonDigest.h>
 
+#ifndef GX_PROJECT_VERSION
+#define GX_PROJECT_VERSION "0.0.0"
+#endif
+
 #include <array>
 #include <cerrno>
 #include <cstdio>
@@ -13,6 +17,129 @@
 namespace
 {
 NSString * const GXHubErrorDomain = @"GeneralsXHub";
+
+NSString * const GXHubChannelDefaultsKey = @"GXHubUpdateChannel";
+NSString * const GXHubRemoteCatalogName = @"HubCatalog.remote.json";
+NSString * const GXHubCatalogOverrideName = @"HubCatalog.json";
+NSString * const GXHubCatalogURLOverrideName = @"HubCatalogURL.txt";
+
+NSString *GXHubDocumentsPath(NSString *name)
+{
+    return [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:name];
+}
+
+NSDictionary<NSString *, id> *GXHubReadJSONDictionary(NSString *path)
+{
+    if (path.length == 0)
+        return nil;
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data == nil)
+        return nil;
+    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    return [json isKindOfClass:[NSDictionary class]] ? (NSDictionary *)json : nil;
+}
+
+BOOL GXHubCatalogIsValid(NSDictionary<NSString *, id> *document)
+{
+    if (document == nil)
+        return NO;
+    NSNumber *schema = document[@"schemaVersion"];
+    NSArray *mods = document[@"mods"];
+    return schema.integerValue >= 1 && [mods isKindOfClass:[NSArray class]];
+}
+
+NSDictionary<NSString *, id> *GXHubBundledCatalogDocument(void)
+{
+    NSString *path = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"HubCatalog.json"];
+    NSDictionary *document = GXHubReadJSONDictionary(path);
+    return GXHubCatalogIsValid(document) ? document : @{};
+}
+
+NSDictionary<NSString *, id> *GXHubPreferredCatalogDocumentInternal(void)
+{
+    for (NSString *path in @[
+        GXHubDocumentsPath(GXHubCatalogOverrideName),
+        GXHubDocumentsPath(GXHubRemoteCatalogName)
+    ])
+    {
+        NSDictionary *document = GXHubReadJSONDictionary(path);
+        if (GXHubCatalogIsValid(document))
+            return document;
+    }
+    return GXHubBundledCatalogDocument();
+}
+
+NSDictionary<NSString *, id> *GXHubFlattenRelease(
+    NSDictionary<NSString *, id> *entry,
+    NSString *channel)
+{
+    if (![entry isKindOfClass:[NSDictionary class]])
+        return nil;
+
+    NSDictionary *channels = entry[@"channels"];
+    if (![channels isKindOfClass:[NSDictionary class]])
+    {
+        NSMutableDictionary *legacy = [entry mutableCopy];
+        if (legacy[@"channel"] == nil)
+            legacy[@"channel"] = @"stable";
+        return legacy;
+    }
+
+    NSDictionary *release = channels[channel];
+    if (![release isKindOfClass:[NSDictionary class]] && ![channel isEqualToString:@"stable"])
+        release = channels[@"stable"];
+    if (![release isKindOfClass:[NSDictionary class]])
+        return nil;
+
+    NSMutableDictionary *flattened = [NSMutableDictionary dictionary];
+    for (NSString *key in entry)
+    {
+        if (![key isEqualToString:@"channels"])
+            flattened[key] = entry[key];
+    }
+    [flattened addEntriesFromDictionary:release];
+    flattened[@"channel"] = channel;
+    return flattened;
+}
+
+NSString *GXHubTrimmedString(NSString *value)
+{
+    return [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
+
+BOOL GXHubVersionSatisfies(NSString *current, NSString *minimum)
+{
+    if (minimum.length == 0)
+        return YES;
+    if (current.length == 0)
+        return NO;
+    return [current compare:minimum options:NSNumericSearch] != NSOrderedAscending;
+}
+
+NSString *GXHubProjectVersion(void)
+{
+    return [NSString stringWithUTF8String:GX_PROJECT_VERSION] ?: @"0.0.0";
+}
+
+NSString *GXHubCatalogBootstrapURL(void)
+{
+    NSString *overridePath = GXHubDocumentsPath(GXHubCatalogURLOverrideName);
+    NSString *override = [NSString stringWithContentsOfFile:overridePath
+                                                  encoding:NSUTF8StringEncoding
+                                                     error:nil];
+    override = GXHubTrimmedString(override ?: @"");
+    if ([override hasPrefix:@"https://"])
+        return override;
+
+    NSDictionary *preferred = GXHubPreferredCatalogDocumentInternal();
+    NSString *url = GXHubTrimmedString(preferred[@"remoteCatalogURL"] ?: @"");
+    if ([url hasPrefix:@"https://"])
+        return url;
+
+    NSDictionary *bundled = GXHubBundledCatalogDocument();
+    url = GXHubTrimmedString(bundled[@"remoteCatalogURL"] ?: @"");
+    return [url hasPrefix:@"https://"] ? url : nil;
+}
 
 NSError *GXHubError(NSInteger code, NSString *message)
 {
@@ -328,6 +455,17 @@ BOOL GXHubInstallTar(NSURL *packageURL, NSDictionary **installedManifest, NSErro
                 ok = NO;
                 break;
             }
+            NSString *minimumHub = manifest[@"minHubVersion"];
+            if (minimumHub.length > 0 && !GXHubVersionSatisfies(GXHubProjectVersion(), minimumHub))
+            {
+                if (error != nullptr)
+                    *error = GXHubError(
+                        54,
+                        [NSString stringWithFormat:@"This mod requires Generals Hub %@ or newer. Installed Hub: %@.",
+                            minimumHub, GXHubProjectVersion()]);
+                ok = NO;
+                break;
+            }
         }
         else if ([name hasPrefix:@"profile/"])
         {
@@ -533,36 +671,45 @@ NSDictionary<NSString *, id> *GXHubInstalledManifest(NSString *profileId)
     return [json isKindOfClass:[NSDictionary class]] ? json : nil;
 }
 
+NSString *GXHubCatalogChannel(void)
+{
+    NSString *channel = [[[NSUserDefaults standardUserDefaults] stringForKey:GXHubChannelDefaultsKey] lowercaseString];
+    return [channel isEqualToString:@"beta"] ? @"beta" : @"stable";
+}
+
+void GXHubSetCatalogChannel(NSString *channel)
+{
+    NSString *normalized = [[channel lowercaseString] isEqualToString:@"beta"] ? @"beta" : @"stable";
+    [[NSUserDefaults standardUserDefaults] setObject:normalized forKey:GXHubChannelDefaultsKey];
+    fprintf(stderr, "[HUB-CATALOG] channel='%s'\n", normalized.UTF8String);
+}
+
+NSDictionary<NSString *, id> *GXHubCatalogDocument(void)
+{
+    return GXHubPreferredCatalogDocumentInternal();
+}
+
+NSString *GXHubRemoteCatalogURL(void)
+{
+    return GXHubCatalogBootstrapURL();
+}
+
 NSArray<NSDictionary<NSString *, id> *> *GXHubCatalogEntries(void)
 {
-    NSString *documentsCatalog = [NSHomeDirectory()
-        stringByAppendingPathComponent:@"Documents/HubCatalog.json"];
-    NSString *bundleCatalog = [[[NSBundle mainBundle] resourcePath]
-        stringByAppendingPathComponent:@"HubCatalog.json"];
-    NSString *path = [[NSFileManager defaultManager] fileExistsAtPath:documentsCatalog]
-        ? documentsCatalog
-        : bundleCatalog;
-
-    NSData *data = [NSData dataWithContentsOfFile:path];
-    if (data == nil)
-        return @[];
-
-    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    NSArray *entries = nil;
-    if ([json isKindOfClass:[NSArray class]])
-        entries = json;
-    else if ([json isKindOfClass:[NSDictionary class]])
-        entries = ((NSDictionary *)json)[@"mods"];
-
+    NSDictionary *document = GXHubPreferredCatalogDocumentInternal();
+    NSArray *entries = document[@"mods"];
     if (![entries isKindOfClass:[NSArray class]])
         return @[];
 
+    NSString *channel = GXHubCatalogChannel();
     NSMutableArray *valid = [NSMutableArray array];
     for (id raw in entries)
     {
         if (![raw isKindOfClass:[NSDictionary class]])
             continue;
-        NSDictionary *entry = raw;
+        NSDictionary *entry = GXHubFlattenRelease(raw, channel);
+        if (entry == nil)
+            continue;
         if (GXHubSafeId(entry[@"profileId"]) &&
             [entry[@"name"] isKindOfClass:[NSString class]] &&
             [entry[@"version"] isKindOfClass:[NSString class]])
@@ -571,6 +718,86 @@ NSArray<NSDictionary<NSString *, id> *> *GXHubCatalogEntries(void)
         }
     }
     return valid;
+}
+
+NSDictionary<NSString *, id> *GXHubHubReleaseForCurrentChannel(void)
+{
+    NSDictionary *document = GXHubPreferredCatalogDocumentInternal();
+    NSDictionary *hub = document[@"hub"];
+    if (![hub isKindOfClass:[NSDictionary class]])
+        return nil;
+    return GXHubFlattenRelease(hub, GXHubCatalogChannel());
+}
+
+void GXHubRefreshRemoteCatalog(GXHubCatalogCompletion completion)
+{
+    NSString *urlText = GXHubCatalogBootstrapURL();
+    NSURL *url = urlText.length > 0 ? [NSURL URLWithString:urlText] : nil;
+    if (url == nil || ![[url scheme] isEqualToString:@"https"])
+    {
+        NSError *error = GXHubError(90, @"No HTTPS remote catalog URL is configured.");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(NO, error);
+        });
+        return;
+    }
+
+    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    configuration.timeoutIntervalForRequest = 30.0;
+    configuration.timeoutIntervalForResource = 60.0;
+    configuration.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+
+    fprintf(stderr, "[HUB-CATALOG] refresh-start url='%s' channel='%s'\n",
+            urlText.UTF8String, GXHubCatalogChannel().UTF8String);
+
+    NSURLSessionDataTask *task =
+        [session dataTaskWithURL:url
+              completionHandler:^(NSData *data, NSURLResponse *response, NSError *requestError) {
+        NSError *finalError = requestError;
+        BOOL updated = NO;
+
+        NSHTTPURLResponse *http = [response isKindOfClass:[NSHTTPURLResponse class]]
+            ? (NSHTTPURLResponse *)response
+            : nil;
+        if (finalError == nil && http != nil && (http.statusCode < 200 || http.statusCode >= 300))
+            finalError = GXHubError(91, [NSString stringWithFormat:@"Catalog HTTP %ld.", (long)http.statusCode]);
+
+        if (finalError == nil && (data.length == 0 || data.length > 2 * 1024 * 1024))
+            finalError = GXHubError(92, @"Remote catalog is empty or too large.");
+
+        NSDictionary *document = nil;
+        if (finalError == nil)
+        {
+            id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&finalError];
+            if ([json isKindOfClass:[NSDictionary class]])
+                document = json;
+            if (finalError == nil && !GXHubCatalogIsValid(document))
+                finalError = GXHubError(93, @"Remote catalog schema is invalid.");
+        }
+
+        if (finalError == nil)
+        {
+            NSString *path = GXHubDocumentsPath(GXHubRemoteCatalogName);
+            updated = [data writeToFile:path options:NSDataWritingAtomic error:&finalError];
+            if (updated)
+            {
+                [[NSUserDefaults standardUserDefaults] setObject:[NSDate date]
+                                                         forKey:@"GXHubCatalogLastRefresh"];
+                fprintf(stderr,
+                        "[HUB-CATALOG] refresh-ok schema=%ld bytes=%lu path='%s'\n",
+                        (long)[document[@"schemaVersion"] integerValue],
+                        (unsigned long)data.length,
+                        path.fileSystemRepresentation);
+            }
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(updated, finalError);
+        });
+        [session finishTasksAndInvalidate];
+    }];
+    [task resume];
 }
 
 NSArray<NSDictionary<NSString *, id> *> *GXHubInstalledModEntries(void)
@@ -693,6 +920,19 @@ void GXHubDownloadAndInstall(
     if (expected.length != 64)
     {
         NSError *error = GXHubError(81, @"Remote packages require a SHA-256 value in the catalog.");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(nil, error);
+        });
+        return;
+    }
+
+    NSString *minimumHub = catalogEntry[@"minHubVersion"];
+    if (minimumHub.length > 0 && !GXHubVersionSatisfies(GXHubProjectVersion(), minimumHub))
+    {
+        NSError *error = GXHubError(
+            83,
+            [NSString stringWithFormat:@"This release requires Generals Hub %@ or newer. Installed Hub: %@.",
+                minimumHub, GXHubProjectVersion()]);
         dispatch_async(dispatch_get_main_queue(), ^{
             completion(nil, error);
         });

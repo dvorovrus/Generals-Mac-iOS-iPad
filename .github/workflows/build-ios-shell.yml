@@ -180,6 +180,7 @@ jobs:
         env:
           GX_BUNDLE_ID: com.dvorov.generalszh.hub
           GX_BUILD_DIR: ${{ github.workspace }}/build/ios-vulkan-online
+          GX_BUILD_NUMBER: ${{ github.run_id }}
         run: |
           chmod +x scripts/build/ios/package-shell.sh
           ./scripts/build/ios/package-shell.sh
