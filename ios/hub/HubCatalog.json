@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 5,
+  "catalogVersion": 6,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -8,11 +8,11 @@
     "channels": {
       "stable": {
         "version": "0.1.0",
-        "build": 37292978231,
+        "build": 37296391446,
         "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/0.1.0/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "68ed07bc311704630768c55970c29d4ee4f430b6a457ac16e84bd6df2f198571",
-        "packageBytes": 2113794772,
-        "releaseNotes": "Online packet/map-transfer fixes; Stable/Beta Mods & Updates; automatic update checks; direct R2 catalog bootstrap."
+        "sha256": "6828411a0de81e58051a73d9c76a3fd9337ced1b6a6ac9e5b3a231aa66b59d49",
+        "packageBytes": 2113800845,
+        "releaseNotes": "Reliable large mod downloads with progress and storage preflight; Online packet/map-transfer fixes; Stable/Beta Mods & Updates."
       },
       "beta": {
         "version": "0.1.0",
@@ -71,5 +71,5 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T09:59:22Z"
+  "updatedAt": "2026-10-05T10:29:39Z"
 }
