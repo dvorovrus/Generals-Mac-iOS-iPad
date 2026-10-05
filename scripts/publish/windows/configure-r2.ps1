@@ -16,7 +16,7 @@ function Ensure-AwsCli {
     if ($aws) { return $aws.Source }
 
     Write-Host "AWS CLI not found. Installing awscli for current user..." -ForegroundColor Cyan
-    & py -m pip install --user --disable-pip-version-check awscli
+    & py -m pip install --user --disable-pip-version-check awscli 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Failed to install awscli." }
 
     $scriptsDir = (& py -c "import sysconfig; print(sysconfig.get_path('scripts', scheme='nt_user'))").Trim()
@@ -34,7 +34,7 @@ function Ensure-AwsCli {
             [Environment]::SetEnvironmentVariable("Path", "$scriptsDir;$userPath", "User")
         }
     }
-    return $candidate
+    return [string]$candidate
 }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
