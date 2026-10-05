@@ -4,7 +4,7 @@ param(
     [ValidateSet("stable", "beta")]
     [string] $Channel = "beta",
     [string] $Version = "0.1.0",
-    [int] $Build = 1,
+    [long] $Build = 1,
     [string] $ReleaseNotes = "",
     [string] $Bucket = $env:R2_BUCKET,
     [string] $AccountId = $env:CLOUDFLARE_ACCOUNT_ID,
