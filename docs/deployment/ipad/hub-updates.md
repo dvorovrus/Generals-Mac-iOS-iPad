@@ -35,19 +35,17 @@ hub/
 Create one R2 bucket, for example `generals-hub`, and enable a public R2.dev URL or a custom download domain.
 Create an R2 API token with Object Read & Write access for this bucket.
 
-Local publishing uses the S3-compatible R2 API and AWS CLI. Configure these environment variables on Windows:
+Run the interactive configurator once from the project worktree:
 
 ```powershell
-$env:CLOUDFLARE_ACCOUNT_ID = '...'
-$env:AWS_ACCESS_KEY_ID = '...'
-$env:AWS_SECRET_ACCESS_KEY = '...'
-$env:R2_BUCKET = 'generals-hub'
-$env:R2_PUBLIC_BASE_URL = 'https://your-public-r2-domain.example'
+.\scripts\publish\windows\configure-r2.ps1
 ```
 
-Do not commit credentials to the repository.
+It installs AWS CLI for the current Windows user when needed, stores the R2 key in the standard local AWS profile `generals-r2`, persists only the non-secret R2 settings as user environment variables, uploads a temporary probe object to verify both private bucket access and the public URL, and writes the required GitHub Actions secrets through `gh secret set`.
 
-For GitHub Actions add these repository secrets:
+The secret key never needs to be pasted into ChatGPT or committed to the repository.
+
+The configurator creates these GitHub repository secrets:
 
 ```text
 CLOUDFLARE_ACCOUNT_ID
@@ -57,6 +55,16 @@ R2_BUCKET
 ```
 
 The `Hub | Publish Catalog to R2` workflow mirrors `ios/hub/HubCatalog.json` to `catalog.json` whenever the catalog changes.
+
+## Publish the current Stable mods in one command
+
+After configuration, publish the already-built Enhanced and Contra X packages together:
+
+```powershell
+.\scripts\publish\windows\publish-stable-mods-r2.ps1 -CommitAndPush
+```
+
+This uploads both packages, updates their Stable channel records, uploads `catalog.json` to R2, commits the updated local catalog once, and pushes it to GitHub.
 
 ## Build and publish a mod
 
