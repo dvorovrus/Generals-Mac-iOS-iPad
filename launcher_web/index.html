@@ -163,15 +163,17 @@
     <div class="modal-backdrop" id="modalBackdrop" hidden>
       <section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal__header">
-          <div>
+          <button class="modal__close" id="modalClose" type="button" aria-label="Back" title="Back">
+            <svg class="lucide lucide-arrow-left" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m15 18-6-6 6-6"/>
+              <path d="M21 12H9"/>
+            </svg>
+          </button>
+          <div class="modal__heading">
             <small id="modalEyebrow">GENERALS X</small>
             <h2 id="modalTitle">Settings</h2>
           </div>
-          <button class="modal__close" id="modalClose" type="button" aria-label="Close">
-            <svg class="lucide lucide-x" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12"/>
-            </svg>
-          </button>
+          <div class="modal__header-spacer" aria-hidden="true"></div>
         </div>
         <div class="modal__body" id="modalBody"></div>
       </section>

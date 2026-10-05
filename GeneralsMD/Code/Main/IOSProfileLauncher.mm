@@ -899,10 +899,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSDictionary *release = [channels[channel] isKindOfClass:[NSDictionary class]]
         ? channels[channel]
         : ([channels[@"stable"] isKindOfClass:[NSDictionary class]] ? channels[@"stable"] : nil);
-    // Bridge schema 3 adds reliable Diagnostics export/share behavior. Older Hub
-    // binaries must fail closed to their bundled launcher rather than receiving
-    // web actions their native bridge cannot handle.
-    if ([release[@"bridgeSchema"] integerValue] != 3)
+    // Bridge schema 4 adds native haptic feedback for the Web Launcher. Older Hub
+    // binaries fail closed to their bundled launcher rather than receiving web
+    // actions their native bridge cannot handle.
+    if ([release[@"bridgeSchema"] integerValue] != 4)
     {
         fprintf(stderr, "[HUB-WEB] remote launcher bridge schema is incompatible; using bundled launcher\n");
         return nil;
@@ -1012,6 +1012,39 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     if ([action isEqualToString:@"getState"])
     {
         [self sendWebResponse:requestId result:[self webLauncherState] error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"haptic"])
+    {
+        NSString *style = [payload[@"style"] isKindOfClass:[NSString class]] ? payload[@"style"] : @"light";
+        if ([style isEqualToString:@"selection"])
+        {
+            UISelectionFeedbackGenerator *generator = [[UISelectionFeedbackGenerator alloc] init];
+            [generator prepare];
+            [generator selectionChanged];
+        }
+        else if ([style isEqualToString:@"success"])
+        {
+            UINotificationFeedbackGenerator *generator = [[UINotificationFeedbackGenerator alloc] init];
+            [generator prepare];
+            [generator notificationOccurred:UINotificationFeedbackTypeSuccess];
+        }
+        else
+        {
+            UIImpactFeedbackStyle impactStyle = UIImpactFeedbackStyleLight;
+            if ([style isEqualToString:@"medium"]) impactStyle = UIImpactFeedbackStyleMedium;
+            else if ([style isEqualToString:@"heavy"]) impactStyle = UIImpactFeedbackStyleHeavy;
+            else if (@available(iOS 13.0, *))
+            {
+                if ([style isEqualToString:@"soft"]) impactStyle = UIImpactFeedbackStyleSoft;
+                else if ([style isEqualToString:@"rigid"]) impactStyle = UIImpactFeedbackStyleRigid;
+            }
+            UIImpactFeedbackGenerator *generator = [[UIImpactFeedbackGenerator alloc] initWithStyle:impactStyle];
+            [generator prepare];
+            [generator impactOccurred];
+        }
+        [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
         return;
     }
 

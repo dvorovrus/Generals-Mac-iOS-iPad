@@ -241,6 +241,11 @@ function ensureUIAudio() {
   return uiAudioContext;
 }
 
+function triggerHaptic(style = "light") {
+  if (!hasNativeBridge) return;
+  window.GeneralsXNative.request("haptic", { style }, 1200).catch(() => {});
+}
+
 function playUISound(name = "tap") {
   if (!uiSoundEnabled) return;
   const context = ensureUIAudio();
@@ -453,6 +458,7 @@ function showToast(message) {
 function setActiveCard(card) {
   if (!card || card === activeCard) return;
 
+  triggerHaptic("selection");
   cards.forEach(item => item.classList.toggle("is-active", item === card));
   activeCard = card;
 
@@ -1221,6 +1227,17 @@ document.addEventListener("pointerdown", event => {
           ? "open"
           : "tap";
   playUISound(sound);
+
+  const haptic = target === playButton
+    ? "medium"
+    : target.classList.contains("mode-card")
+      ? null
+      : target.classList.contains("add-mod-card") || target.matches("[data-panel]")
+        ? "light"
+        : target === modalClose
+          ? "soft"
+          : "light";
+  if (haptic) triggerHaptic(haptic);
 }, { passive: true });
 
 if (modesRail) {
@@ -1245,7 +1262,7 @@ function closePanel() {
   window.clearTimeout(modalCloseTimer);
   modalCloseTimer = window.setTimeout(() => {
     modalBackdrop.hidden = true;
-  }, 220);
+  }, 320);
 }
 
 modalClose.addEventListener("click", closePanel);
