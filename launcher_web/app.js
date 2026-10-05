@@ -5,12 +5,25 @@ let nativeState = null;
 let nativeDiagnosticsText = "";
 
 window.GeneralsXNative = {
-  request(action, payload = {}) {
+  request(action, payload = {}, timeoutMs = 20000) {
     if (!hasNativeBridge) return Promise.reject(new Error("Native bridge is unavailable"));
     const id = `gx-${Date.now()}-${++nativeRequestCounter}`;
     return new Promise((resolve, reject) => {
-      nativePending.set(id, { resolve, reject });
-      window.webkit.messageHandlers.generalsX.postMessage({ id, action, payload });
+      const timer = window.setTimeout(() => {
+        nativePending.delete(id);
+        reject(new Error(`Native action timed out: ${action}`));
+      }, timeoutMs);
+      nativePending.set(id, {
+        resolve(value) { window.clearTimeout(timer); resolve(value); },
+        reject(error) { window.clearTimeout(timer); reject(error); }
+      });
+      try {
+        window.webkit.messageHandlers.generalsX.postMessage({ id, action, payload });
+      } catch (error) {
+        window.clearTimeout(timer);
+        nativePending.delete(id);
+        reject(error);
+      }
     });
   },
 
@@ -701,10 +714,11 @@ Session logs: 1/10`;
 
 function renderDiagnostics() {
   modalBody.innerHTML = `
-    <p class="diagnostics-note">Build, installed content and crash logs. The last 10 app sessions are kept automatically.</p>
+    <p class="diagnostics-note">Build, installed content and crash logs. A copy is saved automatically to Files > On My iPad > Generals ZH > Diagnostics.</p>
     <div class="diagnostic-block" id="diagnosticReport">${diagnosticsReport()}</div>
     <div class="diagnostics-actions">
       <button type="button" class="diagnostics-action" data-diagnostics-refresh>Refresh</button>
+      <button type="button" class="diagnostics-action" data-diagnostics-export>Save to Files</button>
       <button type="button" class="diagnostics-action" data-diagnostics-share>Share report + logs</button>
       <button type="button" class="diagnostics-action diagnostics-action--danger" data-diagnostics-clear>Clear logs</button>
     </div>
@@ -720,6 +734,7 @@ function renderDiagnostics() {
       const result = await nativeRequest("diagnostics");
       nativeDiagnosticsText = result?.report || "";
       modalBody.querySelector("#diagnosticReport").textContent = nativeDiagnosticsText || "No diagnostics available.";
+      if (result?.exportPath) showToast(`Diagnostics saved: ${result.exportPath}`);
     } catch (error) {
       modalBody.querySelector("#diagnosticReport").textContent = error.message || "Diagnostics failed";
     }
@@ -728,9 +743,28 @@ function renderDiagnostics() {
   modalBody.querySelector("[data-diagnostics-refresh]").addEventListener("click", refreshDiagnostics);
   if (hasNativeBridge) refreshDiagnostics();
 
+  modalBody.querySelector("[data-diagnostics-export]").addEventListener("click", async () => {
+    if (!hasNativeBridge) {
+      showToast("Native bridge is unavailable");
+      return;
+    }
+    showToast("Saving diagnostics to Files…");
+    try {
+      const result = await nativeRequest("exportDiagnostics");
+      showToast(`Saved ${result?.fileCount || 0} files · ${result?.path || "Diagnostics"}`);
+    } catch (error) {
+      showToast(error.message || "Save failed");
+    }
+  });
+
   modalBody.querySelector("[data-diagnostics-share]").addEventListener("click", async () => {
     if (hasNativeBridge) {
-      nativeRequest("shareDiagnostics").catch(error => showToast(error.message || "Share failed"));
+      showToast("Opening share sheet…");
+      try {
+        await nativeRequest("shareDiagnostics");
+      } catch (error) {
+        showToast(error.message || "Share failed");
+      }
       return;
     }
     const report = diagnosticsReport();
@@ -748,9 +782,14 @@ function renderDiagnostics() {
     }
   });
 
-  modalBody.querySelector("[data-diagnostics-clear]").addEventListener("click", () => {
+  modalBody.querySelector("[data-diagnostics-clear]").addEventListener("click", async () => {
     if (hasNativeBridge) {
-      nativeRequest("clearDiagnostics").catch(error => showToast(error.message || "Clear failed"));
+      try {
+        await nativeRequest("clearDiagnostics");
+        showToast("Clear dialog opened");
+      } catch (error) {
+        showToast(error.message || "Clear failed");
+      }
     } else {
       showToast("Demo logs cleared");
     }

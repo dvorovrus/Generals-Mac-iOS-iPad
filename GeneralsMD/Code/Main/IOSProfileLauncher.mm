@@ -93,6 +93,64 @@ NSArray<NSString *> *DiagnosticReplayPaths()
     return paths;
 }
 
+NSString *DiagnosticsExportDirectoryPath()
+{
+    return DocumentsFilePath(@"Diagnostics");
+}
+
+NSArray<NSURL *> *ExportDiagnosticsSnapshot(NSString *reportText)
+{
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+    NSString *directory = DiagnosticsExportDirectoryPath();
+    NSError *directoryError = nil;
+    if (![fileManager createDirectoryAtPath:directory
+                 withIntermediateDirectories:YES
+                                  attributes:nil
+                                       error:&directoryError])
+    {
+        fprintf(stderr, "[HUB-DIAG] failed to create export directory: %s\n",
+                directoryError.localizedDescription.UTF8String ?: "unknown");
+        return @[];
+    }
+
+    NSMutableArray<NSURL *> *files = [NSMutableArray array];
+    NSString *reportPath = [directory stringByAppendingPathComponent:@"GeneralsZH-Diagnostics.txt"];
+    if ((reportText ?: @"").length > 0 &&
+        [reportText writeToFile:reportPath atomically:YES encoding:NSUTF8StringEncoding error:nil])
+    {
+        [files addObject:[NSURL fileURLWithPath:reportPath]];
+    }
+
+    for (NSString *name in DiagnosticSessionLogNames())
+    {
+        NSString *source = DocumentsFilePath(name);
+        if (![fileManager fileExistsAtPath:source])
+            continue;
+        NSString *destination = [directory stringByAppendingPathComponent:name];
+        [fileManager removeItemAtPath:destination error:nil];
+        NSError *copyError = nil;
+        if ([fileManager copyItemAtPath:source toPath:destination error:&copyError])
+            [files addObject:[NSURL fileURLWithPath:destination]];
+        else
+            fprintf(stderr, "[HUB-DIAG] log export failed '%s': %s\n",
+                    name.UTF8String,
+                    copyError.localizedDescription.UTF8String ?: "unknown");
+    }
+
+    for (NSString *source in DiagnosticReplayPaths())
+    {
+        NSString *destination = [directory stringByAppendingPathComponent:source.lastPathComponent];
+        [fileManager removeItemAtPath:destination error:nil];
+        if ([fileManager copyItemAtPath:source toPath:destination error:nil])
+            [files addObject:[NSURL fileURLWithPath:destination]];
+    }
+
+    fprintf(stderr, "[HUB-DIAG] exported %lu files to '%s'\n",
+            (unsigned long)files.count,
+            directory.UTF8String);
+    return files;
+}
+
 unsigned long long FileSizeAtPath(NSString *path)
 {
     NSDictionary<NSFileAttributeKey, id> *attributes =
@@ -656,6 +714,18 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     }
 }
 
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+
+    // Keep a Files-visible snapshot even when the Web Launcher bridge/share UI fails.
+    // This runs every time the launcher becomes visible after a crash/relaunch.
+    NSString *report = [self diagnosticsTextWithGameDataSize:@"Open Diagnostics to refresh size"];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        ExportDiagnosticsSnapshot(report);
+    });
+}
+
 - (void)handleMemoryWarning:(NSNotification *)notification
 {
     (void)notification;
@@ -829,10 +899,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSDictionary *release = [channels[channel] isKindOfClass:[NSDictionary class]]
         ? channels[channel]
         : ([channels[@"stable"] isKindOfClass:[NSDictionary class]] ? channels[@"stable"] : nil);
-    // Native bridge schema 2 is required by the downloadable base-content flow.
-    // Older remote launchers treat Online as permanently bundled, so fail closed
-    // to the embedded launcher until a compatible web release is published.
-    if ([release[@"bridgeSchema"] integerValue] != 2)
+    // Bridge schema 3 adds reliable Diagnostics export/share behavior. Older Hub
+    // binaries must fail closed to their bundled launcher rather than receiving
+    // web actions their native bridge cannot handle.
+    if ([release[@"bridgeSchema"] integerValue] != 3)
     {
         fprintf(stderr, "[HUB-WEB] remote launcher bridge schema is incompatible; using bundled launcher\n");
         return nil;
@@ -1069,11 +1139,30 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             dispatch_async(dispatch_get_main_queue(), ^{
                 GXProfileLauncherViewController *strongSelf = weakSelf;
                 if (strongSelf != nil)
+                {
+                    NSString *report = [strongSelf diagnosticsTextWithGameDataSize:sizeText] ?: @"";
+                    strongSelf.diagnosticsText.text = report;
+                    ExportDiagnosticsSnapshot(report);
                     [strongSelf sendWebResponse:requestId
-                                        result:@{ @"report": [strongSelf diagnosticsTextWithGameDataSize:sizeText] ?: @"" }
+                                        result:@{ @"report": report,
+                                                  @"exportPath": @"Files > On My iPad > Generals ZH > Diagnostics" }
                                          error:nil];
+                }
             });
         });
+        return;
+    }
+
+    if ([action isEqualToString:@"exportDiagnostics"])
+    {
+        NSString *report = [self diagnosticsTextWithGameDataSize:@"Open Diagnostics to refresh size"] ?: @"";
+        self.diagnosticsText.text = report;
+        NSArray<NSURL *> *files = ExportDiagnosticsSnapshot(report);
+        [self sendWebResponse:requestId
+                      result:@{ @"accepted": @YES,
+                                @"fileCount": @(files.count),
+                                @"path": @"Files > On My iPad > Generals ZH > Diagnostics" }
+                       error:nil];
         return;
     }
 
@@ -2419,6 +2508,7 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
                 [fileManager removeItemAtPath:DocumentsFilePath(name) error:nil];
             [fileManager removeItemAtPath:DocumentsFilePath(@"generals-stderr-prev.log") error:nil];
         }
+        [NSFileManager.defaultManager removeItemAtPath:DiagnosticsExportDirectoryPath() error:nil];
 
         GXProfileLauncherViewController *strongSelf = weakSelf;
         if (strongSelf != nil)
@@ -2434,31 +2524,14 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
 
 - (void)shareDiagnostics
 {
-    NSMutableArray *items = [NSMutableArray array];
+    NSString *report = self.diagnosticsText.text;
+    if (report.length == 0)
+        report = [self diagnosticsTextWithGameDataSize:@"Open Diagnostics to refresh size"] ?: @"";
 
-    NSString *reportPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"GeneralsZH-Diagnostics.txt"];
-    NSError *writeError = nil;
-    BOOL wroteReport = [self.diagnosticsText.text writeToFile:reportPath
-                                                  atomically:YES
-                                                    encoding:NSUTF8StringEncoding
-                                                       error:&writeError];
-    if (wroteReport)
-        [items addObject:[NSURL fileURLWithPath:reportPath]];
-    else
-        [items addObject:self.diagnosticsText.text ?: @"Generals ZH diagnostics unavailable"];
-
-    for (NSString *name in DiagnosticSessionLogNames())
-    {
-        NSString *path = DocumentsFilePath(name);
-        if ([[NSFileManager defaultManager] fileExistsAtPath:path])
-            [items addObject:[NSURL fileURLWithPath:path]];
-    }
-
-    // Include the newest replay(s), especially useful after an Online CRC mismatch.
-    // The replay captures the exact command stream and lets the same match be replayed
-    // on Windows and iPad for deterministic CRC comparison.
-    for (NSString *path in DiagnosticReplayPaths())
-        [items addObject:[NSURL fileURLWithPath:path]];
+    NSArray<NSURL *> *exportedFiles = ExportDiagnosticsSnapshot(report);
+    NSMutableArray *items = [NSMutableArray arrayWithArray:exportedFiles];
+    if (items.count == 0)
+        [items addObject:report.length > 0 ? report : @"Generals ZH diagnostics unavailable"];
 
     UIActivityViewController *activity =
         [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
@@ -2466,17 +2539,15 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
     UIPopoverPresentationController *popover = activity.popoverPresentationController;
     if (popover != nil)
     {
-        popover.sourceView = self.shareDiagnosticsButton;
-        popover.sourceRect = self.shareDiagnosticsButton.bounds;
+        UIView *anchor = (self.webLauncherActive && !self.webView.hidden && self.webView.window != nil)
+            ? self.webView
+            : self.view;
+        popover.sourceView = anchor;
+        popover.sourceRect = CGRectMake(CGRectGetMidX(anchor.bounds), CGRectGetMidY(anchor.bounds), 1.0, 1.0);
+        popover.permittedArrowDirections = 0;
     }
 
     [self presentViewController:activity animated:YES completion:nil];
-
-    if (!wroteReport && writeError != nil)
-    {
-        fprintf(stderr, "WARNING: failed to write diagnostics report: %s\n",
-                [[writeError description] UTF8String]);
-    }
 }
 
 - (BOOL)prefersStatusBarHidden

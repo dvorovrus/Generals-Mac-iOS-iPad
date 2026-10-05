@@ -697,8 +697,21 @@ void GameEngine::init()
 		CommandLine::parseCommandLineForEngineInit();
 
 #if defined(GENERALS_ONLINE)
-		// Load Generals Online settings before mods/data packs are resolved.
-		NGMP_OnlineServicesManager::Settings.Initialize();
+		// A Hub mod profile must behave like classic Zero Hour. The command line
+		// parser has already populated m_modBIG/m_modDir here, so do not initialize
+		// Generals Online runtime settings for Enhanced/Contra. Online itself has no
+		// explicit -mod argument and keeps the normal GO initialization path.
+		const Bool explicitModProfile = TheGlobalData != nullptr &&
+			(TheGlobalData->m_modBIG.isNotEmpty() || TheGlobalData->m_modDir.isNotEmpty());
+		if (!explicitModProfile)
+		{
+			NGMP_OnlineServicesManager::Settings.Initialize();
+		}
+		else
+		{
+			fprintf(stderr,
+			        "[HUB] Generals Online runtime settings disabled for explicit mod profile\n");
+		}
 #endif
 
 		TheArchiveFileSystem->loadMods();
@@ -812,7 +825,21 @@ void GameEngine::init()
 
 
 
+#if defined(__APPLE__)
+		fprintf(stderr,
+		        "[IOS-INIT] stage=thing-factory begin modBIG='%s' modDir='%s' crc=0x%08X\n",
+		        TheGlobalData != nullptr ? TheGlobalData->m_modBIG.str() : "",
+		        TheGlobalData != nullptr ? TheGlobalData->m_modDir.str() : "",
+		        xferCRC.getCRC());
+		fflush(stderr);
+#endif
 		initSubsystem(TheThingFactory,"TheThingFactory", createThingFactory(), &xferCRC, "Data\\INI\\Default\\Object", "Data\\INI\\Object");
+#if defined(__APPLE__)
+		fprintf(stderr,
+		        "[IOS-INIT] stage=thing-factory complete crc=0x%08X\n",
+		        xferCRC.getCRC());
+		fflush(stderr);
+#endif
 
 	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////
 	GetPrecisionTimer(&endTime64);//////////////////////////////////////////////////////////////////
