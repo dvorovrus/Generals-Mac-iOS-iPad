@@ -45,8 +45,18 @@ def main() -> None:
 
         if app_l + "info.plist" not in lower:
             fail("missing Info.plist")
-        if any(n.startswith(app_l + "launcher/") for n in lower):
-            fail("legacy web Launcher directory leaked into IPA")
+        launcher_files = {
+            app_l + "launcher/index.html",
+            app_l + "launcher/app.js",
+            app_l + "launcher/styles.css",
+        }
+        has_launcher_dir = any(n.startswith(app_l + "launcher/") for n in lower)
+        if args.variant == "hub":
+            missing_launcher = sorted(n for n in launcher_files if n not in lower)
+            if missing_launcher:
+                fail("Hub IPA is missing web launcher files: " + ", ".join(missing_launcher))
+        elif has_launcher_dir:
+            fail("web Launcher directory is only allowed in the Hub variant")
 
         executable = [
             n for n in names
