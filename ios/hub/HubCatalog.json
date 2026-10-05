@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 7,
+  "catalogVersion": 8,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -8,11 +8,11 @@
     "channels": {
       "stable": {
         "version": "0.1.0",
-        "build": 37296391446,
+        "build": 37302121137,
         "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/0.1.0/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "6828411a0de81e58051a73d9c76a3fd9337ced1b6a6ac9e5b3a231aa66b59d49",
-        "packageBytes": 2113800845,
-        "releaseNotes": "Reliable large mod downloads with progress and storage preflight; Online packet/map-transfer fixes; Stable/Beta Mods & Updates."
+        "sha256": "34c98a951c1353b751953324e17a12c296eeda6a9c3b8428c6ecf8edec85e81c",
+        "packageBytes": 2134551773,
+        "releaseNotes": "Transition to remote-first Generals X web launcher with native bridge and bundled offline fallback; reliable mod downloads remain enabled."
       },
       "beta": {
         "version": "0.1.0",
@@ -71,7 +71,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T11:12:58Z",
+  "updatedAt": "2026-10-05T11:23:53Z",
   "launcherWeb": {
     "stable": {
       "version": "0.1.0-web.1",
