@@ -135,12 +135,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
     find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
     find_library(WEBKIT_FRAMEWORK WebKit REQUIRED)
+    find_library(COREGRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
     find_library(UNIFORMTYPEIDENTIFIERS_FRAMEWORK UniformTypeIdentifiers REQUIRED)
     find_library(OBJC_LIBRARY objc REQUIRED)
     target_link_libraries(generalsx_ios_launcher PRIVATE
         ${FOUNDATION_FRAMEWORK}
         ${UIKIT_FRAMEWORK}
         ${WEBKIT_FRAMEWORK}
+        ${COREGRAPHICS_FRAMEWORK}
         ${UNIFORMTYPEIDENTIFIERS_FRAMEWORK}
         ${OBJC_LIBRARY}
     )

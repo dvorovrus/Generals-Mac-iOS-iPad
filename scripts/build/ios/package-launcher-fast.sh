@@ -67,6 +67,7 @@ xcrun --sdk iphoneos clang++ \
   -framework Foundation \
   -framework UIKit \
   -framework WebKit \
+  -framework CoreGraphics \
   -framework UniformTypeIdentifiers \
   -lobjc \
   "${MOD_MANAGER_SRC}" \
