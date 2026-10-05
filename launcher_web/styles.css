@@ -67,9 +67,9 @@ button {
 .battlefield__tile {
   position: absolute;
   inset: -90px;
-  background-repeat: repeat;
-  background-position: 0 0;
-  background-size: var(--tile) var(--tile);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
   opacity: 0;
   filter: saturate(0.84) contrast(1.04) brightness(0.65);
   transition: none;
@@ -1879,4 +1879,197 @@ button {
     height: calc(100% - 74px);
     padding: 22px 15px max(28px, env(safe-area-inset-bottom));
   }
+}
+
+
+/* Web launcher v6: stable hero geometry, full-width pages and home download progress. */
+.battlefield__tile {
+  inset: -7%;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center center;
+}
+
+.hero__copy {
+  max-width: 760px;
+  min-width: 0;
+}
+
+.hero h1 {
+  min-height: 0.92em;
+}
+
+.hero p {
+  min-height: 3.15em;
+}
+
+.hero__meta {
+  min-height: 48px;
+  align-content: flex-start;
+}
+
+.hero__actions {
+  display: grid;
+  grid-template-columns: 188px 58px 108px 148px;
+  grid-auto-rows: 58px;
+  align-items: stretch;
+  gap: 11px;
+  min-height: 58px;
+  width: max-content;
+  max-width: 100%;
+}
+
+.play-button,
+.hero-settings-button,
+.hero-source-button,
+.secondary-button {
+  height: 58px;
+  min-height: 58px;
+  box-sizing: border-box;
+}
+
+.play-button {
+  min-width: 0;
+  width: 188px;
+}
+
+.hero-source-button {
+  width: 108px;
+  justify-content: center;
+}
+
+.hero-source-button[hidden] {
+  display: inline-flex !important;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.secondary-button {
+  width: 148px;
+  padding-inline: 14px;
+  white-space: nowrap;
+}
+
+.modes {
+  padding: 8px 2px 11px 8px;
+  scroll-padding-inline: 8px 112px;
+}
+
+.mode-card,
+.mode-card.is-active {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.mode-card.is-active {
+  transform: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(224, 184, 91, 0.46),
+    0 10px 28px rgba(0, 0, 0, 0.24);
+}
+
+.mode-card.is-active:hover {
+  transform: translateY(-1px);
+}
+
+.mode-card__content {
+  position: relative;
+  z-index: 3;
+  padding-right: 46px;
+}
+
+.mode-card__download-fill {
+  position: absolute;
+  z-index: 1;
+  inset: 0 auto 0 0;
+  width: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(212, 173, 84, 0.13), rgba(212, 173, 84, 0.30)),
+    rgba(212, 173, 84, 0.05);
+  transition: width 260ms cubic-bezier(.2,.8,.2,1);
+}
+
+.mode-card__download-percent {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  right: 13px;
+  transform: translateY(-50%);
+  color: #efd88f;
+  font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+}
+
+.mode-card.is-downloading {
+  border-color: rgba(212, 173, 84, 0.58);
+  background: rgba(14, 14, 11, 0.86);
+}
+
+.mode-card.is-download-complete {
+  box-shadow: inset 0 0 0 1px rgba(141, 205, 122, 0.56), 0 0 30px rgba(141, 205, 122, 0.12);
+}
+
+.mode-card.is-download-error {
+  box-shadow: inset 0 0 0 1px rgba(211, 91, 91, 0.58);
+}
+
+.modal__body {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  padding-inline: clamp(22px, 4vw, 60px);
+}
+
+.settings-content,
+.mod-library,
+.diagnostics-page,
+.diagnostic-block,
+.setting-section,
+.mod-library-card {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.mod-library {
+  grid-template-columns: 1fr;
+}
+
+.mod-library-card {
+  min-width: 0;
+}
+
+.diagnostic-block {
+  min-height: min(58vh, 620px);
+}
+
+@media (max-width: 860px) {
+  .hero__actions {
+    grid-template-columns: minmax(170px, 188px) 58px 100px 136px;
+    width: 100%;
+  }
+  .play-button,
+  .hero-source-button,
+  .secondary-button { width: 100%; }
+}
+
+@media (max-width: 640px) {
+  .hero__actions {
+    grid-template-columns: minmax(0, 1fr) 54px 92px;
+    grid-template-areas:
+      "play settings source"
+      "details details details";
+    width: 100%;
+  }
+  .play-button { grid-area: play; width: 100%; }
+  .hero-settings-button { grid-area: settings; width: 54px; }
+  .hero-source-button { grid-area: source; width: 92px; }
+  .secondary-button { grid-area: details; width: 100%; }
+  .hero__actions { min-height: 127px; }
+  .hero p { min-height: 4.6em; }
+  .modes { padding-left: 7px; }
 }

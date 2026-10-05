@@ -3,6 +3,7 @@ const nativePending = new Map();
 let nativeRequestCounter = 0;
 let nativeState = null;
 let nativeDiagnosticsText = "";
+const homeDownloadState = new Map();
 
 window.GeneralsXNative = {
   request(action, payload = {}, timeoutMs = 20000) {
@@ -82,6 +83,9 @@ function applyNativeState(state) {
     mod.updateAvailable = Boolean(item.updateAvailable);
     mod.packageBytes = Number(item.packageBytes || 0);
     mod.releaseNotes = item.releaseNotes || "";
+    mod.channel = item.channel || state.channel || "stable";
+    mod.requestedChannel = item.requestedChannel || state.channel || "stable";
+    mod.fallbackChannel = item.fallbackChannel || "";
     if (item.sourceURL) mod.moddbUrl = item.sourceURL;
     if (item.author) mod.author = item.author;
   });
@@ -143,14 +147,7 @@ function updateNativeProgress(payload) {
   const fraction = Math.max(0, Math.min(1, Number(payload.fraction || 0)));
   if (progress) progress.style.display = "block";
   if (bar) bar.style.width = `${Math.round(fraction * 100)}%`;
-
-  const mod = modCatalog.find(item => item.id === modId);
-  const title = mod?.title || (modId === "online" ? "Zero Hour + Online" : modId);
-  const received = Number(payload.received || 0) / 1024 / 1024 / 1024;
-  const total = Number(payload.total || 0) / 1024 / 1024 / 1024;
-  showToast(total > 0
-    ? `${title}: ${Math.round(fraction * 100)}% · ${received.toFixed(2)} / ${total.toFixed(2)} GB`
-    : `${title}: downloading…`);
+  setHomeDownloadProgress(modId, fraction, true);
 }
 
 function handleNativeEvent(name, payload) {
@@ -165,11 +162,15 @@ function handleNativeEvent(name, payload) {
   if (name === "installComplete") {
     const title = modCatalog.find(item => item.id === payload.profileId)?.title ||
       (payload.profileId === "online" ? "Zero Hour + Online" : payload.profileId);
+    setHomeDownloadProgress(payload.profileId, 1, true);
+    finishHomeDownload(payload.profileId, true);
+    triggerHaptic("success");
     showToast(`${title} installed`);
     syncNativeState();
     return;
   }
   if (name === "installError") {
+    finishHomeDownload(payload.profileId, false);
     showToast(payload.error || "Install failed");
     syncNativeState();
   }
@@ -324,6 +325,72 @@ function isModInstalled(modId) {
   return installedMods.includes(modId);
 }
 
+function cardForProfileId(profileId) {
+  const cardId = profileId === "online" ? "zero-hour-online" : profileId;
+  return cards.find(card => card.dataset.id === cardId) || null;
+}
+
+function ensureHomeDownloadUI(card) {
+  if (!card) return null;
+  let fill = card.querySelector(".mode-card__download-fill");
+  let percent = card.querySelector(".mode-card__download-percent");
+  if (!fill) {
+    fill = document.createElement("span");
+    fill.className = "mode-card__download-fill";
+    card.prepend(fill);
+  }
+  if (!percent) {
+    percent = document.createElement("span");
+    percent.className = "mode-card__download-percent";
+    card.append(percent);
+  }
+  return { fill, percent };
+}
+
+function setHomeDownloadProgress(profileId, fraction = 0, active = true) {
+  const value = Math.max(0, Math.min(1, Number(fraction || 0)));
+  homeDownloadState.set(profileId, { active, fraction: value });
+  const card = cardForProfileId(profileId);
+  if (!card) return;
+  const ui = ensureHomeDownloadUI(card);
+  card.hidden = false;
+  card.classList.toggle("is-downloading", active);
+  card.classList.remove("is-download-error", "is-download-complete");
+  card.style.setProperty("--download-progress", `${Math.round(value * 100)}%`);
+  if (ui) {
+    ui.fill.style.width = `${Math.round(value * 100)}%`;
+    ui.percent.textContent = active ? `${Math.round(value * 100)}%` : "";
+  }
+  updateModesOverflow();
+}
+
+function finishHomeDownload(profileId, ok) {
+  const card = cardForProfileId(profileId);
+  const state = homeDownloadState.get(profileId);
+  if (card) {
+    const ui = ensureHomeDownloadUI(card);
+    if (ok) {
+      card.style.setProperty("--download-progress", "100%");
+      if (ui) { ui.fill.style.width = "100%"; ui.percent.textContent = "100%"; }
+      card.classList.add("is-download-complete");
+      window.setTimeout(() => {
+        card.classList.remove("is-downloading", "is-download-complete");
+        if (ui) ui.percent.textContent = "";
+        homeDownloadState.delete(profileId);
+        syncInstalledModCards();
+      }, 700);
+    } else {
+      card.classList.remove("is-downloading");
+      card.classList.add("is-download-error");
+      if (ui) ui.percent.textContent = "";
+      homeDownloadState.delete(profileId);
+      window.setTimeout(() => { card.classList.remove("is-download-error"); syncInstalledModCards(); }, 900);
+    }
+  } else if (state) {
+    homeDownloadState.delete(profileId);
+  }
+}
+
 function updateModesOverflow() {
   if (!modesRail) return;
   window.requestAnimationFrame(() => {
@@ -353,7 +420,8 @@ function syncInstalledModCards() {
 
   modCatalog.forEach(mod => {
     const card = cards.find(item => item.dataset.id === mod.id);
-    if (card) card.hidden = !isModInstalled(mod.id);
+    const downloading = Boolean(homeDownloadState.get(mod.id)?.active);
+    if (card) card.hidden = !isModInstalled(mod.id) && !downloading;
   });
 
   syncModeCardVersions();
@@ -502,13 +570,15 @@ playButton.addEventListener("click", async () => {
   if (!installed || updateAvailable) {
     try {
       if (profile?.packageURL) {
-        await nativeRequest("install", { profileId });
+        setHomeDownloadProgress(profileId, 0, true);
         showToast(`${updateAvailable ? "Updating" : "Downloading"} ${activeCard.dataset.title}…`);
+        await nativeRequest("install", { profileId });
       } else {
         await nativeRequest("chooseFile", { profileId });
         showToast(`Choose the ${activeCard.dataset.title} package`);
       }
     } catch (error) {
+      finishHomeDownload(profileId, false);
       showToast(error.message || "Install failed");
     }
     return;
@@ -531,13 +601,7 @@ detailsButton.addEventListener("click", () => {
   openPanel("details");
 });
 
-function openPanel(type) {
-  if (type === "settings" && hasNativeBridge) {
-    const profileId = nativeProfileIdForCard();
-    nativeRequest("settings", { profileId }).catch(error => showToast(error.message || "Settings failed"));
-    return;
-  }
-
+async function openPanel(type) {
   window.clearTimeout(modalCloseTimer);
   modalBackdrop.hidden = false;
   window.requestAnimationFrame(() => modalBackdrop.classList.add("is-visible"));
@@ -552,6 +616,15 @@ function openPanel(type) {
         : profileId === "contra-x"
           ? "Contra X settings"
           : "Zero Hour + Online settings";
+    if (hasNativeBridge) {
+      try {
+        const nativeSettings = await nativeRequest("settingsGet", { profileId });
+        const scope = profileId === "enhanced" ? "enhanced" : profileId === "contra-x" ? "contra" : "game";
+        settingsState[scope] = { ...settingsDefaults[scope], ...(nativeSettings?.values || {}) };
+      } catch (error) {
+        showToast(error.message || "Unable to load settings");
+      }
+    }
     renderSettings(profileId);
   } else if (type === "mods") {
     modalEyebrow.textContent = "GENERALS X";
@@ -654,7 +727,7 @@ function renderModLibrary() {
           <div class="mod-library-card__copy">
             <strong>${mod.title}</strong>
             <span>${mod.description}</span>
-            <span class="mod-version-line">${mod.version ? `Version ${mod.version}` : ""}${mod.packageBytes ? ` · ${humanSize(mod.packageBytes)}` : ""}</span>
+            <span class="mod-version-line">${mod.version ? `Version ${mod.version}` : ""}${mod.packageBytes ? ` · ${humanSize(mod.packageBytes)}` : ""}${mod.fallbackChannel ? ` · ${mod.fallbackChannel.toUpperCase()} package fallback` : ""}</span>
             <a class="mod-author-link" href="${mod.moddbUrl}" target="_blank" rel="noopener noreferrer">
               <svg class="lucide lucide-external-link" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M15 3h6v6"/>
@@ -739,10 +812,13 @@ async function installNativeMod(modId, button) {
   if (!mod) return;
 
   button.disabled = true;
+  setHomeDownloadProgress(modId, 0, true);
+  const fallbackNote = mod.fallbackChannel ? ` · using ${mod.fallbackChannel.toUpperCase()} package` : "";
+  showToast(`Downloading ${mod.title}${fallbackNote}…`);
   try {
     await nativeRequest("install", { profileId: modId });
-    showToast(`Downloading ${mod.title}…`);
   } catch (error) {
+    finishHomeDownload(modId, false);
     button.disabled = false;
     showToast(error.message || "Download failed");
   }
@@ -1053,13 +1129,18 @@ function renderSettings(profileId = "zero-hour-online") {
     });
   });
 
-  modalBody.querySelector("[data-settings-save]").addEventListener("click", () => {
+  modalBody.querySelector("[data-settings-save]").addEventListener("click", async () => {
     try {
-      localStorage.setItem("generals-x-launcher-demo-settings", JSON.stringify(settingsState));
-    } catch {
-      // The visual demo still works if browser storage is unavailable.
+      if (hasNativeBridge) {
+        await nativeRequest("settingsSave", { profileId, values: settingsState[scope] });
+      } else {
+        localStorage.setItem("generals-x-launcher-demo-settings", JSON.stringify(settingsState));
+      }
+      triggerHaptic("success");
+      showToast(`${activeCard.dataset.title} settings saved`);
+    } catch (error) {
+      showToast(error.message || "Settings save failed");
     }
-    showToast(`${activeCard.dataset.title} settings saved`);
   });
 
   modalBody.querySelector("[data-settings-reset]").addEventListener("click", () => {
@@ -1137,11 +1218,17 @@ function showNextBackgroundSlide() {
   backgroundFadeFrame = requestAnimationFrame(fadeFrame);
 }
 
-function startBackgroundMotion() {
+async function startBackgroundMotion() {
   if (!backgroundPrimary || !backgroundSecondary) return;
 
   activeBackgroundIndex = randomBackgroundIndex();
-  backgroundPrimary.style.backgroundImage = 'url("' + backgroundSlides[activeBackgroundIndex] + '")';
+  const firstSource = backgroundSlides[activeBackgroundIndex];
+  await new Promise(resolve => {
+    const image = new Image();
+    image.onload = image.onerror = resolve;
+    image.src = firstSource;
+  });
+  backgroundPrimary.style.backgroundImage = 'url("' + firstSource + '")';
   backgroundPrimary.style.opacity = "1";
   backgroundSecondary.style.opacity = "0";
 

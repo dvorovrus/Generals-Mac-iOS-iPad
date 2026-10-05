@@ -87,10 +87,36 @@ NSDictionary<NSString *, id> *GXHubFlattenRelease(
     }
 
     NSDictionary *release = channels[channel];
+    NSString *effectiveChannel = channel;
+    NSString *fallbackChannel = nil;
+    NSDictionary *stableRelease = [channels[@"stable"] isKindOfClass:[NSDictionary class]] ? channels[@"stable"] : nil;
     if (![release isKindOfClass:[NSDictionary class]] && ![channel isEqualToString:@"stable"])
-        release = channels[@"stable"];
+    {
+        release = stableRelease;
+        effectiveChannel = @"stable";
+        fallbackChannel = @"stable";
+    }
     if (![release isKindOfClass:[NSDictionary class]])
         return nil;
+
+    NSString *packageURL = [release[@"packageURL"] isKindOfClass:[NSString class]] ? release[@"packageURL"] : @"";
+    NSURL *parsedPackageURL = packageURL.length > 0 ? [NSURL URLWithString:packageURL] : nil;
+    BOOL validHTTPSPackage = [[parsedPackageURL.scheme lowercaseString] isEqualToString:@"https"] && parsedPackageURL.host.length > 0;
+    if (!validHTTPSPackage && ![channel isEqualToString:@"stable"] && stableRelease != nil)
+    {
+        NSString *stableURLText = [stableRelease[@"packageURL"] isKindOfClass:[NSString class]] ? stableRelease[@"packageURL"] : @"";
+        NSURL *stableURL = stableURLText.length > 0 ? [NSURL URLWithString:stableURLText] : nil;
+        if ([[stableURL.scheme lowercaseString] isEqualToString:@"https"] && stableURL.host.length > 0)
+        {
+            release = stableRelease;
+            effectiveChannel = @"stable";
+            fallbackChannel = @"stable";
+            fprintf(stderr,
+                    "[HUB-CATALOG] package fallback profile='%s' requested='%s' effective='stable'\n",
+                    [entry[@"profileId"] UTF8String] ?: "unknown",
+                    channel.UTF8String ?: "unknown");
+        }
+    }
 
     NSMutableDictionary *flattened = [NSMutableDictionary dictionary];
     for (NSString *key in entry)
@@ -99,7 +125,10 @@ NSDictionary<NSString *, id> *GXHubFlattenRelease(
             flattened[key] = entry[key];
     }
     [flattened addEntriesFromDictionary:release];
-    flattened[@"channel"] = channel;
+    flattened[@"channel"] = effectiveChannel;
+    flattened[@"requestedChannel"] = channel;
+    if (fallbackChannel.length > 0)
+        flattened[@"fallbackChannel"] = fallbackChannel;
     return flattened;
 }
 

@@ -792,6 +792,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             @"packageBytes": entry[@"packageBytes"] ?: @0,
             @"releaseNotes": entry[@"releaseNotes"] ?: @"",
             @"minHubVersion": entry[@"minHubVersion"] ?: @"",
+            @"channel": entry[@"channel"] ?: channel,
+            @"requestedChannel": entry[@"requestedChannel"] ?: channel,
+            @"fallbackChannel": entry[@"fallbackChannel"] ?: @"",
             @"sourceURL": sourceURL,
             @"author": author,
         }];
@@ -826,6 +829,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             @"packageBytes": onlineEntry[@"packageBytes"] ?: @0,
             @"releaseNotes": onlineEntry[@"releaseNotes"] ?: @"",
             @"minHubVersion": onlineEntry[@"minHubVersion"] ?: @"",
+            @"channel": onlineEntry[@"channel"] ?: channel,
+            @"requestedChannel": onlineEntry[@"requestedChannel"] ?: channel,
+            @"fallbackChannel": onlineEntry[@"fallbackChannel"] ?: @"",
         },
         @"mods": mods,
         @"download": @{
@@ -899,10 +905,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSDictionary *release = [channels[channel] isKindOfClass:[NSDictionary class]]
         ? channels[channel]
         : ([channels[@"stable"] isKindOfClass:[NSDictionary class]] ? channels[@"stable"] : nil);
-    // Bridge schema 4 adds native haptic feedback for the Web Launcher. Older Hub
-    // binaries fail closed to their bundled launcher rather than receiving web
-    // actions their native bridge cannot handle.
-    if ([release[@"bridgeSchema"] integerValue] != 4)
+    // Bridge schema 5 adds Web-owned settings pages, download fallback metadata and
+    // richer home-card progress. Older Hub binaries fail closed to bundled UI.
+    if ([release[@"bridgeSchema"] integerValue] != 5)
     {
         fprintf(stderr, "[HUB-WEB] remote launcher bridge schema is incompatible; using bundled launcher\n");
         return nil;
@@ -1209,6 +1214,170 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     if ([action isEqualToString:@"clearDiagnostics"])
     {
         [self clearDiagnosticsLogs];
+        [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"settingsGet"])
+    {
+        NSString *profileId = [payload[@"profileId"] isKindOfClass:[NSString class]] ? payload[@"profileId"] : @"online";
+        NSMutableDictionary *values = [NSMutableDictionary dictionary];
+        if ([profileId isEqualToString:@"enhanced"])
+        {
+            EnsureDefaultEnhancedSettings();
+            NSDictionary *raw = ReadKeyValueFile(EnhancedSettingsPath());
+            values[@"textureResolution"] = SettingValue(raw, @"TextureResolution", @"High");
+            values[@"uiQuality"] = SettingValue(raw, @"UIQuality", @"FHD");
+            NSString *scale = SettingValue(raw, @"InfantryIconScale", @"100");
+            values[@"infantryIconScale"] = [scale stringByAppendingString:@"%"];
+            values[@"cameos"] = SettingValue(raw, @"Cameos", @"HD");
+            values[@"aiScripts"] = SettingValue(raw, @"AIScripts", @"Default");
+        }
+        else if ([profileId isEqualToString:@"contra-x"])
+        {
+            EnsureDefaultContraSettings();
+            NSDictionary *raw = ReadKeyValueFile(ContraSettingsPath());
+            values[@"controlBar"] = SettingValue(raw, @"ControlBar", @"Contra");
+            values[@"cameos"] = SettingValue(raw, @"Cameos", @"Standard");
+            values[@"music"] = SettingValue(raw, @"Music", @"Standard");
+            values[@"voices"] = SettingValue(raw, @"UnitVoices", @"English");
+            values[@"hotkeys"] = SettingValue(raw, @"Hotkeys", @"Original");
+            values[@"hotkeyLanguage"] = SettingValue(raw, @"HotkeyLanguage", @"English");
+            values[@"portraits"] = SettingValue(raw, @"Portraits", @"Standard");
+            values[@"fogEffects"] = @(SettingBoolValue(raw, @"FogEffects", NO));
+            values[@"waterEffects"] = @(SettingBoolValue(raw, @"WaterEffects", YES));
+            values[@"extraBuildingProps"] = @(SettingBoolValue(raw, @"ExtraBuildingProps", YES));
+        }
+        else
+        {
+            NSDictionary *options = ReadKeyValueFile(EngineOptionsPath());
+            NSString *camera = [NSString stringWithContentsOfFile:IPadOverridesPath() encoding:NSUTF8StringEncoding error:nil] ?: DefaultIPadOverrides();
+            values[@"shadow3D"] = @(SettingBoolValue(options, @"UseShadowVolumes", NO));
+            values[@"shadow2D"] = @(SettingBoolValue(options, @"UseShadowDecals", YES));
+            values[@"cloudShadows"] = @(SettingBoolValue(options, @"UseCloudMap", NO));
+            values[@"groundLighting"] = @(SettingBoolValue(options, @"UseLightMap", YES));
+            values[@"softWater"] = @(SettingBoolValue(options, @"ShowSoftWaterEdge", YES));
+            values[@"buildingOcclusion"] = @(SettingBoolValue(options, @"BuildingOcclusion", YES));
+            values[@"showProps"] = @(SettingBoolValue(options, @"ShowTrees", YES));
+            values[@"extraAnimations"] = @(SettingBoolValue(options, @"ExtraAnimations", YES));
+            values[@"dynamicLOD"] = @(SettingBoolValue(options, @"DynamicLOD", NO));
+            values[@"heatEffects"] = @(SettingBoolValue(options, @"HeatEffects", NO));
+            NSInteger textureReduction = [SettingValue(options, @"TextureReduction", @"0") integerValue];
+            values[@"textureQuality"] = textureReduction <= 0 ? @"High" : (textureReduction == 1 ? @"Medium" : @"Low");
+            NSInteger particles = [SettingValue(options, @"MaxParticleCount", @"2500") integerValue];
+            values[@"particles"] = particles <= 1000 ? @"Low" : (particles >= 5000 ? @"High" : @"Medium");
+            values[@"textureFilter"] = SettingValue(options, @"TextureFilter", @"Anisotropic");
+            values[@"anisotropy"] = [NSString stringWithFormat:@"%@x", SettingValue(options, @"AnisotropyLevel", @"8")];
+            NSString *aa = SettingValue(options, @"AntiAliasing", @"0");
+            values[@"msaa"] = [aa isEqualToString:@"0"] ? @"Off" : [aa stringByAppendingString:@"x"];
+            values[@"maxCamera"] = @([self floatSetting:@"MaxCameraHeight" contents:camera fallback:550.0f]);
+            values[@"minCamera"] = @([self floatSetting:@"MinCameraHeight" contents:camera fallback:70.0f]);
+            values[@"cameraPitch"] = @([self floatSetting:@"CameraPitch" contents:camera fallback:37.0f]);
+            values[@"enforceMax"] = @([self boolSetting:@"EnforceMaxCameraHeight" contents:camera fallback:NO]);
+            values[@"scrollSpeed"] = @([self floatSetting:@"KeyboardScrollSpeedFactor" contents:camera fallback:1.0f]);
+            values[@"drawDistance"] = @([self floatSetting:@"TerrainDrawDistanceScale" contents:camera fallback:1.20f]);
+            values[@"fpsLimit"] = @([self boolSetting:@"UseFPSLimit" contents:camera fallback:YES]);
+            values[@"fps"] = @([self floatSetting:@"FramesPerSecondLimit" contents:camera fallback:60.0f]);
+        }
+        [self sendWebResponse:requestId result:@{ @"profileId": profileId, @"values": values } error:nil];
+        return;
+    }
+
+    if ([action isEqualToString:@"settingsSave"])
+    {
+        NSString *profileId = [payload[@"profileId"] isKindOfClass:[NSString class]] ? payload[@"profileId"] : @"online";
+        NSDictionary *values = [payload[@"values"] isKindOfClass:[NSDictionary class]] ? payload[@"values"] : @{};
+        NSString *(^stringValue)(NSString *, NSString *) = ^NSString *(NSString *key, NSString *fallback) {
+            id value = values[key];
+            return [value isKindOfClass:[NSString class]] ? value : fallback;
+        };
+        BOOL (^boolValue)(NSString *, BOOL) = ^BOOL(NSString *key, BOOL fallback) {
+            id value = values[key];
+            return [value respondsToSelector:@selector(boolValue)] ? [value boolValue] : fallback;
+        };
+        double (^numberValue)(NSString *, double) = ^double(NSString *key, double fallback) {
+            id value = values[key];
+            return [value respondsToSelector:@selector(doubleValue)] ? [value doubleValue] : fallback;
+        };
+        NSError *saveError = nil;
+        BOOL ok = YES;
+        if ([profileId isEqualToString:@"enhanced"])
+        {
+            NSMutableDictionary *out = [DefaultEnhancedSettings() mutableCopy];
+            out[@"TextureResolution"] = stringValue(@"textureResolution", @"High");
+            out[@"UIQuality"] = stringValue(@"uiQuality", @"FHD");
+            NSString *scale = [stringValue(@"infantryIconScale", @"100%") stringByReplacingOccurrencesOfString:@"%" withString:@""];
+            out[@"InfantryIconScale"] = scale;
+            out[@"Cameos"] = stringValue(@"cameos", @"HD");
+            out[@"AIScripts"] = stringValue(@"aiScripts", @"Default");
+            ok = WriteKeyValueFile(EnhancedSettingsPath(), out, &saveError);
+        }
+        else if ([profileId isEqualToString:@"contra-x"])
+        {
+            NSMutableDictionary *out = [DefaultContraSettings() mutableCopy];
+            out[@"ControlBar"] = stringValue(@"controlBar", @"Contra");
+            out[@"Cameos"] = stringValue(@"cameos", @"Standard");
+            out[@"Music"] = stringValue(@"music", @"Standard");
+            out[@"UnitVoices"] = stringValue(@"voices", @"English");
+            out[@"Hotkeys"] = stringValue(@"hotkeys", @"Original");
+            out[@"HotkeyLanguage"] = stringValue(@"hotkeyLanguage", @"English");
+            out[@"Portraits"] = stringValue(@"portraits", @"Standard");
+            out[@"FogEffects"] = boolValue(@"fogEffects", NO) ? @"Yes" : @"No";
+            out[@"WaterEffects"] = boolValue(@"waterEffects", YES) ? @"Yes" : @"No";
+            out[@"ExtraBuildingProps"] = boolValue(@"extraBuildingProps", YES) ? @"Yes" : @"No";
+            ok = WriteKeyValueFile(ContraSettingsPath(), out, &saveError);
+        }
+        else
+        {
+            NSString *camera = [NSString stringWithFormat:
+                @"GameData\n"
+                 "  MaxCameraHeight = %.1f\n"
+                 "  MinCameraHeight = %.1f\n"
+                 "  CameraPitch = %.1f\n"
+                 "  EnforceMaxCameraHeight = %@\n"
+                 "  KeyboardScrollSpeedFactor = %.1f\n"
+                 "  TerrainDrawDistanceScale = %.2f\n"
+                 "  UseFPSLimit = %@\n"
+                 "  FramesPerSecondLimit = %.0f\n"
+                 "End\n",
+                numberValue(@"maxCamera", 550.0),
+                numberValue(@"minCamera", 70.0),
+                numberValue(@"cameraPitch", 37.0),
+                boolValue(@"enforceMax", NO) ? @"Yes" : @"No",
+                numberValue(@"scrollSpeed", 1.0),
+                numberValue(@"drawDistance", 1.20),
+                boolValue(@"fpsLimit", YES) ? @"Yes" : @"No",
+                numberValue(@"fps", 60.0)];
+            ok = [camera writeToFile:IPadOverridesPath() atomically:YES encoding:NSUTF8StringEncoding error:&saveError];
+            NSMutableDictionary *options = ReadKeyValueFile(EngineOptionsPath());
+            options[@"IdealStaticGameLOD"] = @"High";
+            options[@"StaticGameLOD"] = @"Custom";
+            options[@"UseShadowVolumes"] = boolValue(@"shadow3D", NO) ? @"Yes" : @"No";
+            options[@"UseShadowDecals"] = boolValue(@"shadow2D", YES) ? @"Yes" : @"No";
+            options[@"UseCloudMap"] = boolValue(@"cloudShadows", NO) ? @"Yes" : @"No";
+            options[@"UseLightMap"] = boolValue(@"groundLighting", YES) ? @"Yes" : @"No";
+            options[@"ShowSoftWaterEdge"] = boolValue(@"softWater", YES) ? @"Yes" : @"No";
+            options[@"BuildingOcclusion"] = boolValue(@"buildingOcclusion", YES) ? @"Yes" : @"No";
+            options[@"ShowTrees"] = boolValue(@"showProps", YES) ? @"Yes" : @"No";
+            options[@"ExtraAnimations"] = boolValue(@"extraAnimations", YES) ? @"Yes" : @"No";
+            options[@"DynamicLOD"] = boolValue(@"dynamicLOD", NO) ? @"Yes" : @"No";
+            options[@"HeatEffects"] = boolValue(@"heatEffects", NO) ? @"Yes" : @"No";
+            NSString *quality = stringValue(@"textureQuality", @"High");
+            options[@"TextureReduction"] = [quality isEqualToString:@"High"] ? @"0" : ([quality isEqualToString:@"Medium"] ? @"1" : @"2");
+            NSString *particles = stringValue(@"particles", @"Medium");
+            options[@"MaxParticleCount"] = [particles isEqualToString:@"Low"] ? @"1000" : ([particles isEqualToString:@"High"] ? @"5000" : @"2500");
+            options[@"TextureFilter"] = stringValue(@"textureFilter", @"Anisotropic");
+            options[@"AnisotropyLevel"] = [stringValue(@"anisotropy", @"8x") stringByReplacingOccurrencesOfString:@"x" withString:@""];
+            NSString *msaa = stringValue(@"msaa", @"Off");
+            options[@"AntiAliasing"] = [msaa isEqualToString:@"Off"] ? @"0" : [msaa stringByReplacingOccurrencesOfString:@"x" withString:@""];
+            if (ok) ok = WriteKeyValueFile(EngineOptionsPath(), options, &saveError);
+        }
+        if (!ok)
+        {
+            [self sendWebResponse:requestId result:nil error:saveError.localizedDescription ?: @"Settings save failed."];
+            return;
+        }
+        fprintf(stderr, "[HUB-SETTINGS] web saved profile='%s'\n", profileId.UTF8String);
         [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
         return;
     }
