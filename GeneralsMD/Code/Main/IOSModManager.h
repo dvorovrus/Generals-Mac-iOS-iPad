@@ -33,6 +33,12 @@ typedef void (^GXHubInstallCompletion)(
     NSDictionary<NSString *, id> * _Nullable installedManifest,
     NSError * _Nullable error);
 
+typedef void (^GXHubCatalogCompletion)(
+    BOOL updated,
+    NSError * _Nullable error);
+
+FOUNDATION_EXPORT void GXHubRefreshRemoteCatalog(GXHubCatalogCompletion completion);
+
 FOUNDATION_EXPORT void GXHubDownloadAndInstall(
     NSDictionary<NSString *, id> *catalogEntry,
     GXHubInstallCompletion completion);
