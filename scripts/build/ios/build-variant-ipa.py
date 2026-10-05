@@ -17,6 +17,7 @@ import argparse
 import contextlib
 import hashlib
 import importlib.util
+import plistlib
 import sys
 import zipfile
 from pathlib import Path
@@ -52,6 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contra-patch1", type=Path)
     parser.add_argument("--online-data", type=Path, help="Optional Generals Online data root containing GeneralsOnlineGameData/")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--app-version", help="Optional CFBundleShortVersionString override for the packaged app.")
+    parser.add_argument("--build-number", help="Optional CFBundleVersion override for the packaged app.")
     parser.add_argument("--skip-md5", action="store_true")
     return parser.parse_args()
 
@@ -186,6 +189,16 @@ def main() -> None:
             if info.is_dir() or any(name.startswith(prefix) for prefix in skipped_prefixes):
                 continue
             if args.variant == "hub" and name.lower() == (shell_app + "HubCatalog.json").lower():
+                continue
+            if name.lower() == (shell_app + "Info.plist").lower() and (args.app_version or args.build_number):
+                plist = plistlib.loads(shell.read(info))
+                if args.app_version:
+                    plist["CFBundleShortVersionString"] = args.app_version
+                if args.build_number:
+                    plist["CFBundleVersion"] = args.build_number
+                payload = plistlib.dumps(plist, fmt=plistlib.FMT_BINARY, sort_keys=False)
+                out.writestr(info, payload)
+                shell_bytes += len(payload)
                 continue
             shell_bytes += b.zip_copy(shell, info, out, name)
 

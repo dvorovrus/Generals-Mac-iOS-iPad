@@ -1,3 +1,7 @@
+param(
+    [string] $Version = "1.4.2"
+)
+
 $ErrorActionPreference = "Stop"
 $Workspace = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..\..")).Path
 $RepoRoot = (& git -C $PSScriptRoot rev-parse --show-toplevel 2>$null | Select-Object -First 1).Trim()
@@ -38,7 +42,7 @@ if (-not (Test-Path -LiteralPath $Shell)) {
 }
 
 Write-Host "Packaging lightweight Generals Hub (engine + launcher only)..." -ForegroundColor Cyan
-& $Python $Builder --variant hub --shell $Shell --output $Output
+& $Python $Builder --variant hub --shell $Shell --app-version $Version --build-number $RunId --output $Output
 if ($LASTEXITCODE -ne 0) { throw "Hub Online IPA packaging failed." }
 
 Write-Host "Verifying Hub Online IPA..." -ForegroundColor Cyan
@@ -47,7 +51,7 @@ if ($LASTEXITCODE -ne 0) { throw "Hub Online IPA verification failed." }
 
 $sizeMb = [math]::Round((Get-Item -LiteralPath $Output).Length / 1MB, 1)
 $nl = [Environment]::NewLine
-$SourceInfo = "Run: $RunId" + $nl + "Commit: $($run.headSha)" + $nl + "URL: $($run.url)" + $nl + "Shell: $Shell" + $nl + "Base content: external online.gxmod" + $nl + "Mode: Generals Hub" + $nl
+$SourceInfo = "Run: $RunId" + $nl + "Commit: $($run.headSha)" + $nl + "URL: $($run.url)" + $nl + "Shell: $Shell" + $nl + "Version: $Version" + $nl + "Build: $RunId" + $nl + "Base content: external online.gxmod" + $nl + "Mode: Generals Hub" + $nl
 [System.IO.File]::WriteAllText("$Output.source.txt", $SourceInfo)
 
 Write-Host ""
