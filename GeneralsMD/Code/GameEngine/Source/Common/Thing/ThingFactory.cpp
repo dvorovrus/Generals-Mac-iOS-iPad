@@ -379,6 +379,16 @@ AsciiString TheThingTemplateBeingParsedName;
 #if defined(RTS_DEBUG) || defined(DEBUG_CRASHING)
 	TheThingTemplateBeingParsedName = name;
 #endif
+#if defined(__APPLE__)
+	fprintf(stderr,
+	        "[OBJECT-DIAG] begin file='%s' line=%d name='%s' reskin='%s' loadType=%d\n",
+	        ini->getFilename().str(),
+	        ini->getLineNum(),
+	        name.str(),
+	        reskinFrom.str(),
+	        (int)ini->getLoadType());
+	fflush(stderr);
+#endif
 
 	// find existing item if present
 	ThingTemplate *thingTemplate = TheThingFactory->findTemplateInternal( name, FALSE );
@@ -407,6 +417,13 @@ AsciiString TheThingTemplateBeingParsedName;
 		thingTemplate = TheThingFactory->newOverride( thingTemplate );
 	}
 
+#if defined(__APPLE__)
+	fprintf(stderr,
+	        "[OBJECT-DIAG] template-ready file='%s' line=%d name='%s' ptr=%p\n",
+	        ini->getFilename().str(), ini->getLineNum(), name.str(), (void *)thingTemplate);
+	fflush(stderr);
+#endif
+
 	if (reskinFrom.isNotEmpty())
 	{
 		const ThingTemplate* reskinTmpl = TheThingFactory->findTemplate(reskinFrom);
@@ -415,7 +432,15 @@ AsciiString TheThingTemplateBeingParsedName;
 			thingTemplate->copyFrom(reskinTmpl);
 			thingTemplate->setCopiedFromDefault();
 			thingTemplate->setReskinnedFrom(reskinTmpl);
+#if defined(__APPLE__)
+			fprintf(stderr, "[OBJECT-DIAG] fields-begin name='%s' mode=reskin\n", name.str());
+			fflush(stderr);
+#endif
 			ini->initFromINI( thingTemplate, thingTemplate->getReskinFieldParse() );
+#if defined(__APPLE__)
+			fprintf(stderr, "[OBJECT-DIAG] fields-complete name='%s' mode=reskin\n", name.str());
+			fflush(stderr);
+#endif
 		}
 		else
 		{
@@ -425,15 +450,38 @@ AsciiString TheThingTemplateBeingParsedName;
 	}
 	else
 	{
+#if defined(__APPLE__)
+		fprintf(stderr, "[OBJECT-DIAG] fields-begin name='%s' mode=normal\n", name.str());
+		fflush(stderr);
+#endif
 		ini->initFromINI( thingTemplate, thingTemplate->getFieldParse() );
+#if defined(__APPLE__)
+		fprintf(stderr, "[OBJECT-DIAG] fields-complete name='%s' mode=normal\n", name.str());
+		fflush(stderr);
+#endif
 	}
 
+#if defined(__APPLE__)
+	fprintf(stderr, "[OBJECT-DIAG] validate-begin name='%s'\n", name.str());
+	fflush(stderr);
+#endif
 	thingTemplate->validate();
+#if defined(__APPLE__)
+	fprintf(stderr, "[OBJECT-DIAG] validate-complete name='%s'\n", name.str());
+	fflush(stderr);
+#endif
 
 	if( ini->getLoadType() == INI_LOAD_CREATE_OVERRIDES )
 	{
 		thingTemplate->resolveNames();
 	}
+
+#if defined(__APPLE__)
+	fprintf(stderr,
+	        "[OBJECT-DIAG] complete file='%s' line=%d name='%s'\n",
+	        ini->getFilename().str(), ini->getLineNum(), name.str());
+	fflush(stderr);
+#endif
 
 #if defined(RTS_DEBUG) || defined(DEBUG_CRASHING)
 	TheThingTemplateBeingParsedName.clear();

@@ -1085,21 +1085,34 @@ void GeneralsXClearIOSDiagnosticLogs()
 #if defined(__APPLE__)
 static void AppleFatalSignalHandler(int signalNumber)
 {
+	int outputFd = STDERR_FILENO;
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+	// iOS diagnostics use a funopen-backed FILE* stderr. A raw write to
+	// STDERR_FILENO bypasses that sink, so fatal-signal traces previously vanished.
+	// Write directly to the retained diagnostics fd when it is available.
+	if (g_iosDiagnosticLogFd >= 0)
+		outputFd = g_iosDiagnosticLogFd;
+#endif
+
 	char header[128];
 	const int headerLength = snprintf(header, sizeof(header),
 	                                  "\n[FATAL-SIGNAL] signal=%d\n[FATAL-SIGNAL] native backtrace follows:\n",
 	                                  signalNumber);
 	if (headerLength > 0)
 	{
-		write(STDERR_FILENO, header, (size_t)headerLength);
+		write(outputFd, header, (size_t)headerLength);
 	}
 
 	void *frames[64];
 	const int frameCount = backtrace(frames, (int)(sizeof(frames) / sizeof(frames[0])));
 	if (frameCount > 0)
 	{
-		backtrace_symbols_fd(frames, frameCount, STDERR_FILENO);
+		backtrace_symbols_fd(frames, frameCount, outputFd);
 	}
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+	if (outputFd == g_iosDiagnosticLogFd)
+		fsync(outputFd);
+#endif
 	_exit(128 + signalNumber);
 }
 
