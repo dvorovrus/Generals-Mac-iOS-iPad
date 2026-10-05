@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 9,
+  "catalogVersion": 13,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "0.1.0",
-        "build": 37302121137,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/0.1.0/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "34c98a951c1353b751953324e17a12c296eeda6a9c3b8428c6ecf8edec85e81c",
-        "packageBytes": 2134551773,
-        "releaseNotes": "Transition to remote-first Generals X web launcher with native bridge and bundled offline fallback; reliable mod downloads remain enabled."
+        "version": "1.4.1",
+        "build": 37306183589,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.1/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "9ffbac21033cac0e0d99138488329c486262215d89e86561565b40caccc52283",
+        "packageBytes": 45436833,
+        "releaseNotes": "Lightweight Generals Hub shell with downloadable Zero Hour + Online base content and bridge schema 2."
       },
       "beta": {
         "version": "0.1.0",
@@ -31,11 +31,11 @@
       "channels": {
         "stable": {
           "version": "1.04+GO-100126_QFE6",
-          "packageURL": "",
+          "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/online/stable/1.04+GO-100126_QFE6.gxmod",
           "sha256": "a01298198008b0786c2896bceda4d31628ad0e884c92cbdbe22349363aa9f9c1",
           "packageBytes": 2904975360,
           "minHubVersion": "0.1.0",
-          "releaseNotes": "Initial separately installable Zero Hour + Generals Online base content."
+          "releaseNotes": "Zero Hour 1.04 + official Generals Online 100126_QFE6 shared base content."
         },
         "beta": {
           "version": "1.04+GO-100126_QFE6",
@@ -94,15 +94,17 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T11:23:53Z",
+  "updatedAt": "2026-10-05T12:19:29Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.1.0-web.1",
-      "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html"
+      "version": "0.2.0-web.1",
+      "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
+      "bridgeSchema": 2
     },
     "beta": {
-      "version": "0.1.0-web.1",
-      "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html"
+      "version": "0.2.0-web.1",
+      "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
+      "bridgeSchema": 2
     }
   }
 }
