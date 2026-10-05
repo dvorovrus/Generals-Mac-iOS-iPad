@@ -1258,15 +1258,18 @@ async function startBackgroundMotion() {
     parallaxX += (targetX - parallaxX) * 0.014;
     parallaxY += (targetY - parallaxY) * 0.014;
 
-    const driftX = elapsed * 0.0088;
-    const driftY = elapsed * 0.0034;
-    const waveX = Math.sin(elapsed / 7600) * 9;
-    const waveY = Math.cos(elapsed / 9200) * 5;
+    // Keep motion bounded so a non-repeating cover image can never drift far
+    // enough to expose an edge. The overscanned background layer absorbs this
+    // slow cinematic movement plus the small pointer parallax.
+    const driftX = Math.sin(elapsed / 18000) * 24;
+    const driftY = Math.cos(elapsed / 22000) * 14;
+    const waveX = Math.sin(elapsed / 7600) * 8;
+    const waveY = Math.cos(elapsed / 9200) * 4;
 
     const primaryX = driftX + waveX + parallaxX;
     const primaryY = driftY + waveY + parallaxY;
-    const secondaryX = driftX + waveX * 0.82 + parallaxX * 0.8 + 34;
-    const secondaryY = driftY + waveY * 0.82 + parallaxY * 0.8 + 18;
+    const secondaryX = driftX * 0.84 + waveX * 0.82 + parallaxX * 0.8 + 20;
+    const secondaryY = driftY * 0.84 + waveY * 0.82 + parallaxY * 0.8 + 12;
 
     backgroundPrimary.style.backgroundPosition =
       primaryX + "px " + primaryY + "px";
