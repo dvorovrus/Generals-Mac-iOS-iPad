@@ -653,11 +653,20 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSString *channel = GXHubCatalogChannel();
     NSDictionary *catalog = GXHubCatalogDocument();
 
+    NSDictionary *onlineEntry = HubEntryForProfile(@"online") ?: @{};
+    NSDictionary *onlineInstalledManifest = GXHubInstalledManifest(@"online") ?: @{};
+    NSString *onlineInstalledVersion = onlineInstalledManifest[@"version"] ?: @"";
+    NSString *onlineAvailableVersion = onlineEntry[@"version"] ?: @"unknown";
+    BOOL onlineInstalled = GXHubProfileInstalled(@"online");
+    BOOL onlineUpdateAvailable = onlineInstalled && onlineInstalledVersion.length > 0 &&
+        HubVersionDiffers(onlineInstalledVersion, onlineAvailableVersion) &&
+        [onlineEntry[@"packageURL"] length] > 0;
+
     NSMutableArray *mods = [NSMutableArray array];
     for (NSDictionary *entry in GXHubCatalogEntries())
     {
         NSString *profileId = entry[@"profileId"] ?: @"";
-        if (profileId.length == 0)
+        if (profileId.length == 0 || [profileId isEqualToString:@"online"])
             continue;
         NSDictionary *installedManifest = GXHubInstalledManifest(profileId);
         NSString *installedVersion = installedManifest[@"version"];
@@ -716,10 +725,16 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         @"channel": channel,
         @"online": @{
             @"profileId": @"online",
-            @"name": @"Zero Hour + Online",
-            @"description": @"Classic Zero Hour with Generals Online multiplayer integration.",
-            @"installed": @YES,
-            @"version": @"1.4 / network 0x00010004",
+            @"name": onlineEntry[@"name"] ?: @"Zero Hour + Online",
+            @"description": onlineEntry[@"description"] ?: @"Classic Zero Hour with Generals Online multiplayer integration.",
+            @"installed": @(onlineInstalled),
+            @"installedVersion": onlineInstalledVersion,
+            @"version": onlineAvailableVersion,
+            @"updateAvailable": @(onlineUpdateAvailable),
+            @"packageURL": onlineEntry[@"packageURL"] ?: @"",
+            @"packageBytes": onlineEntry[@"packageBytes"] ?: @0,
+            @"releaseNotes": onlineEntry[@"releaseNotes"] ?: @"",
+            @"minHubVersion": onlineEntry[@"minHubVersion"] ?: @"",
         },
         @"mods": mods,
         @"download": @{
@@ -793,6 +808,14 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSDictionary *release = [channels[channel] isKindOfClass:[NSDictionary class]]
         ? channels[channel]
         : ([channels[@"stable"] isKindOfClass:[NSDictionary class]] ? channels[@"stable"] : nil);
+    // Native bridge schema 2 is required by the downloadable base-content flow.
+    // Older remote launchers treat Online as permanently bundled, so fail closed
+    // to the embedded launcher until a compatible web release is published.
+    if ([release[@"bridgeSchema"] integerValue] != 2)
+    {
+        fprintf(stderr, "[HUB-WEB] remote launcher bridge schema is incompatible; using bundled launcher\n");
+        return nil;
+    }
     NSString *urlText = [release[@"indexURL"] isKindOfClass:[NSString class]] ? release[@"indexURL"] : nil;
 
     if (urlText.length == 0)
@@ -901,8 +924,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     if ([action isEqualToString:@"play"])
     {
         NSString *profileId = payload[@"profileId"];
-        if ([profileId isEqualToString:@"online"] ||
-            (([profileId isEqualToString:@"enhanced"] || [profileId isEqualToString:@"contra-x"]) && GXHubProfileInstalled(profileId)))
+        BOOL baseInstalled = GXHubProfileInstalled(@"online");
+        BOOL selectedInstalled = [profileId isEqualToString:@"online"]
+            ? baseInstalled
+            : (([profileId isEqualToString:@"enhanced"] || [profileId isEqualToString:@"contra-x"]) && GXHubProfileInstalled(profileId));
+        if (baseInstalled && selectedInstalled)
         {
             [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -911,7 +937,10 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         }
         else
         {
-            [self sendWebResponse:requestId result:nil error:@"Profile is not installed."];
+            NSString *message = baseInstalled
+                ? @"Profile is not installed."
+                : @"Zero Hour + Online base content is not installed.";
+            [self sendWebResponse:requestId result:nil error:message];
         }
         return;
     }
@@ -1007,9 +1036,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     if ([action isEqualToString:@"diagnostics"])
     {
-        NSString *resourcePath = NSBundle.mainBundle.resourcePath ?: @"";
-        NSString *gameDataPath = [resourcePath stringByAppendingPathComponent:@"GameData"];
-        BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:gameDataPath];
+        NSString *gameDataPath = GXHubInstalledProfilePath(@"online");
+        BOOL exists = GXHubProfileInstalled(@"online");
         __weak GXProfileLauncherViewController *weakSelf = self;
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
             unsigned long long bytes = exists ? DirectorySizeAtPath(gameDataPath) : 0;
@@ -2119,10 +2147,9 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
     NSBundle *bundle = [NSBundle mainBundle];
     NSString *shortVersion = [bundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
     NSString *buildVersion = [bundle objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"unknown";
-    NSString *resourcePath = bundle.resourcePath ?: @"";
-    NSString *gameDataPath = [resourcePath stringByAppendingPathComponent:@"GameData"];
+    NSString *gameDataPath = GXHubInstalledProfilePath(@"online");
 
-    BOOL gameDataExists = [[NSFileManager defaultManager] fileExistsAtPath:gameDataPath];
+    BOOL gameDataExists = GXHubProfileInstalled(@"online");
     BOOL enhancedInstalled = ProfileDirectoryExists(@"enhanced");
     BOOL contraInstalled = ProfileDirectoryExists(@"contra-x");
 
@@ -2319,9 +2346,8 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
     self.diagnosticsScanRunning = YES;
     self.diagnosticsText.text = [self diagnosticsTextWithGameDataSize:@"Calculating…"];
 
-    NSString *resourcePath = [NSBundle mainBundle].resourcePath ?: @"";
-    NSString *gameDataPath = [resourcePath stringByAppendingPathComponent:@"GameData"];
-    BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:gameDataPath];
+    NSString *gameDataPath = GXHubInstalledProfilePath(@"online");
+    BOOL exists = GXHubProfileInstalled(@"online");
 
     __weak GXProfileLauncherViewController *weakSelf = self;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{

@@ -19,6 +19,9 @@ The current bootstrap catalog is public through the GitHub branch URL. Once R2 i
 ```text
 catalog.json
 mods/
+  online/
+    stable/<version>.gxmod
+    beta/<version>.gxmod
   enhanced/
     stable/<version>.gxmod
     beta/<version>.gxmod
@@ -56,15 +59,31 @@ R2_BUCKET
 
 The `Hub | Publish Catalog to R2` workflow mirrors `ios/hub/HubCatalog.json` to `catalog.json` whenever the catalog changes.
 
-## Publish the current Stable mods in one command
+## Publish the current Stable content in one command
 
-After configuration, publish the already-built Enhanced and Contra X packages together:
+After configuration, build `online.gxmod`, Enhanced and Contra X, then publish all three packages together:
 
 ```powershell
 .\scripts\publish\windows\publish-stable-mods-r2.ps1 -CommitAndPush
 ```
 
-This uploads both packages, updates their Stable channel records, uploads `catalog.json` to R2, commits the updated local catalog once, and pushes it to GitHub.
+This uploads the shared Zero Hour + Online base package plus Enhanced and Contra X, updates their Stable channel records, uploads `catalog.json` to R2, commits the updated local catalog once, and pushes it to GitHub.
+
+## Build and publish the Online/base package
+
+```powershell
+.\scripts\build\ios\windows\build-online-gxmod.ps1 `
+  -Channel stable `
+  -Version '1.04+GO-100126_QFE6'
+
+.\scripts\publish\windows\publish-gxmod-r2.ps1 `
+  -PackagePath 'D:\project\test\Generals-iPad\output\mods\online.gxmod' `
+  -Channel stable `
+  -ReleaseNotes 'Zero Hour 1.04 + Generals Online 100126_QFE6 base content' `
+  -CommitAndPush
+```
+
+The Online package is a required base dependency for every playable Hub profile. It is downloaded once; Enhanced and Contra X do not duplicate retail GameData.
 
 ## Build and publish a mod
 
@@ -120,7 +139,7 @@ The Hub IPA cannot replace its own signed application on iOS. It can detect a ne
 - manual Refresh;
 - cached catalog fallback;
 - Hub update status and changelog;
-- Install/Update for mods when an HTTPS package URL exists;
+- Install/Update for Zero Hour + Online and mods when an HTTPS package URL exists;
 - SHA-256 verification before installation;
 - minimum Hub version enforcement;
 - existing per-mod settings preservation during updates.

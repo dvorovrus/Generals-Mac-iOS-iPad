@@ -3,7 +3,7 @@
 
 The format is a POSIX USTAR archive:
   manifest.json     (must be first)
-  profile/<files>   (the mod profile consumed by the existing -mod runtime)
+  profile/<files>   (base GameData for Online, or a mod overlay for Enhanced/Contra)
 
 The archive is intentionally uncompressed: Generals BIG/CTR assets are already
 compressed or binary-heavy, and an uncompressed TAR can be extracted on iOS in
@@ -18,6 +18,7 @@ import io
 import json
 import sys
 import tarfile
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -39,7 +40,9 @@ b = load_builder()
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Build Generals Hub .gxmod package.")
-    p.add_argument("--variant", choices=("enhanced", "contra"), required=True)
+    p.add_argument("--variant", choices=("online", "enhanced", "contra"), required=True)
+    p.add_argument("--base-ipa", type=Path, help="Full retail Zero Hour IPA used to build the Online base content package.")
+    p.add_argument("--online-data", type=Path, help="Official Generals Online parity-data root merged over retail GameData.")
     p.add_argument("--enhanced", type=Path)
     p.add_argument("--enhanced-patch", type=Path)
     p.add_argument("--contra-beta2", type=Path)
@@ -87,11 +90,97 @@ def add_source(tar: tarfile.TarFile, entry, target: str) -> int:
     return size
 
 
+def write_sidecars(output: Path, manifest: dict, total: int) -> None:
+    digest = sha256(output)
+    output.with_suffix(output.suffix + ".sha256").write_text(
+        f"{digest}  {output.name}\n", encoding="utf-8"
+    )
+    output.with_suffix(output.suffix + ".json").write_text(
+        json.dumps({
+            **manifest,
+            "sha256": digest,
+            "packageBytes": output.stat().st_size,
+        }, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"READY: {output.resolve()}")
+    print(f"Profile files: {manifest['profileFiles']}")
+    print(f"Profile bytes: {total}")
+    print(f"Package bytes: {output.stat().st_size}")
+    print(f"SHA-256: {digest}")
+
+
+def build_online(args: argparse.Namespace) -> None:
+    if args.base_ipa is None or not args.base_ipa.exists() or not zipfile.is_zipfile(args.base_ipa):
+        b.die("A valid retail Zero Hour base IPA is required for the Online package")
+    if args.online_data is None or not args.online_data.exists():
+        b.die("Official Generals Online data is required for the Online package")
+
+    required_patch = args.online_data / "GeneralsOnlineGameData" / "500_900_CommunityPatch_CoreINI.big"
+    required_parity = args.online_data / "GeneralsOnlineGameData" / "generals-online-parity.json"
+    if not required_patch.is_file() or not required_parity.is_file():
+        b.die("Generals Online parity data is incomplete")
+
+    online_sources = [
+        (path, path.relative_to(args.online_data).as_posix())
+        for path in sorted(args.online_data.rglob("*"))
+        if path.is_file()
+    ]
+    online_rel_lower = {rel.lower() for _, rel in online_sources}
+
+    with zipfile.ZipFile(args.base_ipa, "r") as base:
+        base_app = b.find_single_app(base.namelist())
+        base_prefix = base_app + "GameData/"
+        base_entries = []
+        for info in base.infolist():
+            name = info.filename.replace("\\", "/")
+            if info.is_dir() or not name.startswith(base_prefix):
+                continue
+            rel = name[len(base_prefix):]
+            if not rel or rel.lower() in online_rel_lower:
+                continue
+            base_entries.append((info, rel))
+
+        if not base_entries:
+            b.die("Base IPA contains no retail GameData files")
+
+        manifest = {
+            "schemaVersion": 1,
+            "profileId": "online",
+            "name": "Zero Hour + Online",
+            "version": args.version or "1.04+GO-100126_QFE6",
+            "channel": args.channel,
+            "minHubVersion": args.min_hub_version,
+            "runtimeAdapter": "online",
+            "contentRole": "base",
+            "profileFiles": len(base_entries) + len(online_sources),
+        }
+        manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode()
+        total = 0
+        with tarfile.open(args.output, "w", format=tarfile.USTAR_FORMAT) as tar:
+            tar.addfile(tar_info("manifest.json", len(manifest_bytes)), io.BytesIO(manifest_bytes))
+            for info, rel in base_entries:
+                with base.open(info, "r") as src:
+                    tar.addfile(tar_info("profile/" + b.normalized_rel(rel), info.file_size), src)
+                total += info.file_size
+            for source, rel in online_sources:
+                size = source.stat().st_size
+                with source.open("rb") as src:
+                    tar.addfile(tar_info("profile/" + b.normalized_rel(rel), size), src)
+                total += size
+
+    write_sidecars(args.output, manifest, total)
+
+
 def main() -> None:
     args = parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.output.exists():
         args.output.unlink()
+
+    if args.variant == "online":
+        build_online(args)
+        return
 
     contexts = []
     generated: dict[str, bytes] = {}
@@ -156,23 +245,7 @@ def main() -> None:
                 tar.addfile(tar_info("manifest.json", len(manifest_bytes)), io.BytesIO(manifest_bytes))
                 for entry, rel in entries:
                     total += add_source(tar, entry, rel)
-            digest = sha256(args.output)
-            args.output.with_suffix(args.output.suffix + ".sha256").write_text(
-                f"{digest}  {args.output.name}\n", encoding="utf-8"
-            )
-            args.output.with_suffix(args.output.suffix + ".json").write_text(
-                json.dumps({
-                    **manifest,
-                    "sha256": digest,
-                    "packageBytes": args.output.stat().st_size,
-                }, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            print(f"READY: {args.output.resolve()}")
-            print(f"Profile files: {len(entries)}")
-            print(f"Profile bytes: {total}")
-            print(f"Package bytes: {args.output.stat().st_size}")
-            print(f"SHA-256: {digest}")
+            write_sidecars(args.output, manifest, total)
             return
 
     # Enhanced sources are reopened because entries may be backed by ZIP streams.
@@ -198,23 +271,7 @@ def main() -> None:
         for ctx in reversed(contexts[:len(opened)]):
             ctx.__exit__(None, None, None)
 
-    digest = sha256(args.output)
-    args.output.with_suffix(args.output.suffix + ".sha256").write_text(
-        f"{digest}  {args.output.name}\n", encoding="utf-8"
-    )
-    args.output.with_suffix(args.output.suffix + ".json").write_text(
-        json.dumps({
-            **manifest,
-            "sha256": digest,
-            "packageBytes": args.output.stat().st_size,
-        }, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    print(f"READY: {args.output.resolve()}")
-    print(f"Profile files: {manifest['profileFiles']}")
-    print(f"Profile bytes: {total}")
-    print(f"Package bytes: {args.output.stat().st_size}")
-    print(f"SHA-256: {digest}")
+    write_sidecars(args.output, manifest, total)
 
 
 if __name__ == "__main__":

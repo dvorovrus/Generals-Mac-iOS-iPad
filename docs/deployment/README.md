@@ -20,7 +20,7 @@ The single source of truth is `scripts/deploy/catalog.json`.
 | Platform | Variant | Canonical build | Install status |
 |---|---|---|---|
 | iPad | Original | GitHub Actions | Ready |
-| iPad | Generals Hub | Shared shell + local Windows package | MVP ready for device test |
+| iPad | Generals Hub | Lightweight signed shell + downloadable Online/mod packages | Architecture ready; device validation pending |
 | iPad | Contra X | GitHub Actions | Ready |
 | iPad | Enhanced | GitHub Actions | Ready |
 | iPad | All-in-One | Local Windows packager | Ready |
@@ -69,6 +69,10 @@ This creates the canonical folders without moving or deleting existing user file
 
 # Enhanced uses the same GitHub Actions lifecycle
 .\scripts\deploy\windows\generals-deploy.ps1 full -Platform ipad -Variant enhanced
+
+# Hub: build small IPA and separately build shared Online/base package
+.\scripts\build\ios\windows\build-hub-online.ps1
+.\scripts\build\ios\windows\build-online-gxmod.ps1
 ```
 
 ### macOS

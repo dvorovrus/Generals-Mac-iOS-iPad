@@ -77,7 +77,7 @@
         "note": "Current Online artifact is an engine shell without retail GameData. Treat it as a test build, not a normal end-user full IPA."
       },
       "hub": {
-        "title": "Generals Hub: Online + installable mods",
+        "title": "Generals Hub: downloadable Online + mods",
         "status": "experimental",
         "branch": "feature/generals-hub-online",
         "buildMode": "local",
@@ -88,7 +88,7 @@
         "installMode": "sideloadly",
         "localFallbackScript": "scripts/build/ios/windows/build-hub-online.ps1",
         "localOutput": "GeneralsZH-Hub-Online-unsigned.ipa",
-        "note": "One Online-enabled Hub IPA. There is no separate vanilla launch mode. Enhanced/Contra and future mods install later as .gxmod packages under Documents/Mods, with per-mod settings kept separately."
+        "note": "Lightweight Online-capable signed Hub shell. Zero Hour + Online base GameData installs separately as online.gxmod under Documents/Mods/online/profile; Enhanced/Contra are overlays that reuse the same base content."
       }
     },
     "macos": {

@@ -46,6 +46,11 @@ function nativeModState(modId) {
   return nativeState?.mods?.find(item => item.profileId === modId) || null;
 }
 
+function nativeProfileState(profileId) {
+  if (profileId === "online") return nativeState?.online || null;
+  return nativeModState(profileId);
+}
+
 function applyNativeState(state) {
   if (!state || typeof state !== "object") return;
   nativeState = state;
@@ -88,20 +93,25 @@ function syncNativeSystemStatus() {
   if (engine) engine.textContent = nativeState.engineVersion || "unknown";
   if (launcher) launcher.textContent =
     `${nativeState.launcherVersion || "unknown"} · web ${nativeState.launcherWebVersion || "bundled"}`;
-  if (gameData) gameData.textContent = "Ready";
+  const onlineInstalled = Boolean(nativeState.online?.installed);
+  if (gameData) {
+    gameData.textContent = onlineInstalled ? "Ready" : "Not installed";
+    gameData.classList.toggle("good", onlineInstalled);
+  }
   if (profiles) {
-    const installedCount = 1 + (nativeState.mods || []).filter(item => item.installed).length;
+    const installedCount = (onlineInstalled ? 1 : 0) + (nativeState.mods || []).filter(item => item.installed).length;
     profiles.textContent = `${installedCount} ready`;
   }
   if (footerBuild) footerBuild.textContent = `BUILD ${nativeState.build || "unknown"}`;
 
   const currentProfileId = nativeProfileIdForCard();
-  const mod = nativeModState(currentProfileId);
-  const installed = currentProfileId === "online" || Boolean(mod?.installed);
-  statusLabel.textContent = installed ? (mod?.updateAvailable ? "UPDATE" : "READY") : "NOT INSTALLED";
-  statusLabel.classList.toggle("status-text--warning", !installed || Boolean(mod?.updateAvailable));
-  statusLabel.classList.toggle("status-text--ready", installed && !mod?.updateAvailable);
-  playLabel.textContent = installed ? "PLAY" : "INSTALL";
+  const profile = nativeProfileState(currentProfileId);
+  const installed = Boolean(profile?.installed);
+  const updateAvailable = Boolean(profile?.updateAvailable);
+  statusLabel.textContent = installed ? (updateAvailable ? "UPDATE" : "READY") : "NOT INSTALLED";
+  statusLabel.classList.toggle("status-text--warning", !installed || updateAvailable);
+  statusLabel.classList.toggle("status-text--ready", installed && !updateAvailable);
+  playLabel.textContent = !installed ? "INSTALL" : (updateAvailable ? "UPDATE" : "PLAY");
 }
 
 async function syncNativeState() {
@@ -122,11 +132,12 @@ function updateNativeProgress(payload) {
   if (bar) bar.style.width = `${Math.round(fraction * 100)}%`;
 
   const mod = modCatalog.find(item => item.id === modId);
+  const title = mod?.title || (modId === "online" ? "Zero Hour + Online" : modId);
   const received = Number(payload.received || 0) / 1024 / 1024 / 1024;
   const total = Number(payload.total || 0) / 1024 / 1024 / 1024;
   showToast(total > 0
-    ? `${mod?.title || modId}: ${Math.round(fraction * 100)}% · ${received.toFixed(2)} / ${total.toFixed(2)} GB`
-    : `${mod?.title || modId}: downloading…`);
+    ? `${title}: ${Math.round(fraction * 100)}% · ${received.toFixed(2)} / ${total.toFixed(2)} GB`
+    : `${title}: downloading…`);
 }
 
 function handleNativeEvent(name, payload) {
@@ -139,7 +150,9 @@ function handleNativeEvent(name, payload) {
     return;
   }
   if (name === "installComplete") {
-    showToast(`${modCatalog.find(item => item.id === payload.profileId)?.title || payload.profileId} installed`);
+    const title = modCatalog.find(item => item.id === payload.profileId)?.title ||
+      (payload.profileId === "online" ? "Zero Hour + Online" : payload.profileId);
+    showToast(`${title} installed`);
     syncNativeState();
     return;
   }
@@ -370,12 +383,27 @@ playButton.addEventListener("click", async () => {
     return;
   }
 
-  const mod = nativeModState(profileId);
-  const installed = profileId === "online" || Boolean(mod?.installed);
-  if (!installed) {
-    const card = document.querySelector('[data-panel="mods"]');
-    openPanel("mods");
-    showToast(`${activeCard.dataset.title} is not installed`);
+  const profile = nativeProfileState(profileId);
+  const installed = Boolean(profile?.installed);
+  const updateAvailable = Boolean(profile?.updateAvailable);
+
+  if (!installed || updateAvailable) {
+    try {
+      if (profile?.packageURL) {
+        await nativeRequest("install", { profileId });
+        showToast(`${updateAvailable ? "Updating" : "Downloading"} ${activeCard.dataset.title}…`);
+      } else {
+        await nativeRequest("chooseFile", { profileId });
+        showToast(`Choose the ${activeCard.dataset.title} package`);
+      }
+    } catch (error) {
+      showToast(error.message || "Install failed");
+    }
+    return;
+  }
+
+  if (profileId !== "online" && !nativeState?.online?.installed) {
+    showToast("Install Zero Hour + Online base content first");
     return;
   }
 

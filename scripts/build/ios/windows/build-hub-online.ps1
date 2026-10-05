@@ -9,16 +9,12 @@ $Branch = "feature/generals-hub-online"
 $Workflow = "build-ios-shell.yml"
 $ArtifactName = "GeneralsXZH-launcher-unsigned"
 $ArtifactFile = "GeneralsXZH-launcher-unsigned.ipa"
-$BaseIpa = Join-Path $Workspace "input\GeneralsZH-FULL-unsigned.ipa"
 $Output = Join-Path $Workspace "output\GeneralsZH-Hub-Online-unsigned.ipa"
 $Builder = Join-Path $RepoRoot "scripts\build\ios\build-variant-ipa.py"
 $Verifier = Join-Path $RepoRoot "scripts\build\ios\verify-variant-ipa.py"
-$SyncOnlineData = Join-Path $RepoRoot "scripts\build\common\sync-generals-online-data.py"
-$OnlineDataStage = Join-Path $Workspace "artifacts\gamedata\online\official"
-$OnlineDataCache = Join-Path $Workspace "cache\generals-online-official"
 $Python = if (Get-Command py -ErrorAction SilentlyContinue) { "py" } else { "python" }
 
-foreach ($required in @($BaseIpa,$Builder,$Verifier,$SyncOnlineData)) {
+foreach ($required in @($Builder,$Verifier)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Required input not found: $required" }
 }
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "GitHub CLI (gh) is required." }
@@ -41,24 +37,20 @@ if (-not (Test-Path -LiteralPath $Shell)) {
     if ($LASTEXITCODE -ne 0) { throw "Artifact download failed." }
 }
 
-Write-Host "Syncing official Generals Online parity data..." -ForegroundColor Cyan
-& $Python $SyncOnlineData --dest $OnlineDataStage --cache-dir $OnlineDataCache --expected-version 100126_QFE6 --expected-seed 0x808CB29E
-if ($LASTEXITCODE -ne 0) { throw "Generals Online data sync/parity verification failed." }
-
-Write-Host "Packaging Generals Hub (Online base + downloadable mods)..." -ForegroundColor Cyan
-& $Python $Builder --variant hub --shell $Shell --base-ipa $BaseIpa --online-data $OnlineDataStage --output $Output
+Write-Host "Packaging lightweight Generals Hub (engine + launcher only)..." -ForegroundColor Cyan
+& $Python $Builder --variant hub --shell $Shell --output $Output
 if ($LASTEXITCODE -ne 0) { throw "Hub Online IPA packaging failed." }
 
 Write-Host "Verifying Hub Online IPA..." -ForegroundColor Cyan
-& $Python $Verifier --variant hub --require-online-data $Output
+& $Python $Verifier --variant hub $Output
 if ($LASTEXITCODE -ne 0) { throw "Hub Online IPA verification failed." }
 
 $sizeMb = [math]::Round((Get-Item -LiteralPath $Output).Length / 1MB, 1)
 $nl = [Environment]::NewLine
-$SourceInfo = "Run: $RunId" + $nl + "Commit: $($run.headSha)" + $nl + "URL: $($run.url)" + $nl + "Shell: $Shell" + $nl + "Base IPA: $BaseIpa" + $nl + "Online data: $OnlineDataStage" + $nl + "Official GO: 100126_QFE6" + $nl + "Windows 60Hz shift/add seed: 0x808CB29E" + $nl + "Mode: Generals Hub" + $nl
+$SourceInfo = "Run: $RunId" + $nl + "Commit: $($run.headSha)" + $nl + "URL: $($run.url)" + $nl + "Shell: $Shell" + $nl + "Base content: external online.gxmod" + $nl + "Mode: Generals Hub" + $nl
 [System.IO.File]::WriteAllText("$Output.source.txt", $SourceInfo)
 
 Write-Host ""
 Write-Host "READY: $Output ($sizeMb MB)" -ForegroundColor Green
-Write-Host "Install this IPA once with Sideloadly; add mods later from the Hub Mods screen."
+Write-Host "Install this IPA once with Sideloadly; download Zero Hour + Online, Enhanced and Contra X from the Hub."
 

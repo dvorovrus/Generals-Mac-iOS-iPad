@@ -1257,17 +1257,24 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	// The engine resolves all game data relative to the working directory.
-	// Preferred layout: assets ship read-only INSIDE the signed app bundle
-	// (<bundle>/GameData), the iOS-sanctioned home for app resources — the
-	// install is then fully self-contained. Dev builds packaged without
-	// assets fall back to the Documents folder (Files-app accessible).
-	// User data (saves, Options.ini) always lives in Library/Application
-	// Support via the engine's user-data path; never in the bundle.
+	// The engine resolves all base game data relative to the working directory.
+	// Generals Hub keeps this large content outside the signed application so a
+	// small Hub IPA can reuse one downloaded Zero Hour + Online package for every
+	// experience. Preferred layout is Documents/Mods/online/profile. Bundled
+	// GameData remains a compatibility fallback for legacy standalone IPAs.
+	// User data (saves, Options.ini) always lives in Library/Application Support.
 	{
 		const char *home = getenv("HOME");
 
-		// <bundle>/GameData, derived from the executable path (argv[0])
+		char externalOnlineData[1024] = {0};
+		if (home != nullptr && home[0] != '\0') {
+			snprintf(externalOnlineData,
+			         sizeof(externalOnlineData),
+			         "%s/Documents/Mods/online/profile",
+			         home);
+		}
+
+		// Legacy <bundle>/GameData fallback, derived from argv[0].
 		char bundleData[1024] = {0};
 		if (argc > 0 && argv[0] != nullptr) {
 			const char *slash = strrchr(argv[0], '/');
@@ -1280,20 +1287,26 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		bool usingBundleData = false;
-		if (bundleData[0] != '\0' && access(bundleData, R_OK) == 0) {
-			if (chdir(bundleData) == 0) {
-				usingBundleData = true;
-				fprintf(stderr, "INFO: iOS working directory (bundle): %s\n", bundleData);
+		bool usingManagedGameData = false;
+		if (externalOnlineData[0] != '\0' && access(externalOnlineData, R_OK) == 0) {
+			if (chdir(externalOnlineData) == 0) {
+				usingManagedGameData = true;
+				fprintf(stderr, "[HUB] iOS working directory (downloaded Online base): %s\n", externalOnlineData);
 			}
 		}
-		if (!usingBundleData && home != nullptr) {
+		if (!usingManagedGameData && bundleData[0] != '\0' && access(bundleData, R_OK) == 0) {
+			if (chdir(bundleData) == 0) {
+				usingManagedGameData = true;
+				fprintf(stderr, "INFO: iOS working directory (legacy bundle): %s\n", bundleData);
+			}
+		}
+		if (!usingManagedGameData && home != nullptr) {
 			char docs[1024];
 			snprintf(docs, sizeof(docs), "%s/Documents", home);
 			if (chdir(docs) != 0) {
 				fprintf(stderr, "WARNING: chdir(%s) failed: %s\n", docs, strerror(errno));
 			} else {
-				fprintf(stderr, "INFO: iOS working directory (Documents): %s\n", docs);
+				fprintf(stderr, "WARNING: iOS base GameData is not installed; working directory fallback: %s\n", docs);
 			}
 		}
 
@@ -1306,7 +1319,7 @@ int main(int argc, char* argv[])
 			mkdir(cacheDir, 0755);
 			setenv("DXVK_STATE_CACHE_PATH", cacheDir, 0);
 
-			if (usingBundleData) {
+			if (usingManagedGameData) {
 				// Seed default settings on first run (full detail instead of the
 				// 2003 auto-detect, which drops unknown GPUs to Low).
 				char userDataDir[1024], optionsPath[1024];

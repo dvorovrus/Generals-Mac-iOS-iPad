@@ -1,6 +1,8 @@
 param(
     [ValidateSet('stable','beta')]
     [string] $Channel = 'stable',
+    [string] $Version = '0.2.0-web.1',
+    [int] $BridgeSchema = 2,
     [switch] $Both,
     [switch] $CommitAndPush
 )
@@ -9,6 +11,8 @@ $ErrorActionPreference = 'Stop'
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $WebRoot = Join-Path $Repo 'launcher_web'
 $Catalog = Join-Path $Repo 'ios\hub\HubCatalog.json'
+$Updater = Join-Path $Repo 'scripts\publish\update-hub-catalog.py'
+$Python = if (Get-Command py -ErrorAction SilentlyContinue) { 'py' } else { 'python' }
 
 foreach ($required in @('CLOUDFLARE_ACCOUNT_ID','R2_BUCKET','R2_PUBLIC_BASE_URL')) {
     if (-not (Get-Item "Env:$required" -ErrorAction SilentlyContinue)) {
@@ -61,6 +65,10 @@ foreach ($targetChannel in $Channels) {
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 30
     if ($response.StatusCode -ne 200) { throw "Launcher URL returned HTTP $($response.StatusCode): $url" }
     Write-Host "Launcher OK: $url" -ForegroundColor Green
+
+    & $Python $Updater --catalog $Catalog launcher `
+        --channel $targetChannel --version $Version --url $url --bridge-schema $BridgeSchema
+    if ($LASTEXITCODE -ne 0) { throw "Launcher catalog update failed for $targetChannel." }
 }
 
 # Catalog is the bootstrap metadata for the native host.

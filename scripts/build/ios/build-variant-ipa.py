@@ -3,7 +3,7 @@
 
 Variants:
 - original: native launcher + shared Zero Hour 1.04 GameData
-- hub: Generals Hub launcher + shared Zero Hour 1.04 GameData; mods install later
+- hub: lightweight Generals Hub engine/launcher shell; Online base data and mods install later
 - enhanced: original + Zero Hour Enhanced profile
 - contra: original + Contra X Beta 2 + Patch 1 profile
 - all: original + Enhanced + Contra X
@@ -24,6 +24,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PROJECT_ROOT = HERE.parents[2]
 HUB_CATALOG = PROJECT_ROOT / "ios" / "hub" / "HubCatalog.json"
+LAUNCHER_WEB = PROJECT_ROOT / "launcher_web"
 LEGACY_BUILDER = HERE / "build-all-in-one-ipa.py"
 
 
@@ -44,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a selected GeneralsXZH iPad IPA variant.")
     parser.add_argument("--variant", choices=("original", "hub", "enhanced", "contra", "all"), required=True)
     parser.add_argument("--shell", type=Path, required=True)
-    parser.add_argument("--base-ipa", type=Path, required=True)
+    parser.add_argument("--base-ipa", type=Path, help="Base full IPA; required for variants that bundle GameData.")
     parser.add_argument("--enhanced", type=Path)
     parser.add_argument("--enhanced-patch", type=Path)
     parser.add_argument("--contra-beta2", type=Path)
@@ -63,11 +64,12 @@ def require(path: Path | None, label: str) -> Path:
 
 def validate(args: argparse.Namespace) -> None:
     require(args.shell, "launcher shell IPA")
-    require(args.base_ipa, "base full IPA")
+    if args.variant != "hub":
+        require(args.base_ipa, "base full IPA")
 
     if not zipfile.is_zipfile(args.shell):
         b.die(f"shell is not a valid IPA/ZIP: {args.shell}")
-    if not zipfile.is_zipfile(args.base_ipa):
+    if args.base_ipa is not None and not zipfile.is_zipfile(args.base_ipa):
         b.die(f"base IPA is not a valid IPA/ZIP: {args.base_ipa}")
 
     if args.online_data is not None:
@@ -116,7 +118,10 @@ def main() -> None:
 
     print(f"=== GeneralsXZH iPad builder: {args.variant} ===")
     print(f"Shell:      {args.shell}")
-    print(f"Base 1.04:  {args.base_ipa}")
+    if args.base_ipa is not None:
+        print(f"Base 1.04:  {args.base_ipa}")
+    else:
+        print("Base 1.04:  external downloadable package")
     if want_enhanced:
         print(f"Enhanced:   {args.enhanced}")
     if want_contra:
@@ -127,6 +132,11 @@ def main() -> None:
     print(f"Output:     {args.output}")
     print()
 
+    base_ctx = (
+        zipfile.ZipFile(args.base_ipa, "r")
+        if args.base_ipa is not None
+        else contextlib.nullcontext(None)
+    )
     enhanced_ctx = (
         b.ModSource(args.enhanced)
         if want_enhanced and args.enhanced is not None
@@ -150,7 +160,7 @@ def main() -> None:
 
     with (
         zipfile.ZipFile(args.shell, "r") as shell,
-        zipfile.ZipFile(args.base_ipa, "r") as base,
+        base_ctx as base,
         enhanced_ctx as enhanced_source,
         enhanced_patch_ctx as enhanced_patch_source,
         contra_beta_ctx as contra_beta_source,
@@ -164,10 +174,12 @@ def main() -> None:
         ) as out,
     ):
         shell_app = b.find_single_app(shell.namelist())
-        base_app = b.find_single_app(base.namelist())
+        base_app = b.find_single_app(base.namelist()) if base is not None else None
 
         # Copy the current native engine/runtime shell, never stale data/profiles.
         skipped_prefixes = (shell_app + "GameData/", shell_app + "Profiles/")
+        if args.variant == "hub":
+            skipped_prefixes += (shell_app + "Launcher/",)
         shell_bytes = 0
         for info in shell.infolist():
             name = info.filename.replace("\\", "/")
@@ -186,23 +198,26 @@ def main() -> None:
             ]
             online_rel_lower = {rel.lower() for _, rel in online_sources}
 
-        # Shared retail Zero Hour 1.04 data.
-        base_prefix = base_app + "GameData/"
+        # Shared retail Zero Hour 1.04 data. The Hub intentionally keeps this
+        # external so the signed IPA stays small and every profile reuses one
+        # installed Online/base package.
         base_bytes = 0
         base_files = 0
-        for info in base.infolist():
-            name = info.filename.replace("\\", "/")
-            if info.is_dir() or not name.startswith(base_prefix):
-                continue
-            rel = name[len(base_prefix):]
-            if not rel:
-                continue
-            if rel.replace("\\", "/").lower() in online_rel_lower:
-                continue
-            base_bytes += b.zip_copy(base, info, out, shell_app + "GameData/" + rel)
-            base_files += 1
-        if base_files == 0:
-            b.die("base IPA contains no GameData files")
+        if base is not None and base_app is not None:
+            base_prefix = base_app + "GameData/"
+            for info in base.infolist():
+                name = info.filename.replace("\\", "/")
+                if info.is_dir() or not name.startswith(base_prefix):
+                    continue
+                rel = name[len(base_prefix):]
+                if not rel:
+                    continue
+                if rel.replace("\\", "/").lower() in online_rel_lower:
+                    continue
+                base_bytes += b.zip_copy(base, info, out, shell_app + "GameData/" + rel)
+                base_files += 1
+            if base_files == 0:
+                b.die("base IPA contains no GameData files")
 
         online_bytes = 0
         online_count = 0
@@ -216,7 +231,16 @@ def main() -> None:
         if args.variant == "hub":
             if not HUB_CATALOG.is_file():
                 b.die(f"Hub catalog not found: {HUB_CATALOG}")
+            if not LAUNCHER_WEB.is_dir():
+                b.die(f"Hub web launcher not found: {LAUNCHER_WEB}")
             out.writestr(shell_app + "HubCatalog.json", HUB_CATALOG.read_bytes())
+            launcher_files = 0
+            for source in sorted(path for path in LAUNCHER_WEB.rglob("*") if path.is_file()):
+                rel = source.relative_to(LAUNCHER_WEB).as_posix()
+                out.writestr(shell_app + "Launcher/" + rel, source.read_bytes())
+                launcher_files += 1
+            if launcher_files < 3:
+                b.die("Hub web launcher looks incomplete")
 
         enhanced_bytes = 0
         enhanced_count = 0
@@ -271,7 +295,10 @@ def main() -> None:
     print()
     print("DONE")
     print(f"Shell/runtime: {shell_bytes / 1024 / 1024:.1f} MB raw")
-    print(f"GameData:      {base_bytes / 1024 / 1024:.1f} MB raw ({base_files} files)")
+    if args.variant == "hub":
+        print("GameData:      external (downloadable online.gxmod)")
+    else:
+        print(f"GameData:      {base_bytes / 1024 / 1024:.1f} MB raw ({base_files} files)")
     if args.online_data is not None:
         print(f"Online data:   {online_bytes / 1024 / 1024:.1f} MB raw ({online_count} files)")
     if want_enhanced:

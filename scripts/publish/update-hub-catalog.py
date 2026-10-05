@@ -45,6 +45,12 @@ def main() -> None:
     hub.add_argument("--bytes", type=int, required=True)
     hub.add_argument("--release-notes", default="")
 
+    launcher = sub.add_parser("launcher")
+    launcher.add_argument("--channel", choices=("stable", "beta"), required=True)
+    launcher.add_argument("--version", required=True)
+    launcher.add_argument("--url", required=True)
+    launcher.add_argument("--bridge-schema", type=int, default=2)
+
     args = p.parse_args()
     data = load(args.catalog)
 
@@ -65,7 +71,7 @@ def main() -> None:
             "minHubVersion": args.min_hub_version,
             "releaseNotes": args.release_notes,
         }
-    else:
+    elif args.kind == "hub":
         hub_entry = data.setdefault("hub", {"name": "Generals Hub"})
         channels = hub_entry.setdefault("channels", {})
         channels[args.channel] = {
@@ -75,6 +81,13 @@ def main() -> None:
             "sha256": args.sha256.lower(),
             "packageBytes": args.bytes,
             "releaseNotes": args.release_notes,
+        }
+    else:
+        launcher_entry = data.setdefault("launcherWeb", {})
+        launcher_entry[args.channel] = {
+            "version": args.version,
+            "indexURL": args.url,
+            "bridgeSchema": args.bridge_schema,
         }
 
     save(args.catalog, data)

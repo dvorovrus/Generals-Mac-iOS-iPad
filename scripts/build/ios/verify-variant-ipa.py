@@ -93,7 +93,10 @@ def main() -> None:
         if args.variant == "hub" and hub_catalog not in lower:
             fail("Hub IPA is missing HubCatalog.json")
 
-        if len(game) < 10 or not any(n.endswith(".big") for n in game):
+        if args.variant == "hub":
+            if game:
+                fail("Hub IPA must not bundle GameData; install online.gxmod instead")
+        elif len(game) < 10 or not any(n.endswith(".big") for n in game):
             fail("GameData looks incomplete")
 
         if args.require_online_data:

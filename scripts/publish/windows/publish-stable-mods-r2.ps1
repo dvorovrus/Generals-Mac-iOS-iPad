@@ -19,6 +19,7 @@ foreach ($required in @("CLOUDFLARE_ACCOUNT_ID", "R2_BUCKET", "R2_PUBLIC_BASE_UR
 $env:AWS_PROFILE = $AwsProfile
 
 $packages = @(
+    @{ Path = (Join-Path $ModsDir "online.gxmod"); Notes = "Zero Hour 1.04 + official Generals Online 100126_QFE6 base content." },
     @{ Path = (Join-Path $ModsDir "enhanced.gxmod"); Notes = "Zero Hour Enhanced v1.0 + 28/03/2024 patch." },
     @{ Path = (Join-Path $ModsDir "contra-x.gxmod"); Notes = "Contra X Beta 2 + Patch 1." }
 )
@@ -34,7 +35,7 @@ foreach ($package in $packages) {
 if ($CommitAndPush) {
     git -C $SourceRepo add -- ios/hub/HubCatalog.json
     if (-not (git -C $SourceRepo diff --cached --quiet)) {
-        git -C $SourceRepo commit -m "release(mods): publish stable Enhanced and Contra X [skip ci]"
+        git -C $SourceRepo commit -m "release(content): publish stable Online, Enhanced and Contra X [skip ci]"
         if ($LASTEXITCODE -ne 0) { throw "Catalog commit failed." }
         git -C $SourceRepo push
         if ($LASTEXITCODE -ne 0) { throw "Catalog push failed." }
@@ -42,5 +43,5 @@ if ($CommitAndPush) {
 }
 
 Write-Host ""
-Write-Host "STABLE MODS PUBLISHED" -ForegroundColor Green
-Write-Host "Enhanced and Contra X are now available to Generals Hub through the remote catalog."
+Write-Host "STABLE CONTENT PUBLISHED" -ForegroundColor Green
+Write-Host "Zero Hour + Online, Enhanced and Contra X are now available to Generals Hub through the remote catalog."
