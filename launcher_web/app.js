@@ -355,14 +355,37 @@ function cardForProfileId(profileId) {
   return cards.find(card => card.dataset.id === cardId) || null;
 }
 
+function ensureHomeDownloadPercent(card) {
+  if (!card) return null;
+  let indicator = card.querySelector(".mode-card__download-percent");
+  if (!indicator) {
+    indicator = document.createElement("span");
+    indicator.className = "mode-card__download-percent";
+    indicator.setAttribute("aria-hidden", "true");
+    card.append(indicator);
+  }
+  return indicator;
+}
+
 function setHomeDownloadProgress(profileId, fraction = 0, active = true) {
   const value = Math.max(0, Math.min(1, Number(fraction || 0)));
   homeDownloadState.set(profileId, { active, fraction: value });
   const card = cardForProfileId(profileId);
   if (!card) return;
+
+  const pendingInstall = profileId === "online"
+    ? !Boolean(nativeState?.online?.installed)
+    : !isModInstalled(profileId);
+  const indicator = ensureHomeDownloadPercent(card);
+
   card.hidden = false;
   card.classList.toggle("is-downloading", active);
+  card.classList.toggle("is-download-pending", active && pendingInstall);
   card.classList.remove("is-download-error", "is-download-complete");
+
+  if (indicator) {
+    indicator.textContent = active ? `${Math.round(value * 100)}%` : "";
+  }
   updateModesOverflow();
 }
 
@@ -371,7 +394,15 @@ function finishHomeDownload(profileId, outcome) {
   homeDownloadState.delete(profileId);
   if (!card) return;
 
-  card.classList.remove("is-downloading", "is-download-complete", "is-download-error");
+  const indicator = card.querySelector(".mode-card__download-percent");
+  if (indicator) indicator.textContent = "";
+
+  card.classList.remove(
+    "is-downloading",
+    "is-download-pending",
+    "is-download-complete",
+    "is-download-error"
+  );
   if (outcome === "complete") {
     card.classList.add("is-download-complete");
     window.setTimeout(() => card.classList.remove("is-download-complete"), 650);

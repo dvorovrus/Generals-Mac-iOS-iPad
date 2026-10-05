@@ -2067,32 +2067,34 @@ button {
   display: none !important;
 }
 
-/* Preserve the exact active/inactive card surfaces; download is border-only. */
+/* Download state stays on the frame: stronger motion, no progress fill. */
 .mode-card.is-downloading::after {
   content: "";
   position: absolute;
   inset: -1px;
   z-index: 5;
-  padding: 1.5px;
+  padding: 2px;
   pointer-events: none;
-  opacity: 0.58;
+  opacity: 0.82;
   background:
     conic-gradient(
       from var(--gx-download-angle, 0deg),
-      rgba(212, 173, 84, 0.03) 0deg,
-      rgba(212, 173, 84, 0.10) 72deg,
-      rgba(235, 202, 124, 0.58) 118deg,
-      rgba(212, 173, 84, 0.16) 156deg,
-      rgba(212, 173, 84, 0.03) 236deg,
-      rgba(224, 190, 106, 0.38) 302deg,
-      rgba(212, 173, 84, 0.03) 360deg
+      rgba(212, 173, 84, 0.04) 0deg,
+      rgba(212, 173, 84, 0.10) 48deg,
+      rgba(244, 218, 148, 0.84) 92deg,
+      rgba(212, 173, 84, 0.28) 128deg,
+      rgba(212, 173, 84, 0.05) 198deg,
+      rgba(237, 204, 119, 0.62) 272deg,
+      rgba(212, 173, 84, 0.10) 318deg,
+      rgba(212, 173, 84, 0.04) 360deg
     );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: gx-download-border 4.2s linear infinite, gx-download-breathe 2.8s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 6px rgba(224, 190, 106, 0.26));
+  animation: gx-download-border 2.8s linear infinite, gx-download-breathe 2.1s ease-in-out infinite alternate;
 }
 
 @property --gx-download-angle {
@@ -2106,8 +2108,51 @@ button {
 }
 
 @keyframes gx-download-breathe {
-  from { opacity: 0.38; }
-  to { opacity: 0.68; }
+  from { opacity: 0.62; }
+  to { opacity: 0.94; }
+}
+
+.mode-card.is-downloading .mode-card__content {
+  padding-right: 54px;
+}
+
+.mode-card__download-percent {
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  z-index: 6;
+  transform: translateY(-50%) scale(0.96);
+  opacity: 0;
+  color: rgba(241, 214, 146, 0.92);
+  font: 800 12px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.025em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(212, 173, 84, 0.22);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.mode-card.is-downloading .mode-card__download-percent {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+/* Until a profile is installed, give the downloading card a very faint tactical grid. */
+.mode-card.is-download-pending::before {
+  opacity: 1;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 18px 18px, 18px 18px;
+}
+
+.mode-card.is-download-pending.is-active::before {
+  opacity: 1;
+  background:
+    linear-gradient(115deg, var(--accent-soft), transparent 48%),
+    linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px);
+  background-size: auto, 18px 18px, 18px 18px;
 }
 
 .mode-card.is-download-complete::after {
