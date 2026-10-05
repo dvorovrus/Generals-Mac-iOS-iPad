@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 16,
+  "catalogVersion": 19,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.2",
-        "build": 37314156047,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.2/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "a1a75d809c2c37ff7c4385fc0f4baead350e84d09267f9159078c6005132440b",
-        "packageBytes": 45439618,
-        "releaseNotes": "Disable launcher zoom; isolate Generals Online community patch from Enhanced/Contra; add Online math/object CRC and replay diagnostics."
+        "version": "1.4.3",
+        "build": 37319539711,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.3/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "99d99b63b161b29b5108d70749716bc06824ea8522bcb38f46868ad0a6d0b5e7",
+        "packageBytes": 45441339,
+        "releaseNotes": "Make Diagnostics recoverable without working web buttons: automatic Files export, Save to Files, fixed iPad share sheet. Disable Generals Online runtime settings for explicit Enhanced/Contra profiles and add ThingFactory crash breadcrumbs."
       },
       "beta": {
         "version": "0.1.0",
@@ -94,17 +94,17 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T13:19:59Z",
+  "updatedAt": "2026-10-05T13:55:55Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.2.0-web.2",
+      "version": "0.2.0-web.3",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
-      "bridgeSchema": 2
+      "bridgeSchema": 3
     },
     "beta": {
-      "version": "0.2.0-web.2",
+      "version": "0.2.0-web.3",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
-      "bridgeSchema": 2
+      "bridgeSchema": 3
     }
   }
 }
