@@ -215,7 +215,11 @@ void BitFlags<NUMBITS>::xfer(Xfer* xfer)
 
 		// just call the xfer implementation on the data values
 #if RETAIL_COMPATIBLE_CRC
-		xfer->xferUser( this, sizeof( this ) );
+		// Retail Generals/Zero Hour was a 32-bit Windows build. The original
+		// sizeof(this) bug therefore hashed exactly four bytes. Reproduce that
+		// 32-bit ABI width explicitly so 64-bit Apple/Linux builds do not hash
+		// an extra four bytes and diverge from Windows multiplayer CRCs.
+		xfer->xferUser( this, sizeof( UnsignedInt ) );
 #else
 		xfer->xferUser( this, sizeof( *this ) );
 #endif

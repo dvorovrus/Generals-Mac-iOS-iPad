@@ -779,6 +779,11 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             sourceURL = @"https://www.moddb.com/mods/contra";
             author = @"Contra Mod Team";
         }
+        else if ([profileId isEqualToString:@"contra-007"])
+        {
+            sourceURL = @"https://www.moddb.com/mods/contra/downloads/contra-007";
+            author = @"Contra Mod Team";
+        }
 
         [mods addObject:@{
             @"profileId": profileId,
@@ -1052,11 +1057,18 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
 
     if ([action isEqualToString:@"play"])
     {
-        NSString *profileId = payload[@"profileId"];
+        NSString *profileId = [payload[@"profileId"] isKindOfClass:[NSString class]] ? payload[@"profileId"] : @"";
         BOOL baseInstalled = GXHubProfileInstalled(@"online");
+        NSDictionary *catalogEntry = profileId.length > 0 ? HubEntryForProfile(profileId) : nil;
         BOOL selectedInstalled = [profileId isEqualToString:@"online"]
             ? baseInstalled
-            : (([profileId isEqualToString:@"enhanced"] || [profileId isEqualToString:@"contra-x"]) && GXHubProfileInstalled(profileId));
+            : (catalogEntry != nil && GXHubProfileInstalled(profileId));
+        fprintf(stderr,
+                "[HUB-PLAY] profile='%s' baseInstalled=%d selectedInstalled=%d catalogEntry=%d\n",
+                profileId.UTF8String,
+                baseInstalled ? 1 : 0,
+                selectedInstalled ? 1 : 0,
+                catalogEntry != nil ? 1 : 0);
         if (baseInstalled && selectedInstalled)
         {
             [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
@@ -2529,6 +2541,22 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
                                    (unsigned long)sessionLogCount,
                                    HumanReadableBytes(sessionLogBytes)];
 
+    NSMutableArray<NSString *> *installedModDescriptions = [NSMutableArray array];
+    for (NSDictionary<NSString *, id> *manifest in GXHubInstalledModEntries())
+    {
+        NSString *profileId = [manifest[@"profileId"] isKindOfClass:[NSString class]] ? manifest[@"profileId"] : @"";
+        if (profileId.length == 0 || [profileId isEqualToString:@"online"])
+            continue;
+        NSString *name = [manifest[@"name"] isKindOfClass:[NSString class]] ? manifest[@"name"] : profileId;
+        NSString *version = [manifest[@"version"] isKindOfClass:[NSString class]] ? manifest[@"version"] : @"";
+        [installedModDescriptions addObject:(version.length > 0
+            ? [NSString stringWithFormat:@"%@ %@ (%@)", name, version, profileId]
+            : [NSString stringWithFormat:@"%@ (%@)", name, profileId])];
+    }
+    NSString *installedModsText = installedModDescriptions.count > 0
+        ? [installedModDescriptions componentsJoinedByString:@", "]
+        : @"None";
+
     return [NSString stringWithFormat:
         @"APP\n"
          "Project: %s\n"
@@ -2544,7 +2572,8 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
          "GameData: %@\n"
          "GameData size: %@\n"
          "Enhanced: %@\n"
-         "Contra X: %@\n\n"
+         "Contra X: %@\n"
+         "Installed mods: %@\n\n"
          "FILES\n"
          "iPad settings: %@\n"
          "Enhanced settings: %@\n"
@@ -2566,6 +2595,7 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
         gameDataSize,
         enhancedInstalled ? @"Installed" : @"Not installed",
         contraInstalled ? @"Installed" : @"Not installed",
+        installedModsText,
         settingsExists ? @"Present" : @"Missing",
         enhancedSettingsText,
         contraSettingsText,
