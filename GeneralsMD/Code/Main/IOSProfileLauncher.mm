@@ -767,23 +767,21 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             HubVersionDiffers(installedVersion, availableVersion) &&
             [entry[@"packageURL"] length] > 0;
 
-        NSString *sourceURL = @"";
-        NSString *author = @"";
-        if ([profileId isEqualToString:@"enhanced"])
-        {
+        NSString *sourceURL = [entry[@"sourceURL"] isKindOfClass:[NSString class]] ? entry[@"sourceURL"] : @"";
+        NSString *author = [entry[@"author"] isKindOfClass:[NSString class]] ? entry[@"author"] : @"";
+        // Backward-compatible fallbacks for older bundled/remote catalogs.
+        if (sourceURL.length == 0 && [profileId isEqualToString:@"enhanced"])
             sourceURL = @"https://www.moddb.com/mods/cc-generals-zero-hour-enhanced";
-            author = @"Acoustic Alpha";
-        }
-        else if ([profileId isEqualToString:@"contra-x"])
-        {
+        else if (sourceURL.length == 0 && [profileId isEqualToString:@"contra-x"])
             sourceURL = @"https://www.moddb.com/mods/contra";
-            author = @"Contra Mod Team";
-        }
-        else if ([profileId isEqualToString:@"contra-007"])
-        {
+        else if (sourceURL.length == 0 && [profileId isEqualToString:@"contra-007"])
             sourceURL = @"https://www.moddb.com/mods/contra/downloads/contra-007";
+
+        if (author.length == 0 && [profileId isEqualToString:@"enhanced"])
+            author = @"Acoustic Alpha";
+        else if (author.length == 0 &&
+                 ([profileId isEqualToString:@"contra-x"] || [profileId isEqualToString:@"contra-007"]))
             author = @"Contra Mod Team";
-        }
 
         [mods addObject:@{
             @"profileId": profileId,
