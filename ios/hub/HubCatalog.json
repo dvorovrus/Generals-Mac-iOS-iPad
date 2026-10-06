@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 47,
+  "catalogVersion": 48,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.12",
-        "build": 37447489572,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.12/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "27b22100420f7cb989bcad2289a3a113104fe0817e862ba09b4d021eddb17374",
-        "packageBytes": 49323634,
-        "releaseNotes": "Stabilizes Online ICE callback cleanup during map transfers, adds per-object CRC boundaries, and enables generic mod-local AI/MapCache patches."
+        "version": "1.4.13",
+        "build": 37458082036,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.13/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "5f3d8ba1a3f031db2fdde40810e14a2f23597be021d08ef53247e376f2ba3221",
+        "packageBytes": 49323948,
+        "releaseNotes": "Adds Contra 009 catalog support and catalog-driven mod author/source metadata."
       },
       "beta": {
         "version": "0.1.0",
@@ -148,7 +148,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-06T12:01:43Z",
+  "updatedAt": "2026-10-06T12:02:09Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.9",
