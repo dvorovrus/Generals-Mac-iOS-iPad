@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 44,
+  "catalogVersion": 45,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -99,12 +99,12 @@
       "description": "Classic Contra 0.07 with official Fixed AI and Map Fix patches.",
       "channels": {
         "stable": {
-          "version": "0.07+FixedAI+MapFix",
-          "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/contra-007/stable/0.07+FixedAI+MapFix.gxmod",
-          "sha256": "e10f9902ab267bb05ab249ac27dc9d7ab4f1bed3f47e4f2f5870d4a5d7421ae7",
+          "version": "0.07+FixedAI2+MapFix",
+          "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/contra-007/stable/0.07+FixedAI2+MapFix.gxmod",
+          "sha256": "48d7c594d3bb21e04e65e801151c5054123b22554cec41f23089fcc613c461d1",
           "packageBytes": 296867840,
-          "minHubVersion": "1.4.11",
-          "releaseNotes": "Contra 0.07 with official Fixed AI and Map Fix patches. English profile."
+          "minHubVersion": "1.4.12",
+          "releaseNotes": "Fixed AI and MapCache patches are now loaded from the active Contra 007 mod profile."
         },
         "beta": {
           "version": "0.07+FixedAI+MapFix",
@@ -117,7 +117,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-06T10:15:56Z",
+  "updatedAt": "2026-10-06T10:16:30Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.9",
