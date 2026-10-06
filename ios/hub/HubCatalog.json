@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 39,
+  "catalogVersion": 42,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -100,9 +100,9 @@
       "channels": {
         "stable": {
           "version": "0.07+FixedAI+MapFix",
-          "packageURL": "",
-          "sha256": "",
-          "packageBytes": 0,
+          "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/contra-007/stable/0.07+FixedAI+MapFix.gxmod",
+          "sha256": "e10f9902ab267bb05ab249ac27dc9d7ab4f1bed3f47e4f2f5870d4a5d7421ae7",
+          "packageBytes": 296867840,
           "minHubVersion": "0.1.0",
           "releaseNotes": "Contra 0.07 with official Fixed AI and Map Fix patches. English profile."
         },
@@ -117,15 +117,15 @@
       }
     }
   ],
-  "updatedAt": "2026-10-05T22:35:21Z",
+  "updatedAt": "2026-10-06T07:08:15Z",
   "launcherWeb": {
     "stable": {
-      "version": "0.2.0-web.8",
+      "version": "0.2.0-web.9",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/stable/index.html",
       "bridgeSchema": 6
     },
     "beta": {
-      "version": "0.2.0-web.8",
+      "version": "0.2.0-web.9",
       "indexURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/launcher/beta/index.html",
       "bridgeSchema": 6
     }
