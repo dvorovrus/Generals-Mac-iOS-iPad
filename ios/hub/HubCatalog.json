@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 63,
+  "catalogVersion": 64,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -8,11 +8,11 @@
     "channels": {
       "stable": {
         "version": "1.4.15",
-        "build": 37479531437,
+        "build": 37494996231,
         "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.15/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "db6f46493550a8717aefea1434c0631a664817fb7831312e1c4bfeb8b235d8e8",
-        "packageBytes": 49328308,
-        "releaseNotes": "Adds portable loose-file overrides for generic mod profiles and The End of Days 0.986 P11 support."
+        "sha256": "61f6212c3823f165ac2ffbf5dd093974e766460ab32c3714b3d9478fe8b6573c",
+        "packageBytes": 49333241,
+        "releaseNotes": "Moves managed Hub mods/downloads to hidden Application Support with automatic legacy migration, adds profile integrity detection and Repair flow, and supports TEOD loose-file profiles. Web Launcher 0.2.0-web.14 adds remove confirmation and Mod Hub header controls."
       },
       "beta": {
         "version": "0.1.0",
@@ -173,7 +173,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-06T16:23:49Z",
+  "updatedAt": "2026-10-06T16:32:34Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.14",
