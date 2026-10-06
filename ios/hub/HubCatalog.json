@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 59,
+  "catalogVersion": 60,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.14",
-        "build": 37462006010,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.14/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "c1d37693f82e21656e7688631a380e90c3be584c18d9d37fc286a55086b22e88",
-        "packageBytes": 49324408,
-        "releaseNotes": "Fix Hub version compatibility checks to use the installed bundle version and support catalog-driven launcher profiles including Contra 009."
+        "version": "1.4.15",
+        "build": 37479531437,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.15/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "db6f46493550a8717aefea1434c0631a664817fb7831312e1c4bfeb8b235d8e8",
+        "packageBytes": 49328308,
+        "releaseNotes": "Adds portable loose-file overrides for generic mod profiles and The End of Days 0.986 P11 support."
       },
       "beta": {
         "version": "0.1.0",
@@ -173,7 +173,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-06T14:40:20Z",
+  "updatedAt": "2026-10-06T14:41:33Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.13",
