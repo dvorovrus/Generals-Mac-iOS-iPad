@@ -77,7 +77,7 @@ jobs:
             rm -f "${TMP}"
             curl -fL --retry 5 --retry-all-errors --retry-delay 3 \
               --connect-timeout 20 --max-time 180 \
-              -o "${TMP}" "https://ftp.gnu.org/gnu/gperf/gperf-3.1.tar.gz"
+              -o "${TMP}" "https://mirrors.kernel.org/gnu/gperf/gperf-3.1.tar.gz"
             mv "${TMP}" "${GPERF_ARCHIVE}"
           fi
 
