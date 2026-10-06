@@ -57,6 +57,21 @@ jobs:
           brew install cmake ninja meson pkg-config autoconf autoconf-archive automake libtool glslang protobuf ccache
           brew install ffmpeg freetype fontconfig sdl3
 
+      - name: Prefetch flaky GNU distfiles
+        run: |
+          set -euo pipefail
+          VCPKG_DOWNLOADS="${VCPKG_ROOT:-${GITHUB_WORKSPACE}/vcpkg}/downloads"
+          mkdir -p "${VCPKG_DOWNLOADS}"
+          GPERF_ARCHIVE="${VCPKG_DOWNLOADS}/gperf-3.1.tar.gz"
+          if [[ ! -s "${GPERF_ARCHIVE}" ]]; then
+            TMP="${GPERF_ARCHIVE}.tmp"
+            rm -f "${TMP}"
+            curl -fL --retry 5 --retry-all-errors --retry-delay 3 \
+              --connect-timeout 20 --max-time 180 \
+              -o "${TMP}" "https://ftp.gnu.org/gnu/gperf/gperf-3.1.tar.gz"
+            mv "${TMP}" "${GPERF_ARCHIVE}"
+          fi
+
       - name: Prepare build caches
         id: cache-context
         run: |
