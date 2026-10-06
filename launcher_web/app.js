@@ -75,20 +75,8 @@ function applyNativeState(state) {
     .map(item => item.profileId);
 
   (state.mods || []).forEach(item => {
-    const mod = modCatalog.find(candidate => candidate.id === item.profileId);
-    if (!mod) return;
-    mod.title = item.name || mod.title;
-    mod.description = item.description || mod.description;
-    mod.version = item.version || "";
-    mod.installedVersion = item.installedVersion || "";
-    mod.updateAvailable = Boolean(item.updateAvailable);
-    mod.packageBytes = Number(item.packageBytes || 0);
-    mod.releaseNotes = item.releaseNotes || "";
-    mod.channel = item.channel || state.channel || "stable";
-    mod.requestedChannel = item.requestedChannel || state.channel || "stable";
-    mod.fallbackChannel = item.fallbackChannel || "";
-    if (item.sourceURL) mod.moddbUrl = item.sourceURL;
-    if (item.author) mod.author = item.author;
+    const mod = upsertCatalogMod(item, state);
+    ensureCatalogModCard(mod);
   });
 
   if (state.download?.busy && state.download.profileId) {
@@ -200,7 +188,7 @@ function handleNativeEvent(name, payload) {
   }
 }
 
-const cards = [...document.querySelectorAll(".mode-card")];
+let cards = [...document.querySelectorAll(".mode-card")];
 const hero = document.querySelector(".hero");
 const modeTitle = document.querySelector("#modeTitle");
 const modeDescription = document.querySelector("#modeDescription");
@@ -331,8 +319,83 @@ const modCatalog = [
     description: "Classic Contra 0.07 with official Fixed AI and Map Fix patches.",
     author: "Contra Mod Team",
     moddbUrl: "https://www.moddb.com/mods/contra/downloads/contra-007"
+  },
+  {
+    id: "contra-009",
+    title: "Contra 009",
+    description: "Contra 009 Final with Patch 1-3 and official Patch 3 Hotfix 1-4.",
+    author: "Contra Mod Team",
+    moddbUrl: "https://www.moddb.com/mods/contra"
   }
 ];
+
+function upsertCatalogMod(item, state = nativeState) {
+  const profileId = item?.profileId || "";
+  if (!profileId) return null;
+
+  let mod = modCatalog.find(candidate => candidate.id === profileId);
+  if (!mod) {
+    mod = {
+      id: profileId,
+      title: item.name || profileId,
+      description: item.description || "",
+      author: item.author || "Mod author",
+      moddbUrl: item.sourceURL || ""
+    };
+    modCatalog.push(mod);
+  }
+
+  mod.title = item.name || mod.title || profileId;
+  mod.description = item.description || mod.description || "";
+  mod.version = item.version || "";
+  mod.installedVersion = item.installedVersion || "";
+  mod.updateAvailable = Boolean(item.updateAvailable);
+  mod.packageBytes = Number(item.packageBytes || 0);
+  mod.releaseNotes = item.releaseNotes || "";
+  mod.channel = item.channel || state?.channel || "stable";
+  mod.requestedChannel = item.requestedChannel || state?.channel || "stable";
+  mod.fallbackChannel = item.fallbackChannel || "";
+  if (item.sourceURL) mod.moddbUrl = item.sourceURL;
+  if (item.author) mod.author = item.author;
+  return mod;
+}
+
+function ensureCatalogModCard(mod) {
+  if (!mod) return null;
+  let card = cardForProfileId(mod.id);
+  if (card) {
+    card.dataset.title = mod.title || mod.id;
+    card.dataset.description = mod.description || "";
+    const strong = card.querySelector("strong");
+    if (strong) strong.textContent = mod.title || mod.id;
+    return card;
+  }
+  if (!modesRail || !addModCard) return null;
+
+  card = document.createElement("button");
+  card.className = "mode-card";
+  card.type = "button";
+  card.hidden = true;
+  card.dataset.id = mod.id;
+  card.dataset.title = mod.title || mod.id;
+  card.dataset.description = mod.description || "";
+  card.dataset.profile = String(mod.id).toUpperCase();
+  card.dataset.status = "READY";
+  card.dataset.play = String(mod.title || mod.id).toUpperCase();
+  card.innerHTML = `
+    <span class="mode-card__content">
+      <strong></strong>
+      <small></small>
+    </span>
+  `;
+  card.querySelector("strong").textContent = mod.title || mod.id;
+  card.querySelector("small").textContent = mod.installedVersion || mod.version || "Installed";
+  card.addEventListener("click", () => setActiveCard(card));
+
+  modesRail.insertBefore(card, addModCard);
+  cards.push(card);
+  return card;
+}
 
 function loadInstalledMods() {
   try {
@@ -873,14 +936,15 @@ function renderModLibrary() {
               <span>${mod.description}</span>
               ${modVersionSummary(mod)}
               ${mod.fallbackChannel ? `<span class="mod-channel-note">${mod.fallbackChannel.toUpperCase()} package fallback</span>` : ""}
-              <a class="mod-author-link" href="${mod.moddbUrl}" target="_blank" rel="noopener noreferrer">
-                <svg class="lucide lucide-external-link" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M15 3h6v6"/>
-                  <path d="M10 14 21 3"/>
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                </svg>
-                Original mod by ${mod.author} · ModDB
-              </a>
+              ${mod.moddbUrl ? `
+                <a class="mod-author-link" href="${mod.moddbUrl}" target="_blank" rel="noopener noreferrer">
+                  <svg class="lucide lucide-external-link" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15 3h6v6"/>
+                    <path d="M10 14 21 3"/>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  </svg>
+                  Original mod by ${mod.author || "Mod author"} · ModDB
+                </a>` : ""}
             </div>
             <div class="mod-library-card__actions">
               ${modInstallActions(mod)}

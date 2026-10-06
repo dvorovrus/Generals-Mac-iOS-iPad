@@ -2557,7 +2557,7 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
 
     return [NSString stringWithFormat:
         @"APP\n"
-         "Project: %s\n"
+         "Project: %@\n"
          "Bundle: %@ (%@)\n"
          "iOS: %@\n"
          "Device: %@\n\n"
@@ -2578,7 +2578,7 @@ decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
          "Contra settings: %@\n"
          "Current session: %@\n"
          "Session logs: %@\n",
-        GX_PROJECT_VERSION,
+        shortVersion,
         shortVersion,
         buildVersion,
         UIDevice.currentDevice.systemVersion,
