@@ -6,7 +6,7 @@ LIB="${RES}/lib"
 GAME_ROOT="${GX_GAME_ROOT:-${HOME}/GeneralsX/Online/GeneralsZH}"
 LOG_DIR="${HOME}/Library/Logs/GeneralsXZH"
 mkdir -p "${LOG_DIR}"
-LOG="${LOG_DIR}/online-dev.log"
+LOG="${GX_MAC_ONLINE_LOG:-${LOG_DIR}/online-dev.log}"
 export DYLD_LIBRARY_PATH="${LIB}:${DYLD_LIBRARY_PATH:-}"
 export DXVK_WSI_DRIVER=SDL3
 export DXVK_HUD="${DXVK_HUD:-0}"

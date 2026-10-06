@@ -3,8 +3,11 @@
 #include "GameNetwork/GeneralsOnline/HTTP/HTTPManager.h"
 #include "GameNetwork/GeneralsOnline/HTTP/HTTPRequest.h"
 #include "GameNetwork/GeneralsOnline/OnlineServices_Moderation.h"
+#include "GameNetwork/GeneralsOnline/OnlineServices_SmokeTest.h"
 #include "GameNetwork/GeneralsOnline/json.hpp"
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <chrono>
 #include <random>
 #include "GameNetwork/GameSpyOverlay.h"
@@ -70,13 +73,45 @@ struct AuthResponse
 namespace
 {
 #if defined(__APPLE__)
+	std::string GetAppleCredentialAccount()
+	{
+		std::string account = "refresh_token";
+		const char* rawProfile = std::getenv("GX_ONLINE_AUTH_PROFILE");
+		if (rawProfile == nullptr || rawProfile[0] == '\0')
+			return account;
+
+		std::string profile;
+		for (const unsigned char c : std::string(rawProfile))
+		{
+			if (std::isalnum(c) || c == '-' || c == '_' || c == '.')
+				profile.push_back(static_cast<char>(c));
+			if (profile.size() >= 48)
+				break;
+		}
+
+		if (!profile.empty())
+			account += ":" + profile;
+		return account;
+	}
+
 	CFMutableDictionaryRef CreateAppleCredentialQuery()
 	{
 		CFMutableDictionaryRef query = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
 			&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 		CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword);
 		CFDictionarySetValue(query, kSecAttrService, CFSTR("GeneralsXZH.Online"));
-		CFDictionarySetValue(query, kSecAttrAccount, CFSTR("refresh_token"));
+
+		const std::string account = GetAppleCredentialAccount();
+		CFStringRef accountRef = CFStringCreateWithCString(kCFAllocatorDefault, account.c_str(), kCFStringEncodingUTF8);
+		if (accountRef != nullptr)
+		{
+			CFDictionarySetValue(query, kSecAttrAccount, accountRef);
+			CFRelease(accountRef);
+		}
+		else
+		{
+			CFDictionarySetValue(query, kSecAttrAccount, CFSTR("refresh_token"));
+		}
 		return query;
 	}
 
@@ -149,6 +184,19 @@ namespace
 	}
 #endif
 
+	void ReauthenticateOrFailSmoke(NGMP_OnlineServices_AuthInterface* auth)
+	{
+		if (OnlineSmokeTest::IsEnabled())
+		{
+			NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] cached auth is unavailable; interactive re-auth is disabled");
+			auth->OnLoginComplete(ELoginResult::Failed, "");
+		}
+		else
+		{
+			auth->DoFullLoginFlow();
+		}
+	}
+
 	std::string GetBanReason(const std::string& responseBody)
 	{
 		nlohmann::json jsonObject = nlohmann::json::parse(responseBody, nullptr, false, true);
@@ -200,7 +248,8 @@ void NGMP_OnlineServices_AuthInterface::GoToDetermineNetworkCaps()
 				// cache our local stats 
 				// 
 				// go to next screen
-				ClearGSMessageBoxes();
+				if (!OnlineSmokeTest::IsEnabled())
+					ClearGSMessageBoxes();
 
 				if (m_cb_LoginPendingCallback != nullptr)
 				{
@@ -230,7 +279,8 @@ void NGMP_OnlineServices_AuthInterface::GoToDetermineNetworkCaps()
 				// cache our local stats 
 				// 
 				// go to next screen
-				ClearGSMessageBoxes();
+				if (!OnlineSmokeTest::IsEnabled())
+					ClearGSMessageBoxes();
 
 				if (m_cb_LoginPendingCallback != nullptr)
 				{
@@ -391,7 +441,7 @@ void NGMP_OnlineServices_AuthInterface::RefreshToken()
     else
     {
 		// nothing to refresh with, we're going through the full login flow instead
-		DoFullLoginFlow();
+		ReauthenticateOrFailSmoke(this);
     }
 }
 
@@ -427,13 +477,16 @@ void NGMP_OnlineServices_AuthInterface::BeginLogin()
 				{
 					if (statusCode == 423)
 					{
-						ShowLoginBanDialog(GetBanReason(strBody));
+						if (OnlineSmokeTest::IsEnabled())
+							OnLoginComplete(ELoginResult::Failed, "");
+						else
+							ShowLoginBanDialog(GetBanReason(strBody));
 						return;
 					}
 					else
 					{
 						NetworkLog(ELogVerbosity::LOG_RELEASE, "LOGIN: Login failed due to 4XX code, trying to re-auth");
-						DoFullLoginFlow();
+						ReauthenticateOrFailSmoke(this);
 					}
 				}
 				else
@@ -445,8 +498,11 @@ void NGMP_OnlineServices_AuthInterface::BeginLogin()
 
 						if (authResp.result == EAuthResponseResult::SUCCEEDED)
 						{
-							ClearGSMessageBoxes();
-							GSMessageBoxNoButtons(UnicodeString(L"Logging In"), UnicodeString(L"Logged in!"), true);
+							if (!OnlineSmokeTest::IsEnabled())
+							{
+								ClearGSMessageBoxes();
+								GSMessageBoxNoButtons(UnicodeString(L"Logging In"), UnicodeString(L"Logged in!"), true);
+							}
 
 							NetworkLog(ELogVerbosity::LOG_RELEASE, "LOGIN: Logged in");
 							m_bWaitingLogin = false;
@@ -464,13 +520,13 @@ void NGMP_OnlineServices_AuthInterface::BeginLogin()
 						else if (authResp.result == EAuthResponseResult::FAILED)
 						{
 							NetworkLog(ELogVerbosity::LOG_RELEASE, "LOGIN: Login failed, trying to re-auth");
-							DoFullLoginFlow();
+							ReauthenticateOrFailSmoke(this);
 						}
 					}
 					catch (...)
 					{
 						NetworkLog(ELogVerbosity::LOG_RELEASE, "LOGIN: Resp parse failed, trying to re-auth");
-						DoFullLoginFlow();
+						ReauthenticateOrFailSmoke(this);
 					}
 				}
 
@@ -478,7 +534,7 @@ void NGMP_OnlineServices_AuthInterface::BeginLogin()
 	}
 	else
 	{
-		DoFullLoginFlow();
+		ReauthenticateOrFailSmoke(this);
 	}
 }
 
@@ -686,7 +742,8 @@ void NGMP_OnlineServices_AuthInterface::OnLoginComplete(ELoginResult loginResult
 		NGMP_OnlineServicesManager::GetInstance()->OnLogin(loginResult, szWSAddr, [=]() // wait for WS to connect
 			{
                 // move on to network capabilities section
-                ClearGSMessageBoxes();
+                if (!OnlineSmokeTest::IsEnabled())
+                    ClearGSMessageBoxes();
                 GoToDetermineNetworkCaps();
 			});
 	}
@@ -697,7 +754,8 @@ void NGMP_OnlineServices_AuthInterface::OnLoginComplete(ELoginResult loginResult
 			m_cb_LoginPendingCallback(loginResult);
 		}
 
-		TheShell->pop();
+		if (!OnlineSmokeTest::IsEnabled())
+			TheShell->pop();
 	}
 }
 

@@ -1167,6 +1167,7 @@ if(SAGE_USE_GENERALS_ONLINE)
         Source/GameNetwork/GeneralsOnline/OnlineServices_RoomsInterface.cpp
         Source/GameNetwork/GeneralsOnline/OnlineServices_SocialInterface.cpp
         Source/GameNetwork/GeneralsOnline/OnlineServices_StatsInterface.cpp
+        Source/GameNetwork/GeneralsOnline/OnlineServices_SmokeTest.cpp
         Source/GameNetwork/GeneralsOnline/HTTP/HTTPManager.cpp
         Source/GameNetwork/GeneralsOnline/HTTP/HTTPRequest.cpp
     )

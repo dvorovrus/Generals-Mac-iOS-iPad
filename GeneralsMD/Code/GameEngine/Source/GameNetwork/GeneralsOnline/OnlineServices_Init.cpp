@@ -2,6 +2,7 @@
 #include "GameNetwork/GeneralsOnline/NetworkMesh.h"
 #include "GameNetwork/GeneralsOnline/HTTP/HTTPManager.h"
 #include "GameNetwork/GeneralsOnline/json.hpp"
+#include "GameNetwork/GeneralsOnline/OnlineServices_SmokeTest.h"
 #include "GameClient/MessageBox.h"
 #include "Common/FileSystem.h"
 #include "Common/GlobalData.h"
@@ -355,6 +356,8 @@ void NGMP_OnlineServicesManager::WaitForScreenshotThreads()
 void NGMP_OnlineServicesManager::Shutdown()
 {
 	NetworkLog(ELogVerbosity::LOG_RELEASE, "[NGMP] OnlineServicesManager shutdown initiated");
+
+	OnlineSmokeTest::Shutdown();
 
 	// First, wait for all screenshot threads to complete
 	// This prevents race conditions where threads might still be using resources
@@ -938,16 +941,21 @@ void NGMP_OnlineServicesManager::OnLogin(ELoginResult loginResult, const char* s
 
         m_pWebSocket->Connect(strWebsocketAddr.c_str(), false, [=]()
             {
-                // Get friends list and blocked list
-                // we need to wait until the websocket is connected so we have a session
-                NGMP_OnlineServices_SocialInterface* pSocialInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_SocialInterface>();
-                if (pSocialInterface == nullptr)
+                // The smoke runner is intentionally UI-free; social-list refreshes can
+                // create shell notifications and are irrelevant to transport validation.
+                if (!OnlineSmokeTest::IsEnabled())
                 {
-                    return;
-                }
+                    // Get friends list and blocked list. We need to wait until the
+                    // websocket is connected so we have a session.
+                    NGMP_OnlineServices_SocialInterface* pSocialInterface = NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_SocialInterface>();
+                    if (pSocialInterface == nullptr)
+                    {
+                        return;
+                    }
 
-                pSocialInterface->GetFriendsList(false, nullptr);
-                pSocialInterface->GetBlockList(nullptr);
+                    pSocialInterface->GetFriendsList(false, nullptr);
+                    pSocialInterface->GetBlockList(nullptr);
+                }
 
                 // and invoke callback
                 fnWebsocketConnectedCallback();
@@ -1141,6 +1149,7 @@ void NGMP_OnlineServicesManager::Tick()
 	}
 
 	NetworkMeshLibrary::Tick();
+	OnlineSmokeTest::Tick();
 }
 
 void NGMP_OnlineServicesManager::InitSentry()

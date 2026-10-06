@@ -31,6 +31,10 @@
 #include "Common/FramePacer.h"
 #include "Common/GameEngine.h"
 #include "Common/ReplaySimulation.h"
+#if defined(GENERALS_ONLINE)
+#include "GameNetwork/GeneralsOnline/OnlineServices_Init.h"
+#include "GameNetwork/GeneralsOnline/OnlineServices_SmokeTest.h"
+#endif
 
 
 /**
@@ -44,6 +48,25 @@ Int GameMain()
 	TheFramePacer->enableFramesPerSecondLimit(TRUE);
 	TheGameEngine = CreateGameEngine();
 	TheGameEngine->init();
+
+#if defined(GENERALS_ONLINE)
+	// Headless Online smoke runs never enter the multiplayer menu, so bootstrap
+	// the same services that StartPatchCheck normally creates for an interactive run.
+	if (OnlineSmokeTest::IsEnabled())
+	{
+		NGMP_OnlineServicesManager::CreateInstance();
+		NGMP_OnlineServicesManager* onlineServices = NGMP_OnlineServicesManager::GetInstance();
+		if (onlineServices != nullptr)
+		{
+			onlineServices->Init();
+			OnlineSmokeTest::Init();
+		}
+		else
+		{
+			TheGameEngine->setQuitting(TRUE);
+		}
+	}
+#endif
 
 	if (!TheGlobalData->m_simulateReplays.empty())
 	{

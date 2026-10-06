@@ -37,6 +37,7 @@
 #include "GameNetwork/NetworkDefs.h"
 #include "trim.h"
 
+#include <cstdlib>
 #include <string>
 
 #ifndef _WIN32
@@ -421,6 +422,17 @@ Int parseHeadless(char *args[], int num)
 	TheWritableGlobalData->m_playIntro = FALSE;
 	TheWritableGlobalData->m_afterIntro = TRUE;
 	TheWritableGlobalData->m_playSizzle = FALSE;
+
+#if defined(GENERALS_ONLINE)
+	// The two-client Online smoke test intentionally runs multiple headless game
+	// processes. Startup command-line parsing happens before ClientInstance is
+	// initialized, so this is the safe point to opt into multi-instance mode.
+	const char* smokeRole = std::getenv("GX_ONLINE_SMOKE_ROLE");
+	if (smokeRole != nullptr && smokeRole[0] != '\0')
+	{
+		rts::ClientInstance::setMultiInstance(TRUE);
+	}
+#endif
 
 	// TheSuperHackers @fix bobtista 03/02/2026 Set DX8Wrapper_IsWindowed to false in headless
 	// mode so that ignoringAsserts() works correctly throughout the entire process lifetime,
