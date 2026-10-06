@@ -106,7 +106,8 @@
         </div>
       </section>
 
-      <section class="modes" aria-label="Game profiles">
+      <section class="profile-strip" aria-label="Game profiles">
+        <div class="modes" aria-label="Installed profiles">
         <button class="mode-card is-active" type="button" hidden
           data-id="zero-hour-online"
           data-title="Zero Hour + Online"
@@ -159,16 +160,19 @@
           </span>
         </button>
 
-        <button class="add-mod-card" type="button" data-panel="mods" aria-label="Mod Hub" title="Mod Hub">
-          <span class="mod-hub-badge" aria-hidden="true" hidden></span>
-          <svg class="lucide lucide-grid-2x2" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="7"/>
-            <rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/>
-          </svg>
-          <span class="add-mod-card__label">Mod Hub</span>
-        </button>
+        </div>
+        <div class="mod-hub-dock" aria-label="Mod Hub controls">
+          <button class="add-mod-card" type="button" data-panel="mods" aria-label="Mod Hub" title="Mod Hub">
+            <span class="mod-hub-badge" aria-hidden="true" hidden></span>
+            <svg class="lucide lucide-grid-2x2" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            <span class="add-mod-card__label">Mod Hub</span>
+          </button>
+        </div>
       </section>
 
       <footer class="footer">

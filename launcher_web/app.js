@@ -190,6 +190,7 @@ function handleNativeEvent(name, payload) {
 }
 
 let cards = [...document.querySelectorAll(".mode-card")];
+const defaultProfileOrder = cards.map(card => card.dataset.id).filter(Boolean);
 const hero = document.querySelector(".hero");
 const modeTitle = document.querySelector("#modeTitle");
 const modeDescription = document.querySelector("#modeDescription");
@@ -378,7 +379,7 @@ function ensureCatalogModCard(mod) {
     if (strong) strong.textContent = mod.title || mod.id;
     return card;
   }
-  if (!modesRail || !addModCard) return null;
+  if (!modesRail) return null;
 
   card = document.createElement("button");
   card.className = "mode-card";
@@ -402,7 +403,7 @@ function ensureCatalogModCard(mod) {
     if (!profileOrderEditing) setActiveCard(card);
   });
 
-  modesRail.insertBefore(card, addModCard);
+  modesRail.append(card);
   cards.push(card);
   return card;
 }
@@ -441,7 +442,7 @@ function loadJSONStorage(key, fallback) {
 
 function savedProfileOrder() {
   const value = loadJSONStorage(PROFILE_ORDER_KEY, []);
-  return Array.isArray(value) ? value : [];
+  return Array.isArray(value) && value.length ? value : defaultProfileOrder;
 }
 
 function refreshCardsFromDOM() {
@@ -467,7 +468,7 @@ function currentPriorityDownloadId() {
 }
 
 function applyProfileOrder(priorityProfileId = currentPriorityDownloadId()) {
-  if (!modesRail || !addModCard || profileOrderEditing) return;
+  if (!modesRail || profileOrderEditing) return;
 
   const saved = savedProfileOrder();
   const rank = new Map(saved.map((id, index) => [id, index]));
@@ -479,13 +480,13 @@ function applyProfileOrder(priorityProfileId = currentPriorityDownloadId()) {
     return ar === br ? originalRank.get(a) - originalRank.get(b) : ar - br;
   });
 
-  ordered.forEach(card => modesRail.insertBefore(card, addModCard));
+  ordered.forEach(card => modesRail.append(card));
 
   const priority = priorityProfileId ? cardForProfileId(priorityProfileId) : null;
   if (priority && !priority.hidden) {
     const first = refreshCardsFromDOM().find(card => !card.hidden && card !== priority);
     if (first) modesRail.insertBefore(priority, first);
-    else modesRail.insertBefore(priority, addModCard);
+    else modesRail.append(priority);
   }
   refreshCardsFromDOM();
   updateModesOverflow();
@@ -536,6 +537,15 @@ function ensureHomeDownloadPercent(card) {
     indicator.className = "mode-card__download-percent";
     indicator.setAttribute("aria-hidden", "true");
     card.append(indicator);
+  }
+
+  let border = card.querySelector(".mode-card__download-border");
+  if (!border) {
+    border = document.createElement("span");
+    border.className = "mode-card__download-border";
+    border.setAttribute("aria-hidden", "true");
+    border.innerHTML = "<span></span>";
+    card.append(border);
   }
   return indicator;
 }
@@ -1660,16 +1670,20 @@ function visibleProfileCards() {
   return refreshCardsFromDOM().filter(card => !card.hidden);
 }
 
-function animateProfileReflow(before, dragged) {
-  visibleProfileCards().forEach(card => {
-    if (card === dragged || !before.has(card)) return;
-    const delta = before.get(card) - card.getBoundingClientRect().left;
-    if (Math.abs(delta) < 1) return;
-    card.animate(
-      [{ translate: `${delta}px 0` }, { translate: "0 0" }],
-      { duration: 210, easing: "cubic-bezier(.2,.8,.2,1)" }
-    );
-  });
+function ensureProfileOrderGrip(card) {
+  let grip = card.querySelector(".profile-order-grip");
+  if (!grip) {
+    grip = document.createElement("span");
+    grip.className = "profile-order-grip";
+    grip.setAttribute("aria-hidden", "true");
+    grip.innerHTML = "<i></i><i></i><i></i><i></i><i></i><i></i>";
+    card.append(grip);
+  }
+  return grip;
+}
+
+function syncProfileOrderGrips() {
+  visibleProfileCards().forEach(card => ensureProfileOrderGrip(card));
 }
 
 function updateProfileOrderToggle() {
@@ -1678,6 +1692,27 @@ function updateProfileOrderToggle() {
   profileOrderToggle.setAttribute("aria-pressed", String(profileOrderEditing));
   profileOrderToggle.setAttribute("aria-label", profileOrderEditing ? "Done arranging profiles" : "Arrange profiles");
   profileOrderToggle.title = profileOrderEditing ? "Done arranging profiles" : "Arrange profiles";
+}
+
+function cleanupProfileDrag(commit = true) {
+  if (!profileDrag) return;
+  const card = profileDrag.card;
+  const placeholder = profileDrag.placeholder;
+  if (profileDrag.autoScrollFrame) cancelAnimationFrame(profileDrag.autoScrollFrame);
+
+  if (placeholder && placeholder.isConnected) {
+    if (commit) modesRail.insertBefore(card, placeholder);
+    placeholder.remove();
+  }
+
+  card.classList.remove("is-reorder-floating");
+  card.style.removeProperty("--reorder-left");
+  card.style.removeProperty("--reorder-top");
+  card.style.removeProperty("--reorder-width");
+  card.style.removeProperty("--reorder-height");
+  card.style.removeProperty("--reorder-x");
+  profileDrag = null;
+  refreshCardsFromDOM();
 }
 
 function setProfileOrderEditing(enabled) {
@@ -1692,70 +1727,133 @@ function setProfileOrderEditing(enabled) {
     return;
   }
 
+  if (!enabled) cleanupProfileDrag(true);
   profileOrderEditing = Boolean(enabled);
   modesRail.classList.toggle("is-reordering", profileOrderEditing);
   updateProfileOrderToggle();
 
-  if (!profileOrderEditing) {
-    if (profileDrag?.card) {
-      profileDrag.card.classList.remove("is-reorder-dragging");
-      profileDrag.card.style.translate = "";
-    }
-    profileDrag = null;
+  if (profileOrderEditing) {
+    syncProfileOrderGrips();
+    showToast("Drag the handle to arrange profiles");
+  } else {
     saveProfileOrder();
     applyProfileOrder();
     showToast("Profile order saved");
-  } else {
-    showToast("Drag profile cards to reorder");
   }
 }
 
 function beginProfileDrag(event) {
-  if (!profileOrderEditing || event.button > 0) return;
-  const card = event.target.closest(".mode-card");
-  if (!card || card.hidden) return;
+  if (!profileOrderEditing || event.button > 0 || !modesRail) return;
+  const grip = event.target.closest(".profile-order-grip");
+  const card = grip && grip.closest(".mode-card");
+  if (!grip || !card || card.hidden) return;
 
   event.preventDefault();
   const rect = card.getBoundingClientRect();
+  const placeholder = document.createElement("div");
+  placeholder.className = "profile-order-placeholder";
+  placeholder.style.width = rect.width + "px";
+  placeholder.style.height = rect.height + "px";
+  card.before(placeholder);
+
+  card.classList.add("is-reorder-floating");
+  card.style.setProperty("--reorder-left", rect.left + "px");
+  card.style.setProperty("--reorder-top", rect.top + "px");
+  card.style.setProperty("--reorder-width", rect.width + "px");
+  card.style.setProperty("--reorder-height", rect.height + "px");
+  card.style.setProperty("--reorder-x", "0px");
+  document.body.append(card);
+
   profileDrag = {
     card,
+    placeholder,
     pointerId: event.pointerId,
-    grabOffset: event.clientX - rect.left
+    startX: event.clientX,
+    lastX: event.clientX,
+    autoScrollDirection: 0,
+    autoScrollFrame: 0
   };
-  card.classList.add("is-reorder-dragging");
-  card.style.translate = "0 0";
-  try { card.setPointerCapture(event.pointerId); } catch {}
+
+  try { grip.setPointerCapture(event.pointerId); } catch {}
   triggerHaptic("light");
+}
+
+function animateReorderSiblings(before) {
+  visibleProfileCards().forEach(card => {
+    const previousLeft = before.get(card);
+    if (previousLeft == null) return;
+    const delta = previousLeft - card.getBoundingClientRect().left;
+    if (Math.abs(delta) < 1) return;
+    card.animate(
+      [{ translate: delta + "px 0" }, { translate: "0 0" }],
+      { duration: 190, easing: "cubic-bezier(.2,.8,.2,1)" }
+    );
+  });
+}
+
+function reorderPlaceholder(clientX) {
+  if (!profileDrag || !modesRail) return;
+  const placeholder = profileDrag.placeholder;
+  const siblings = [...modesRail.querySelectorAll(".mode-card:not([hidden])")];
+  const before = new Map(siblings.map(card => [card, card.getBoundingClientRect().left]));
+  const railRect = modesRail.getBoundingClientRect();
+  const contentX = clientX - railRect.left + modesRail.scrollLeft;
+
+  let target = null;
+  for (const sibling of siblings) {
+    const center = sibling.offsetLeft + sibling.offsetWidth / 2;
+    if (contentX < center) {
+      target = sibling;
+      break;
+    }
+  }
+
+  const previousNext = placeholder.nextElementSibling;
+  if (target) {
+    if (previousNext !== target) modesRail.insertBefore(placeholder, target);
+  } else if (placeholder !== modesRail.lastElementChild) {
+    modesRail.append(placeholder);
+  }
+
+  if (placeholder.nextElementSibling !== previousNext) animateReorderSiblings(before);
+}
+
+function runProfileAutoScroll() {
+  if (!profileDrag || !modesRail || !profileDrag.autoScrollDirection) return;
+  modesRail.scrollLeft += profileDrag.autoScrollDirection * 7;
+  reorderPlaceholder(profileDrag.lastX);
+  profileDrag.autoScrollFrame = requestAnimationFrame(runProfileAutoScroll);
+}
+
+function updateProfileAutoScroll(clientX) {
+  if (!profileDrag || !modesRail) return;
+  const railRect = modesRail.getBoundingClientRect();
+  const direction = clientX < railRect.left + 48 ? -1 : (clientX > railRect.right - 48 ? 1 : 0);
+  if (direction === profileDrag.autoScrollDirection) return;
+
+  profileDrag.autoScrollDirection = direction;
+  if (profileDrag.autoScrollFrame) {
+    cancelAnimationFrame(profileDrag.autoScrollFrame);
+    profileDrag.autoScrollFrame = 0;
+  }
+  if (direction) profileDrag.autoScrollFrame = requestAnimationFrame(runProfileAutoScroll);
 }
 
 function moveProfileDrag(event) {
   if (!profileDrag || event.pointerId !== profileDrag.pointerId || !modesRail) return;
   event.preventDefault();
 
-  const { card, grabOffset } = profileDrag;
-  const railRect = modesRail.getBoundingClientRect();
-  if (event.clientX < railRect.left + 46) modesRail.scrollLeft -= 10;
-  else if (event.clientX > railRect.right - 116) modesRail.scrollLeft += 10;
-
-  const before = new Map(visibleProfileCards().map(item => [item, item.getBoundingClientRect().left]));
-  const siblings = visibleProfileCards().filter(item => item !== card);
-  const target = siblings.find(item => event.clientX < item.getBoundingClientRect().left + item.getBoundingClientRect().width / 2);
-
-  if (target) modesRail.insertBefore(card, target);
-  else modesRail.insertBefore(card, addModCard);
-
-  animateProfileReflow(before, card);
-  const layoutRect = card.getBoundingClientRect();
-  card.style.translate = `${event.clientX - grabOffset - layoutRect.left}px 0`;
+  profileDrag.lastX = event.clientX;
+  const x = event.clientX - profileDrag.startX;
+  profileDrag.card.style.setProperty("--reorder-x", x + "px");
+  reorderPlaceholder(event.clientX);
+  updateProfileAutoScroll(event.clientX);
 }
 
 function endProfileDrag(event) {
   if (!profileDrag || event.pointerId !== profileDrag.pointerId) return;
-  const card = profileDrag.card;
-  profileDrag = null;
-  card.classList.remove("is-reorder-dragging");
-  card.style.translate = "0 0";
-  window.setTimeout(() => { if (!profileDrag) card.style.translate = ""; }, 190);
+  event.preventDefault();
+  cleanupProfileDrag(true);
   saveProfileOrder();
   triggerHaptic("selection");
 }
@@ -1767,10 +1865,10 @@ if (profileOrderToggle) {
 
 if (modesRail) {
   modesRail.addEventListener("pointerdown", beginProfileDrag, { passive: false });
-  modesRail.addEventListener("pointermove", moveProfileDrag, { passive: false });
-  modesRail.addEventListener("pointerup", endProfileDrag);
-  modesRail.addEventListener("pointercancel", endProfileDrag);
 }
+document.addEventListener("pointermove", moveProfileDrag, { passive: false });
+document.addEventListener("pointerup", endProfileDrag, { passive: false });
+document.addEventListener("pointercancel", endProfileDrag, { passive: false });
 
 document.querySelectorAll("[data-panel]").forEach(button => {
   button.addEventListener("click", () => openPanel(button.dataset.panel));
