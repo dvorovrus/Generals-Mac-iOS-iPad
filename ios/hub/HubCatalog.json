@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 58,
+  "catalogVersion": 59,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -156,11 +156,11 @@
       "channels": {
         "stable": {
           "version": "0.986-P11",
-          "packageURL": "",
-          "sha256": "",
-          "packageBytes": 0,
+          "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/teod/stable/0.986-P11.gxmod",
+          "sha256": "007355283e32548b5ec24811e847f96961861bf50ba9a1f2dd4062f15dd20601",
+          "packageBytes": 1111367680,
           "minHubVersion": "1.4.15",
-          "releaseNotes": "Official TEOD 0.986 Patch 11 full release. Portable profile excludes Windows-only executable/D3D wrapper files."
+          "releaseNotes": "Official The End of Days 0.986 Patch 11 full release. Portable iOS profile includes TEOD BIGs, active scripts, English CSF and movies; excludes Windows-only executable/D3D wrapper and backup installer files."
         },
         "beta": {
           "version": "0.986-P11",
@@ -173,7 +173,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-06T14:27:59Z",
+  "updatedAt": "2026-10-06T14:40:20Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.13",
