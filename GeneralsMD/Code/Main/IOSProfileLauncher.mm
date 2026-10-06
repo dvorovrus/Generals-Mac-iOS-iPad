@@ -749,6 +749,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     NSString *onlineInstalledVersion = onlineInstalledManifest[@"version"] ?: @"";
     NSString *onlineAvailableVersion = onlineEntry[@"version"] ?: @"unknown";
     BOOL onlineInstalled = GXHubProfileInstalled(@"online");
+    NSDictionary *onlineIntegrity = GXHubProfileIntegrity(@"online");
+    BOOL onlineHealthy = [onlineIntegrity[@"healthy"] boolValue];
     BOOL onlineUpdateAvailable = onlineInstalled && onlineInstalledVersion.length > 0 &&
         HubVersionDiffers(onlineInstalledVersion, onlineAvailableVersion) &&
         [onlineEntry[@"packageURL"] length] > 0;
@@ -763,6 +765,8 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         NSString *installedVersion = installedManifest[@"version"];
         NSString *availableVersion = entry[@"version"] ?: @"unknown";
         BOOL installed = GXHubProfileInstalled(profileId);
+        NSDictionary *integrity = GXHubProfileIntegrity(profileId);
+        BOOL healthy = [integrity[@"healthy"] boolValue];
         BOOL updateAvailable = installed && installedVersion.length > 0 &&
             HubVersionDiffers(installedVersion, availableVersion) &&
             [entry[@"packageURL"] length] > 0;
@@ -789,6 +793,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             @"description": entry[@"description"] ?: @"",
             @"version": availableVersion,
             @"installed": @(installed),
+            @"healthy": @(healthy),
+            @"integrityStatus": integrity[@"status"] ?: @"unknown",
+            @"integrityMessage": integrity[@"message"] ?: @"",
             @"installedVersion": installedVersion ?: @"",
             @"updateAvailable": @(updateAvailable),
             @"packageURL": entry[@"packageURL"] ?: @"",
@@ -825,6 +832,9 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
             @"name": onlineEntry[@"name"] ?: @"Zero Hour + Online",
             @"description": onlineEntry[@"description"] ?: @"Classic Zero Hour with Generals Online multiplayer integration.",
             @"installed": @(onlineInstalled),
+            @"healthy": @(onlineHealthy),
+            @"integrityStatus": onlineIntegrity[@"status"] ?: @"unknown",
+            @"integrityMessage": onlineIntegrity[@"message"] ?: @"",
             @"installedVersion": onlineInstalledVersion,
             @"version": onlineAvailableVersion,
             @"updateAvailable": @(onlineUpdateAvailable),
@@ -1057,17 +1067,20 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
     {
         NSString *profileId = [payload[@"profileId"] isKindOfClass:[NSString class]] ? payload[@"profileId"] : @"";
         BOOL baseInstalled = GXHubProfileInstalled(@"online");
+        BOOL baseHealthy = [GXHubProfileIntegrity(@"online")[@"healthy"] boolValue];
         NSDictionary *catalogEntry = profileId.length > 0 ? HubEntryForProfile(profileId) : nil;
         BOOL selectedInstalled = [profileId isEqualToString:@"online"]
             ? baseInstalled
             : (catalogEntry != nil && GXHubProfileInstalled(profileId));
+        BOOL selectedHealthy = selectedInstalled &&
+            [GXHubProfileIntegrity(profileId)[@"healthy"] boolValue];
         fprintf(stderr,
                 "[HUB-PLAY] profile='%s' baseInstalled=%d selectedInstalled=%d catalogEntry=%d\n",
                 profileId.UTF8String,
                 baseInstalled ? 1 : 0,
                 selectedInstalled ? 1 : 0,
                 catalogEntry != nil ? 1 : 0);
-        if (baseInstalled && selectedInstalled)
+        if (baseInstalled && baseHealthy && selectedInstalled && selectedHealthy)
         {
             [self sendWebResponse:requestId result:@{ @"accepted": @YES } error:nil];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -1076,9 +1089,13 @@ void GeneralsXSetIOSDiagnosticClearCallback(GeneralsXIOSDiagnosticClearCallback 
         }
         else
         {
-            NSString *message = baseInstalled
-                ? @"Profile is not installed."
-                : @"Zero Hour + Online base content is not installed.";
+            NSString *message = !baseInstalled
+                ? @"Zero Hour + Online base content is not installed."
+                : (!baseHealthy
+                    ? @"Zero Hour + Online files are damaged. Open Mod Hub and repair the base profile."
+                    : (!selectedInstalled
+                        ? @"Profile is not installed."
+                        : @"Profile files are damaged. Open Mod Hub and choose Repair."));
             [self sendWebResponse:requestId result:nil error:message];
         }
         return;

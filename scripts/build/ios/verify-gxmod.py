@@ -63,6 +63,12 @@ def main() -> None:
             fail(
                 f"profileFiles mismatch: manifest={manifest['profileFiles']} archive={len(profile_files)}"
             )
+        if "profileBytes" in manifest:
+            actual_profile_bytes = sum(m.size for m in profile_files)
+            if actual_profile_bytes != int(manifest["profileBytes"]):
+                fail(
+                    f"profileBytes mismatch: manifest={manifest['profileBytes']} archive={actual_profile_bytes}"
+                )
 
     print("GXMOD VALID")
     print(f"Profile: {manifest['profileId']}")

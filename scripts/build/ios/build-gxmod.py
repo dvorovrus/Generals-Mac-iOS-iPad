@@ -148,6 +148,7 @@ def build_online(args: argparse.Namespace) -> None:
         if not base_entries:
             b.die("Base IPA contains no retail GameData files")
 
+        profile_bytes = sum(info.file_size for info, _ in base_entries) + sum(path.stat().st_size for path, _ in online_sources)
         manifest = {
             "schemaVersion": 1,
             "profileId": "online",
@@ -158,6 +159,7 @@ def build_online(args: argparse.Namespace) -> None:
             "runtimeAdapter": "online",
             "contentRole": "base",
             "profileFiles": len(base_entries) + len(online_sources),
+            "profileBytes": profile_bytes,
         }
         manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode()
         total = 0
@@ -199,6 +201,7 @@ def build_generic(args: argparse.Namespace) -> None:
         if not entries:
             b.die("Generic profile source contains no packageable files")
 
+        profile_bytes = sum(source_size(entry) for entry, _ in entries)
         manifest = {
             "schemaVersion": 1,
             "profileId": args.profile_id,
@@ -208,6 +211,7 @@ def build_generic(args: argparse.Namespace) -> None:
             "minHubVersion": args.min_hub_version,
             "runtimeAdapter": args.runtime_adapter,
             "profileFiles": len(entries),
+            "profileBytes": profile_bytes,
         }
         manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode()
         total = 0
@@ -257,6 +261,7 @@ def main() -> None:
                 "minHubVersion": args.min_hub_version,
                 "runtimeAdapter": "enhanced",
                 "profileFiles": len(entries) + len(generated),
+                "profileBytes": sum(source_size(entry) for entry, _ in entries) + sum(len(payload) for payload in generated.values()),
             }
             write_entries = entries
         finally:
@@ -279,6 +284,7 @@ def main() -> None:
         with b.ModSource(args.contra_beta2) as beta, b.ModSource(args.contra_patch1) as patch:
             entries, _ = b.build_contra_entries(beta, patch)
             # We must write while ZIP-backed SourceEntry streams are alive.
+            profile_bytes = sum(source_size(entry) for entry, _ in entries)
             manifest = {
                 "schemaVersion": 1,
                 "profileId": "contra-x",
@@ -288,6 +294,7 @@ def main() -> None:
                 "minHubVersion": args.min_hub_version,
                 "runtimeAdapter": "contra",
                 "profileFiles": len(entries),
+                "profileBytes": profile_bytes,
             }
             manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode()
             total = 0
@@ -308,6 +315,7 @@ def main() -> None:
         entries = b.build_enhanced_entries(opened)
         generated = b.build_enhanced_ai_archives(entries)
         manifest["profileFiles"] = len(entries) + len(generated)
+        manifest["profileBytes"] = sum(source_size(entry) for entry, _ in entries) + sum(len(payload) for payload in generated.values())
         manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode()
         total = 0
         with tarfile.open(args.output, "w", format=tarfile.USTAR_FORMAT) as tar:
