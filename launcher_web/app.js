@@ -91,8 +91,9 @@ function applyNativeState(state) {
   syncInstalledModCards();
   syncActiveModSourceLink();
   syncNativeSystemStatus();
+  syncModHubAttention();
 
-  if (!modalBackdrop.hidden && modalTitle.textContent === "Add Mod") {
+  if (!modalBackdrop.hidden && modalTitle.textContent === "Mod Hub") {
     renderModLibrary();
   }
 }
@@ -207,7 +208,9 @@ const modalHeaderActions = document.querySelector("#modalHeaderActions");
 const modSourceLink = document.querySelector("#modSourceLink");
 const modesRail = document.querySelector(".modes");
 const addModCard = document.querySelector(".add-mod-card");
+const modHubBadge = addModCard?.querySelector(".mod-hub-badge") || null;
 const audioToggle = document.querySelector("#audioToggle");
+const profileOrderToggle = document.querySelector("#profileOrderToggle");
 
 const backgroundPrimary = document.querySelector(".battlefield__tile--primary");
 const backgroundSecondary = document.querySelector(".battlefield__tile--secondary");
@@ -230,6 +233,11 @@ let activeCard = cards[0];
 let toastTimer;
 let modalCloseTimer = null;
 let uiAudioContext = null;
+let profileOrderEditing = false;
+let profileDrag = null;
+const PROFILE_ORDER_KEY = "generals-x-profile-order-v1";
+const MOD_HUB_SEEN_KEY = "generals-x-mod-hub-seen-v1";
+const LEGACY_MOD_IDS = new Set(["enhanced", "contra-x", "contra-007"]);
 let uiSoundEnabled = (() => {
   try { return localStorage.getItem("generals-x-ui-sound") !== "off"; }
   catch { return true; }
@@ -390,7 +398,9 @@ function ensureCatalogModCard(mod) {
   `;
   card.querySelector("strong").textContent = mod.title || mod.id;
   card.querySelector("small").textContent = mod.installedVersion || mod.version || "Installed";
-  card.addEventListener("click", () => setActiveCard(card));
+  card.addEventListener("click", () => {
+    if (!profileOrderEditing) setActiveCard(card);
+  });
 
   modesRail.insertBefore(card, addModCard);
   cards.push(card);
@@ -418,6 +428,99 @@ function saveInstalledMods() {
 
 function isModInstalled(modId) {
   return installedMods.includes(modId);
+}
+
+function loadJSONStorage(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "null");
+    return value ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function savedProfileOrder() {
+  const value = loadJSONStorage(PROFILE_ORDER_KEY, []);
+  return Array.isArray(value) ? value : [];
+}
+
+function refreshCardsFromDOM() {
+  if (modesRail) cards = [...modesRail.querySelectorAll(".mode-card")];
+  return cards;
+}
+
+function saveProfileOrder() {
+  if (!modesRail) return;
+  const order = refreshCardsFromDOM()
+    .filter(card => !card.hidden)
+    .map(card => card.dataset.id)
+    .filter(Boolean);
+  try { localStorage.setItem(PROFILE_ORDER_KEY, JSON.stringify(order)); } catch {}
+}
+
+function currentPriorityDownloadId() {
+  if (nativeState?.download?.busy && nativeState.download.profileId) return nativeState.download.profileId;
+  for (const [profileId, state] of homeDownloadState.entries()) {
+    if (state?.active) return profileId;
+  }
+  return "";
+}
+
+function applyProfileOrder(priorityProfileId = currentPriorityDownloadId()) {
+  if (!modesRail || !addModCard || profileOrderEditing) return;
+
+  const saved = savedProfileOrder();
+  const rank = new Map(saved.map((id, index) => [id, index]));
+  const current = [...refreshCardsFromDOM()];
+  const originalRank = new Map(current.map((card, index) => [card, index]));
+  const ordered = current.sort((a, b) => {
+    const ar = rank.has(a.dataset.id) ? rank.get(a.dataset.id) : Number.MAX_SAFE_INTEGER;
+    const br = rank.has(b.dataset.id) ? rank.get(b.dataset.id) : Number.MAX_SAFE_INTEGER;
+    return ar === br ? originalRank.get(a) - originalRank.get(b) : ar - br;
+  });
+
+  ordered.forEach(card => modesRail.insertBefore(card, addModCard));
+
+  const priority = priorityProfileId ? cardForProfileId(priorityProfileId) : null;
+  if (priority && !priority.hidden) {
+    const first = refreshCardsFromDOM().find(card => !card.hidden && card !== priority);
+    if (first) modesRail.insertBefore(priority, first);
+    else modesRail.insertBefore(priority, addModCard);
+  }
+  refreshCardsFromDOM();
+  updateModesOverflow();
+}
+
+function loadModHubSeen() {
+  const value = loadJSONStorage(MOD_HUB_SEEN_KEY, {});
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function syncModHubAttention() {
+  if (!addModCard || !modHubBadge || !nativeState) return;
+  const seen = loadModHubSeen();
+  const needsAttention = (nativeState.mods || []).some(item => {
+    if (item.installed && item.updateAvailable) return true;
+    if (item.installed || !item.version) return false;
+    if (!seen[item.profileId] && LEGACY_MOD_IDS.has(item.profileId)) return false;
+    return seen[item.profileId] !== item.version;
+  });
+
+  addModCard.classList.toggle("has-attention", needsAttention);
+  modHubBadge.hidden = !needsAttention;
+  const label = needsAttention ? "Mod Hub — new mods or updates available" : "Mod Hub";
+  addModCard.setAttribute("aria-label", label);
+  addModCard.title = label;
+}
+
+function markModHubSeen() {
+  if (!nativeState) return;
+  const seen = loadModHubSeen();
+  (nativeState.mods || []).forEach(item => {
+    if (item.profileId && item.version) seen[item.profileId] = item.version;
+  });
+  try { localStorage.setItem(MOD_HUB_SEEN_KEY, JSON.stringify(seen)); } catch {}
+  syncModHubAttention();
 }
 
 function cardForProfileId(profileId) {
@@ -456,6 +559,7 @@ function setHomeDownloadProgress(profileId, fraction = 0, active = true) {
   if (indicator) {
     indicator.textContent = active ? `${Math.round(value * 100)}%` : "";
   }
+  if (active) applyProfileOrder(profileId);
   updateModesOverflow();
 }
 
@@ -517,6 +621,7 @@ function syncInstalledModCards() {
   });
 
   syncModeCardVersions();
+  applyProfileOrder();
   updateModesOverflow();
 }
 
@@ -645,7 +750,9 @@ function setActiveCard(card) {
 }
 
 cards.forEach(card => {
-  card.addEventListener("click", () => setActiveCard(card));
+  card.addEventListener("click", () => {
+    if (!profileOrderEditing) setActiveCard(card);
+  });
 });
 
 playButton.addEventListener("click", async () => {
@@ -733,8 +840,9 @@ async function openPanel(type) {
     renderSettings(profileId);
   } else if (type === "mods") {
     modalEyebrow.textContent = "GENERALS X";
-    modalTitle.textContent = "Add Mod";
+    modalTitle.textContent = "Mod Hub";
     renderModLibrary();
+    markModHubSeen();
   } else if (type === "diagnostics") {
     modalEyebrow.textContent = "SYSTEM";
     modalTitle.textContent = "Diagnostics";
@@ -905,7 +1013,7 @@ function updateDownloadPanel(profileId) {
   const metrics = currentDownloadMetrics(profileId);
   const panel = document.querySelector(`[data-mod-progress="${profileId}"]`);
   if (!panel || !metrics) {
-    if (!modalBackdrop.hidden && modalTitle.textContent === "Add Mod") renderModLibrary();
+    if (!modalBackdrop.hidden && modalTitle.textContent === "Mod Hub") renderModLibrary();
     return;
   }
   const bar = panel.querySelector(".mod-download-track span");
@@ -1548,6 +1656,122 @@ async function startBackgroundMotion() {
   requestAnimationFrame(frame);
 }
 
+function visibleProfileCards() {
+  return refreshCardsFromDOM().filter(card => !card.hidden);
+}
+
+function animateProfileReflow(before, dragged) {
+  visibleProfileCards().forEach(card => {
+    if (card === dragged || !before.has(card)) return;
+    const delta = before.get(card) - card.getBoundingClientRect().left;
+    if (Math.abs(delta) < 1) return;
+    card.animate(
+      [{ translate: `${delta}px 0` }, { translate: "0 0" }],
+      { duration: 210, easing: "cubic-bezier(.2,.8,.2,1)" }
+    );
+  });
+}
+
+function updateProfileOrderToggle() {
+  if (!profileOrderToggle) return;
+  profileOrderToggle.classList.toggle("is-active", profileOrderEditing);
+  profileOrderToggle.setAttribute("aria-pressed", String(profileOrderEditing));
+  profileOrderToggle.setAttribute("aria-label", profileOrderEditing ? "Done arranging profiles" : "Arrange profiles");
+  profileOrderToggle.title = profileOrderEditing ? "Done arranging profiles" : "Arrange profiles";
+}
+
+function setProfileOrderEditing(enabled) {
+  if (!modesRail) return;
+  if (enabled && currentPriorityDownloadId()) {
+    showToast("Finish the current download before arranging profiles");
+    return;
+  }
+
+  if (enabled && visibleProfileCards().length < 2) {
+    showToast("Install another profile to arrange the carousel");
+    return;
+  }
+
+  profileOrderEditing = Boolean(enabled);
+  modesRail.classList.toggle("is-reordering", profileOrderEditing);
+  updateProfileOrderToggle();
+
+  if (!profileOrderEditing) {
+    if (profileDrag?.card) {
+      profileDrag.card.classList.remove("is-reorder-dragging");
+      profileDrag.card.style.translate = "";
+    }
+    profileDrag = null;
+    saveProfileOrder();
+    applyProfileOrder();
+    showToast("Profile order saved");
+  } else {
+    showToast("Drag profile cards to reorder");
+  }
+}
+
+function beginProfileDrag(event) {
+  if (!profileOrderEditing || event.button > 0) return;
+  const card = event.target.closest(".mode-card");
+  if (!card || card.hidden) return;
+
+  event.preventDefault();
+  const rect = card.getBoundingClientRect();
+  profileDrag = {
+    card,
+    pointerId: event.pointerId,
+    grabOffset: event.clientX - rect.left
+  };
+  card.classList.add("is-reorder-dragging");
+  card.style.translate = "0 0";
+  try { card.setPointerCapture(event.pointerId); } catch {}
+  triggerHaptic("light");
+}
+
+function moveProfileDrag(event) {
+  if (!profileDrag || event.pointerId !== profileDrag.pointerId || !modesRail) return;
+  event.preventDefault();
+
+  const { card, grabOffset } = profileDrag;
+  const railRect = modesRail.getBoundingClientRect();
+  if (event.clientX < railRect.left + 46) modesRail.scrollLeft -= 10;
+  else if (event.clientX > railRect.right - 116) modesRail.scrollLeft += 10;
+
+  const before = new Map(visibleProfileCards().map(item => [item, item.getBoundingClientRect().left]));
+  const siblings = visibleProfileCards().filter(item => item !== card);
+  const target = siblings.find(item => event.clientX < item.getBoundingClientRect().left + item.getBoundingClientRect().width / 2);
+
+  if (target) modesRail.insertBefore(card, target);
+  else modesRail.insertBefore(card, addModCard);
+
+  animateProfileReflow(before, card);
+  const layoutRect = card.getBoundingClientRect();
+  card.style.translate = `${event.clientX - grabOffset - layoutRect.left}px 0`;
+}
+
+function endProfileDrag(event) {
+  if (!profileDrag || event.pointerId !== profileDrag.pointerId) return;
+  const card = profileDrag.card;
+  profileDrag = null;
+  card.classList.remove("is-reorder-dragging");
+  card.style.translate = "0 0";
+  window.setTimeout(() => { if (!profileDrag) card.style.translate = ""; }, 190);
+  saveProfileOrder();
+  triggerHaptic("selection");
+}
+
+if (profileOrderToggle) {
+  updateProfileOrderToggle();
+  profileOrderToggle.addEventListener("click", () => setProfileOrderEditing(!profileOrderEditing));
+}
+
+if (modesRail) {
+  modesRail.addEventListener("pointerdown", beginProfileDrag, { passive: false });
+  modesRail.addEventListener("pointermove", moveProfileDrag, { passive: false });
+  modesRail.addEventListener("pointerup", endProfileDrag);
+  modesRail.addEventListener("pointercancel", endProfileDrag);
+}
+
 document.querySelectorAll("[data-panel]").forEach(button => {
   button.addEventListener("click", () => openPanel(button.dataset.panel));
 });
@@ -1621,9 +1845,12 @@ modalBackdrop.addEventListener("click", event => {
 });
 
 window.addEventListener("keydown", event => {
-  if (event.key === "Escape") closePanel();
+  if (event.key === "Escape") {
+    if (profileOrderEditing) setProfileOrderEditing(false);
+    else closePanel();
+  }
 
-  if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+  if (!profileOrderEditing && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
     const visibleCards = cards.filter(card => !card.hidden);
     const currentIndex = visibleCards.indexOf(activeCard);
     const delta = event.key === "ArrowRight" ? 1 : -1;
