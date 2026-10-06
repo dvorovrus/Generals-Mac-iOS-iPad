@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 42,
+  "catalogVersion": 43,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.10",
-        "build": 37382366154,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.10/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "3ae2f69475e1956e7bc8e84a082565baa5efa81110b21c21ea86373f2e261d9b",
-        "packageBytes": 49322513,
-        "releaseNotes": "Performance cleanup: disable heavy production object/subsystem/memory/AI/audio diagnostics while preserving post-reset memory relief and lightweight Online CRC tracing. Add one-shot frame-100 legacy WideChar CRC probe to isolate the remaining Windows/iPad mismatch."
+        "version": "1.4.11",
+        "build": 37433558031,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.11/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "033b298c0303382d2aa89d65dfe6ba9e1212f2b8598dac01c8e4f209371df509",
+        "packageBytes": 49324757,
+        "releaseNotes": "Fix generic catalog profile launching so installed Contra 007 and future catalog mods can start. Diagnostics now list all installed Hub mods. Preserve the original 32-bit Windows BitFlags CRC width on 64-bit Apple builds to improve Generals Online retail CRC parity."
       },
       "beta": {
         "version": "0.1.0",
@@ -103,7 +103,7 @@
           "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/mods/contra-007/stable/0.07+FixedAI+MapFix.gxmod",
           "sha256": "e10f9902ab267bb05ab249ac27dc9d7ab4f1bed3f47e4f2f5870d4a5d7421ae7",
           "packageBytes": 296867840,
-          "minHubVersion": "0.1.0",
+          "minHubVersion": "1.4.11",
           "releaseNotes": "Contra 0.07 with official Fixed AI and Map Fix patches. English profile."
         },
         "beta": {
@@ -111,13 +111,13 @@
           "packageURL": "",
           "sha256": "",
           "packageBytes": 0,
-          "minHubVersion": "0.1.0",
+          "minHubVersion": "1.4.11",
           "releaseNotes": "No newer beta is published yet."
         }
       }
     }
   ],
-  "updatedAt": "2026-10-06T07:08:15Z",
+  "updatedAt": "2026-10-06T08:21:37Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.9",

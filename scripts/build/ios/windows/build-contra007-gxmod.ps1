@@ -2,7 +2,7 @@ param(
     [ValidateSet("stable", "beta")]
     [string] $Channel = "stable",
     [string] $Version = "0.07+FixedAI+MapFix",
-    [string] $MinHubVersion = "0.1.0"
+    [string] $MinHubVersion = "1.4.11"
 )
 
 $ErrorActionPreference = "Stop"
