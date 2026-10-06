@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 57,
+  "catalogVersion": 58,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
@@ -146,9 +146,34 @@
           "releaseNotes": "No newer beta is published yet."
         }
       }
+    },
+    {
+      "profileId": "teod",
+      "name": "The End of Days",
+      "description": "TEOD 0.986 Patch 11 full version with Russia and extensive USA, China and GLA reworks.",
+      "author": "The End of Days group",
+      "sourceURL": "https://www.moddb.com/mods/the-end-of-days",
+      "channels": {
+        "stable": {
+          "version": "0.986-P11",
+          "packageURL": "",
+          "sha256": "",
+          "packageBytes": 0,
+          "minHubVersion": "1.4.15",
+          "releaseNotes": "Official TEOD 0.986 Patch 11 full release. Portable profile excludes Windows-only executable/D3D wrapper files."
+        },
+        "beta": {
+          "version": "0.986-P11",
+          "packageURL": "",
+          "sha256": "",
+          "packageBytes": 0,
+          "minHubVersion": "1.4.15",
+          "releaseNotes": "No newer beta is published yet."
+        }
+      }
     }
   ],
-  "updatedAt": "2026-10-06T14:16:10Z",
+  "updatedAt": "2026-10-06T14:27:59Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.13",
