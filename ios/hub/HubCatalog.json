@@ -92,6 +92,29 @@
           "releaseNotes": "No newer beta is published yet."
         }
       }
+    },
+    {
+      "profileId": "contra-007",
+      "name": "Contra 007",
+      "description": "Classic Contra 0.07 with official Fixed AI and Map Fix patches.",
+      "channels": {
+        "stable": {
+          "version": "0.07+FixedAI+MapFix",
+          "packageURL": "",
+          "sha256": "",
+          "packageBytes": 0,
+          "minHubVersion": "0.1.0",
+          "releaseNotes": "Contra 0.07 with official Fixed AI and Map Fix patches. English profile."
+        },
+        "beta": {
+          "version": "0.07+FixedAI+MapFix",
+          "packageURL": "",
+          "sha256": "",
+          "packageBytes": 0,
+          "minHubVersion": "0.1.0",
+          "releaseNotes": "No newer beta is published yet."
+        }
+      }
     }
   ],
   "updatedAt": "2026-10-05T22:35:21Z",

@@ -324,6 +324,13 @@ const modCatalog = [
     description: "Contra X Beta 2 + Patch 1 with dedicated mod settings.",
     author: "Contra Mod Team",
     moddbUrl: "https://www.moddb.com/mods/contra"
+  },
+  {
+    id: "contra-007",
+    title: "Contra 007",
+    description: "Classic Contra 0.07 with official Fixed AI and Map Fix patches.",
+    author: "Contra Mod Team",
+    moddbUrl: "https://www.moddb.com/mods/contra/downloads/contra-007"
   }
 ];
 
@@ -648,7 +655,9 @@ async function openPanel(type) {
         ? "Enhanced settings"
         : profileId === "contra-x"
           ? "Contra X settings"
-          : "Zero Hour + Online settings";
+          : profileId === "online"
+            ? "Zero Hour + Online settings"
+            : activeCard.dataset.title + " settings";
     if (hasNativeBridge) {
       try {
         const nativeSettings = await nativeRequest("settingsGet", { profileId });

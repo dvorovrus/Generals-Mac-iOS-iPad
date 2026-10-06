@@ -40,13 +40,17 @@ b = load_builder()
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Build Generals Hub .gxmod package.")
-    p.add_argument("--variant", choices=("online", "enhanced", "contra"), required=True)
+    p.add_argument("--variant", choices=("online", "enhanced", "contra", "generic"), required=True)
     p.add_argument("--base-ipa", type=Path, help="Full retail Zero Hour IPA used to build the Online base content package.")
     p.add_argument("--online-data", type=Path, help="Official Generals Online parity-data root merged over retail GameData.")
     p.add_argument("--enhanced", type=Path)
     p.add_argument("--enhanced-patch", type=Path)
     p.add_argument("--contra-beta2", type=Path)
     p.add_argument("--contra-patch1", type=Path)
+    p.add_argument("--generic-source", type=Path)
+    p.add_argument("--profile-id")
+    p.add_argument("--name")
+    p.add_argument("--runtime-adapter", default="generic")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--version", help="Override package version written to manifest.json.")
     p.add_argument("--channel", choices=("stable", "beta"), default="stable")
@@ -172,6 +176,49 @@ def build_online(args: argparse.Namespace) -> None:
     write_sidecars(args.output, manifest, total)
 
 
+def build_generic(args: argparse.Namespace) -> None:
+    if args.generic_source is None or not args.generic_source.exists():
+        b.die("Generic profile source is required")
+    if not args.profile_id:
+        b.die("--profile-id is required for generic profiles")
+    if not args.name:
+        b.die("--name is required for generic profiles")
+
+    with b.ModSource(args.generic_source) as source:
+        merged: dict[str, object] = {}
+        for entry in source.entries:
+            rel = b.normalized_rel(entry.rel)
+            if not rel or b.should_skip_common(rel):
+                continue
+            merged[rel.lower()] = entry
+
+        entries = sorted(
+            ((entry, b.normalized_rel(entry.rel)) for entry in merged.values()),
+            key=lambda pair: pair[1].lower(),
+        )
+        if not entries:
+            b.die("Generic profile source contains no packageable files")
+
+        manifest = {
+            "schemaVersion": 1,
+            "profileId": args.profile_id,
+            "name": args.name,
+            "version": args.version or "1.0",
+            "channel": args.channel,
+            "minHubVersion": args.min_hub_version,
+            "runtimeAdapter": args.runtime_adapter,
+            "profileFiles": len(entries),
+        }
+        manifest_bytes = (json.dumps(manifest, indent=2) + "\n").encode()
+        total = 0
+        with tarfile.open(args.output, "w", format=tarfile.USTAR_FORMAT) as tar:
+            tar.addfile(tar_info("manifest.json", len(manifest_bytes)), io.BytesIO(manifest_bytes))
+            for entry, rel in entries:
+                total += add_source(tar, entry, rel)
+
+    write_sidecars(args.output, manifest, total)
+
+
 def main() -> None:
     args = parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -180,6 +227,9 @@ def main() -> None:
 
     if args.variant == "online":
         build_online(args)
+        return
+    if args.variant == "generic":
+        build_generic(args)
         return
 
     contexts = []
