@@ -1,18 +1,18 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": 43,
+  "catalogVersion": 44,
   "defaultChannel": "stable",
   "remoteCatalogURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/catalog.json",
   "hub": {
     "name": "Generals Hub",
     "channels": {
       "stable": {
-        "version": "1.4.11",
-        "build": 37433558031,
-        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.11/GeneralsZH-Hub-Online-unsigned.ipa",
-        "sha256": "033b298c0303382d2aa89d65dfe6ba9e1212f2b8598dac01c8e4f209371df509",
-        "packageBytes": 49324757,
-        "releaseNotes": "Fix generic catalog profile launching so installed Contra 007 and future catalog mods can start. Diagnostics now list all installed Hub mods. Preserve the original 32-bit Windows BitFlags CRC width on 64-bit Apple builds to improve Generals Online retail CRC parity."
+        "version": "1.4.12",
+        "build": 37447489572,
+        "packageURL": "https://pub-08941af8fe30421ba31f2314049303cb.r2.dev/hub/stable/1.4.12/GeneralsZH-Hub-Online-unsigned.ipa",
+        "sha256": "27b22100420f7cb989bcad2289a3a113104fe0817e862ba09b4d021eddb17374",
+        "packageBytes": 49323634,
+        "releaseNotes": "Stabilizes Online ICE callback cleanup during map transfers, adds per-object CRC boundaries, and enables generic mod-local AI/MapCache patches."
       },
       "beta": {
         "version": "0.1.0",
@@ -117,7 +117,7 @@
       }
     }
   ],
-  "updatedAt": "2026-10-06T08:21:37Z",
+  "updatedAt": "2026-10-06T10:15:56Z",
   "launcherWeb": {
     "stable": {
       "version": "0.2.0-web.9",
