@@ -1238,9 +1238,21 @@ target_link_libraries(z_gameengine PUBLIC
 if(SAGE_USE_GENERALS_ONLINE)
     find_package(CURL CONFIG REQUIRED)
     find_package(GameNetworkingSockets CONFIG REQUIRED)
+    if(TARGET GameNetworkingSockets::GameNetworkingSockets_s)
+        set(GX_GNS_TARGET GameNetworkingSockets::GameNetworkingSockets_s)
+    elseif(TARGET GameNetworkingSockets::static)
+        set(GX_GNS_TARGET GameNetworkingSockets::static)
+    elseif(TARGET GameNetworkingSockets::GameNetworkingSockets)
+        set(GX_GNS_TARGET GameNetworkingSockets::GameNetworkingSockets)
+    elseif(TARGET GameNetworkingSockets::shared)
+        set(GX_GNS_TARGET GameNetworkingSockets::shared)
+    else()
+        message(FATAL_ERROR "No supported GameNetworkingSockets CMake target was exported")
+    endif()
+
     target_link_libraries(z_gameengine PUBLIC
         CURL::libcurl
-        GameNetworkingSockets::GameNetworkingSockets_s
+        ${GX_GNS_TARGET}
     )
 
     # GO helpers use SDL_OpenURL even when the update checker is disabled.
