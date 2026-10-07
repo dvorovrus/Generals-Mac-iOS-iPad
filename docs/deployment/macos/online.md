@@ -115,3 +115,49 @@ build/online-smoke-results/
 ```
 
 The script exits successfully only when both clients reach the gameplay frame target.
+
+## Windows ↔ macOS cross-play test
+
+Current validation branch: `feature/online-deterministic-math` (until the deterministic fixes are promoted back to the canonical Online branch).
+
+For the real compatibility test, use the official Windows Generals Online client as the external peer and run only one automated Mac client.
+
+Prepare one dedicated macOS Keychain profile once:
+
+```bash
+bash scripts/build/macos/run-online-crossplay-local.sh --prepare
+```
+
+### Windows hosts, Mac joins
+
+1. Start the official Windows client through `EAC_LaunchGeneralsOnline.exe`.
+2. Create a public 2-player room with a unique name.
+3. On the Mac run:
+
+```bash
+bash scripts/build/macos/run-online-crossplay-local.sh \
+  --role guest \
+  --room "GX-WIN-MAC-001"
+```
+
+Use exactly the same room name on Windows. The Mac client searches for the room, rejects it if the Windows network CRC or INI CRC is incompatible, joins it, marks ready, waits for the Windows host to start, then validates that synchronized gameplay actually advances.
+
+### Mac hosts, Windows joins
+
+Start:
+
+```bash
+bash scripts/build/macos/run-online-crossplay-local.sh \
+  --role host \
+  --room "GX-MAC-WIN-001"
+```
+
+Then join that public room from the official Windows client and mark Ready. The Mac host performs the full-mesh connectivity check and requests `START_GAME` after the Windows peer is ready.
+
+Cross-play logs and machine-readable results are written under:
+
+```text
+build/online-crossplay-results/
+```
+
+A run passes only after the external peer has joined, the lobby/CRC checks have succeeded, P2P or TURN connectivity has reached the game-start path, the map has loaded, and the configured gameplay frame target has been reached.
