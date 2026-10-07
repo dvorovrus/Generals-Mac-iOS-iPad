@@ -4,8 +4,9 @@ GeneralsZH Online Dev — Apple Silicon (arm64), macOS 15 or later
 2. Run "Install Online Data.command" and select your Original or Online IPA.
 3. Open GeneralsZH-Online-Dev.app and select Online in the game menu.
 
-Game assets are not included. The installer copies only your IPA's GameData;
-mod profiles are not imported. Use original Zero Hour data for Online testing.
+Game assets are not included. The installer copies your IPA's retail GameData,
+then synchronizes the exact official Generals Online QFE6 community data pack
+needed for Windows INI parity. Mod profiles are not imported.
 
 Runtime log: ~/Library/Logs/GeneralsXZH/online-dev.log
 GameData: ~/GeneralsX/Online/GeneralsZH

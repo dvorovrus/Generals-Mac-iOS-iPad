@@ -11,6 +11,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
+#include <cstdio>
 #include <fstream>
 #include <list>
 #include <string>
@@ -251,9 +252,17 @@ namespace
 					return;
 				}
 
+				NetworkLog(ELogVerbosity::LOG_RELEASE,
+					"[GO-SMOKE] CRC local exe=0x%08X ini=0x%08X remote exe=0x%08X ini=0x%08X",
+					TheGlobalData->m_exeCRC, TheGlobalData->m_iniCRC, match->exe_crc, match->ini_crc);
+
 				if (match->exe_crc != TheGlobalData->m_exeCRC || match->ini_crc != TheGlobalData->m_iniCRC)
 				{
-					Finish(false, "target room CRC does not match this client");
+					char detail[192];
+					std::snprintf(detail, sizeof(detail),
+						"target room CRC mismatch: local exe=0x%08X ini=0x%08X remote exe=0x%08X ini=0x%08X",
+						TheGlobalData->m_exeCRC, TheGlobalData->m_iniCRC, match->exe_crc, match->ini_crc);
+					Finish(false, detail);
 					return;
 				}
 
