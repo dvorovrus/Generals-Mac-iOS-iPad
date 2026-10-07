@@ -42,4 +42,10 @@
 
 #pragma warning(disable:4201)
 #include <mmsystem.h>
+#if defined(_MSC_VER) && _MSC_VER >= 1900
+// Modern Windows SDKs expose the multimedia timer declarations through
+// timeapi.h. Include it explicitly so timeGetTime/timeBeginPeriod are visible
+// even when WIN32_LEAN_AND_MEAN is active.
+#include <timeapi.h>
+#endif
 #pragma warning(default:4201)
