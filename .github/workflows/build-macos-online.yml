@@ -2,6 +2,16 @@ name: Online | macOS | Build
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Build target"
+        required: true
+        default: mac
+        type: choice
+        options:
+          - mac
+          - windows-reference
+          - both
   push:
     branches:
       - feature/generals-online-apple
@@ -28,6 +38,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'mac' || inputs.target == 'both'
     name: GeneralsZH Online macOS arm64
     runs-on: macos-latest
     timeout-minutes: 150
@@ -188,3 +199,7 @@ jobs:
           path: logs/
           if-no-files-found: ignore
           retention-days: 7
+
+  windows-reference:
+    if: github.event_name == 'workflow_dispatch' && (inputs.target == 'windows-reference' || inputs.target == 'both')
+    uses: ./.github/workflows/build-windows-online-reference.yml
