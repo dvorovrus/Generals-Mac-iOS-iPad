@@ -132,9 +132,10 @@ bash scripts/build/macos/run-online-crossplay-local.sh --prepare
 
 ### Windows hosts, Mac joins
 
-1. Start the official Windows client through `EAC_LaunchGeneralsOnline.exe`.
-2. Create a public 2-player room with a unique name.
-3. On the Mac run:
+1. Start the official Windows launcher from the clean Zero Hour install with `GeneralsOnlineZH.exe`.
+2. In **Options**, keep **Use Community Data Patch** enabled and select **Easy Anti-Cheat** under **Plugins**, then press **Play**.
+3. Create a public 2-player room with a unique name.
+4. On the Mac run:
 
 ```bash
 bash scripts/build/macos/run-online-crossplay-local.sh \
