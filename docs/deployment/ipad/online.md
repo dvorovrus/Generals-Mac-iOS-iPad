@@ -1,6 +1,8 @@
 # iPad — Generals Online
 
-Branch: `feature/generals-online-apple`.
+Canonical branch: `feature/generals-online-apple`.
+
+Current validation branch: `feature/online-deterministic-math`.
 
 Workflow: `Online | iPad | Build`.
 
@@ -24,7 +26,7 @@ From the repository root:
 
 The script:
 
-1. selects the latest iPad Online workflow run on `feature/generals-online-apple`;
+1. selects the latest iPad Online workflow run on `feature/online-deterministic-math` by default (override with `-Branch` when validating another branch);
 2. waits for it if it is still running and fails closed if that run fails;
 3. downloads/caches `GeneralsXZH-online-unsigned.ipa` under `../artifacts/ipad/online/<run-id>/`;
 4. copies clean retail Zero Hour `GameData` from the base IPA;

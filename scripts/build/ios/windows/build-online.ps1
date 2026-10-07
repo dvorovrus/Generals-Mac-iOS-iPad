@@ -1,5 +1,6 @@
 param(
     [long]$RunId = 0,
+    [string]$Branch = "feature/online-deterministic-math",
     [string]$BaseIpa = "",
     [string]$Output = ""
 )
@@ -7,7 +8,6 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RepoName = "dvorovrus/Generals-Mac-iOS-iPad"
-$Branch = "feature/generals-online-apple"
 $Workflow = "build-ios-online.yml"
 $ArtifactName = "GeneralsXZH-online-unsigned"
 $ArtifactFile = "GeneralsXZH-online-unsigned.ipa"
@@ -32,7 +32,7 @@ function Resolve-RepoRoot {
 function Resolve-Workspace([string]$RepoRoot) {
     $parent = Split-Path -Parent $RepoRoot
     if ((Split-Path -Leaf $RepoRoot) -eq "repo") { return $parent }
-    if ((Split-Path -Leaf $parent) -eq "worktrees") { return (Split-Path -Parent $parent) }
+    if ((Split-Path -Leaf $parent) -in @("worktrees", ".webcodex-worktrees")) { return (Split-Path -Parent $parent) }
     return $parent
 }
 
