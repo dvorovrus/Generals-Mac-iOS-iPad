@@ -7,6 +7,37 @@
   },
   "configurePresets": [
     {
+      "name": "win32-vcpkg-online",
+      "displayName": "Windows 32bit Generals Online reference",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/win32-vcpkg-online",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "architecture": {
+        "value": "Win32",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "$<$<CONFIG:Release,Debug,RelWithDebInfo>:Embedded>",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+        "RTS_FLAGS": "/W3",
+        "RTS_BUILD_ZEROHOUR": "ON",
+        "RTS_BUILD_GENERALS": "OFF",
+        "RTS_BUILD_CORE_TOOLS": "OFF",
+        "RTS_BUILD_CORE_EXTRAS": "OFF",
+        "RTS_BUILD_ZEROHOUR_TOOLS": "OFF",
+        "RTS_BUILD_ZEROHOUR_EXTRAS": "OFF",
+        "RTS_BUILD_ZEROHOUR_DOCS": "OFF",
+        "RTS_BUILD_OPTION_FFMPEG": "OFF",
+        "RTS_BUILD_OPTION_SAGE_PATCH": "OFF",
+        "RTS_BUILD_OPTION_DEEP_CRC": "ON",
+        "SAGE_USE_GENERALS_ONLINE": "ON",
+        "SAGE_USE_DETERMINISTIC_MATH": "ON",
+        "SAGE_UPDATE_CHECK": "OFF",
+        "VCPKG_MANIFEST_FEATURES": "generals-online"
+      }
+    },
+    {
       "name": "ios-vulkan",
       "displayName": "iPad Zero Hour (arm64 + MoltenVK)",
       "generator": "Ninja",
@@ -107,6 +138,12 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "win32-vcpkg-online",
+      "configurePreset": "win32-vcpkg-online",
+      "displayName": "Build Windows 32bit Generals Online reference",
+      "configuration": "Release"
+    },
     {
       "name": "ios-vulkan",
       "configurePreset": "ios-vulkan",

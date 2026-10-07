@@ -1,0 +1,89 @@
+name: Online | Windows | Reference Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-online-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: GeneralsZH Online Windows x86 reference
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Set up MSVC x86
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '18ff00a7d2697e23f22e2a2293c3fa6468a50c06'
+
+      - name: Configure Windows Online reference
+        shell: pwsh
+        run: |
+          cmake --preset win32-vcpkg-online
+
+      - name: Build Windows Online reference
+        shell: pwsh
+        run: |
+          cmake --build --preset win32-vcpkg-online --parallel 4
+
+      - name: Collect reference runtime
+        shell: pwsh
+        run: |
+          $out = New-Item -ItemType Directory -Force -Path "artifacts/windows-online-reference"
+          $exe = Get-ChildItem "build/win32-vcpkg-online" -Recurse -File -Filter "generalszh.exe" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "generalszh.exe was not produced"
+            exit 1
+          }
+
+          Copy-Item $exe.FullName (Join-Path $out "generalszh.exe") -Force
+
+          $runtimeDirs = @(
+            $exe.Directory.FullName,
+            (Join-Path $env:VCPKG_ROOT "installed/x86-windows/bin"),
+            (Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed/x86-windows/bin"),
+            (Join-Path $env:GITHUB_WORKSPACE "build/win32-vcpkg-online/vcpkg_installed/x86-windows/bin")
+          ) | Select-Object -Unique
+
+          foreach ($dir in $runtimeDirs) {
+            if (Test-Path $dir) {
+              Get-ChildItem $dir -File -Filter "*.dll" -ErrorAction SilentlyContinue |
+                ForEach-Object { Copy-Item $_.FullName $out -Force }
+            }
+          }
+
+          @(
+            "commit=${{ github.sha }}",
+            "preset=win32-vcpkg-online",
+            "generals_online=ON",
+            "deterministic_math=ON",
+            "deep_crc=ON"
+          ) | Set-Content (Join-Path $out "build-info.txt")
+
+          Write-Host "Reference executable: $($exe.FullName)"
+          Get-ChildItem $out | Format-Table Name,Length -AutoSize
+
+      - name: Upload Windows Online reference
+        uses: actions/upload-artifact@v7
+        with:
+          name: GeneralsZH-Online-windows-x86-reference
+          path: artifacts/windows-online-reference
+          retention-days: 14
+          if-no-files-found: error
