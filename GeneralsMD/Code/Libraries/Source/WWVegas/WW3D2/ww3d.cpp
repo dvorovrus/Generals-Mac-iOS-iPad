@@ -82,7 +82,10 @@
 
 
 #include "ww3d.h"
-#include "win.h"  // GeneralsX @build fbraz 10/02/2026 - For MMRESULT/timeBeginPeriod/BITMAP structures
+#include "win.h"
+#ifdef _WIN32
+#include "mmsys.h"  // Windows multimedia timers (timeBeginPeriod/timeEndPeriod)
+#endif
 #include "rinfo.h"
 #include "assetmgr.h"
 #include "boxrobj.h"

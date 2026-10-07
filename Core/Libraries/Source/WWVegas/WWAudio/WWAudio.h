@@ -37,6 +37,9 @@
 #pragma once
 
 #include "always.h"
+#ifdef _WIN32
+#include <mmsystem.h>  // WinMM wave types required by Miles (LPHWAVEOUT, LPWAVEFORMAT)
+#endif
 
 // TheSuperHackers @build 09/02/2026 Conditionally include Miles (Windows only)
 #if !defined(SAGE_USE_OPENAL)

@@ -43,7 +43,11 @@
 #include "formconv.h"
 #pragma warning (disable : 4201)		// nonstandard extension - nameless struct
 #include <windows.h>
+#ifdef _WIN32
 #include <mmsystem.h>
+#else
+#include "../WWAudio/mmsystem_openal_stub.h"
+#endif
 
 static StringClass CapsWorkString;
 

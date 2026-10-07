@@ -853,7 +853,11 @@ void TextureLoader::Flush_Pending_Load_Tasks()
 
 // Nework update macro for texture loader.
 #pragma warning(disable:4201) // warning C4201: nonstandard extension used : nameless struct/union
+#ifdef _WIN32
 #include <mmsystem.h>
+#else
+#include "../WWAudio/mmsystem_openal_stub.h"
+#endif
 #define UPDATE_NETWORK 											\
 	if (network_callback) {                            \
 		unsigned long time2 = timeGetTime();            \

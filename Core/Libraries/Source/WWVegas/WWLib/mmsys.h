@@ -41,7 +41,12 @@
 */
 
 #pragma warning(disable:4201)
+#ifdef _WIN32
 #include <mmsystem.h>
+#else
+// Keep the OpenAL stub separate: a local mmsystem.h shadows Windows SDK headers.
+#include "../WWAudio/mmsystem_openal_stub.h"
+#endif
 #if defined(_MSC_VER) && _MSC_VER >= 1900
 // Modern Windows SDKs expose the multimedia timer declarations through
 // timeapi.h. Include it explicitly so timeGetTime/timeBeginPeriod are visible
