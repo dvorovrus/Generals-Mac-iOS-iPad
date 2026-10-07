@@ -34,6 +34,7 @@ namespace
 		Disabled,
 		Bootstrap,
 		Login,
+		JoiningNetworkRoom,
 		CreatingLobby,
 		SearchingLobby,
 		JoiningLobby,
@@ -314,6 +315,73 @@ namespace
 			});
 	}
 
+	void ContinueAfterNetworkRoomReady()
+	{
+		if (!g_smoke.active || g_smoke.finished)
+			return;
+
+		if (g_smoke.role == SmokeRole::Host)
+			StartHost();
+		else
+		{
+			g_smoke.phase = SmokePhase::SearchingLobby;
+			g_smoke.nextSearchAt = Clock::now();
+		}
+	}
+
+	void EnterDefaultNetworkRoom()
+	{
+		NGMP_OnlineServices_RoomsInterface* rooms =
+			NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_RoomsInterface>();
+		if (rooms == nullptr)
+		{
+			Finish(false, "rooms interface missing after login");
+			return;
+		}
+
+		g_smoke.phase = SmokePhase::JoiningNetworkRoom;
+		rooms->RegisterForRoomChangedCallback([](int roomIndex, bool)
+			{
+				if (!g_smoke.active || g_smoke.finished || roomIndex < 0)
+					return;
+
+				NGMP_OnlineServices_RoomsInterface* currentRooms =
+					NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_RoomsInterface>();
+				if (currentRooms != nullptr)
+					currentRooms->DeregisterForRoomChangedCallback();
+
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] joined network room index=%d; starting lobby flow", roomIndex);
+				ContinueAfterNetworkRoomReady();
+			});
+
+		rooms->GetRoomList([rooms](bool success)
+			{
+				if (!g_smoke.active || g_smoke.finished)
+					return;
+
+				const std::vector<NetworkRoom>& networkRooms = rooms->GetGroupRooms();
+				if (!success || networkRooms.empty())
+				{
+					rooms->DeregisterForRoomChangedCallback();
+					Finish(false, "network room list is unavailable after login");
+					return;
+				}
+
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] network room list ready count=%zu", networkRooms.size());
+				if (rooms->GetCurrentRoomIndex() >= 0)
+				{
+					const int currentRoom = rooms->GetCurrentRoomIndex();
+					rooms->DeregisterForRoomChangedCallback();
+					NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] already in network room index=%d; starting lobby flow", currentRoom);
+					ContinueAfterNetworkRoomReady();
+					return;
+				}
+
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] joining default network room id=%d", networkRooms[0].GetRoomID());
+				rooms->JoinRoom(0);
+			});
+	}
+
 	void OnLoggedIn(ELoginResult result)
 	{
 		if (!g_smoke.active || g_smoke.finished)
@@ -337,13 +405,7 @@ namespace
 		NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] login complete role=%s user=%lld",
 			RoleName(), static_cast<long long>(g_smoke.userID));
 
-		if (g_smoke.role == SmokeRole::Host)
-			StartHost();
-		else
-		{
-			g_smoke.phase = SmokePhase::SearchingLobby;
-			g_smoke.nextSearchAt = Clock::now();
-		}
+		EnterDefaultNetworkRoom();
 	}
 
 	void StartLogin()
@@ -587,6 +649,11 @@ namespace OnlineSmokeTest
 			lobby->DeregisterForSearchForLobbiesCallback();
 			lobby->DeregisterForGameStartPacket();
 		}
+
+		NGMP_OnlineServices_RoomsInterface* rooms =
+			NGMP_OnlineServicesManager::GetInterface<NGMP_OnlineServices_RoomsInterface>();
+		if (rooms != nullptr)
+			rooms->DeregisterForRoomChangedCallback();
 
 		std::shared_ptr<WebSocket> ws = NGMP_OnlineServicesManager::GetWebSocket();
 		if (ws != nullptr)
