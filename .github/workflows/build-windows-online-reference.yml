@@ -3,6 +3,20 @@ name: Online | Windows | Reference Build
 on:
   workflow_dispatch:
   workflow_call:
+  # Automatically validate source fixes on the deterministic online branch.
+  push:
+    branches:
+      - feature/online-deterministic-math
+    paths:
+      - 'Core/**'
+      - 'GeneralsMD/**'
+      - 'Dependencies/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'vcpkg.json'
+      - 'vcpkg-lock.json'
+      - '.github/workflows/build-windows-online-reference.yml'
 
 permissions:
   contents: read

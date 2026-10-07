@@ -1199,10 +1199,13 @@ add_library(z_gameengine STATIC)
 
 target_sources(z_gameengine PRIVATE ${GAMEENGINE_SRC})
 
-target_include_directories(z_gameengine PUBLIC
-    Include
-    ../CompatLib/Include  # Needed for d3dx8math.h in PCH
-)
+target_include_directories(z_gameengine PUBLIC Include)
+
+# The native Windows and DirectX SDK headers must take precedence on Windows.
+# CompatLib header shims are needed only by non-Windows builds.
+if(NOT WIN32)
+    target_include_directories(z_gameengine PUBLIC ../CompatLib/Include)
+endif()
 
 if(SAGE_USE_GENERALS_ONLINE)
     target_include_directories(z_gameengine PUBLIC
