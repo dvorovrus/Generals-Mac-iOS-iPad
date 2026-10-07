@@ -110,6 +110,22 @@ namespace
 		return g_smoke.role == SmokeRole::Host ? "host" : g_smoke.role == SmokeRole::Guest ? "guest" : "none";
 	}
 
+	bool MatchesTargetRoomName(const std::string& serverName)
+	{
+		if (serverName == g_smoke.roomName)
+			return true;
+
+		// Generals Online decorates public lobby names with server-owned prefixes,
+		// e.g. "[EU][⛊] GX-WIN-MAC-001". Keep the smoke room name
+		// user-controlled and match it only as a complete suffix token.
+		if (serverName.size() <= g_smoke.roomName.size())
+			return false;
+
+		const size_t suffixPos = serverName.size() - g_smoke.roomName.size();
+		return serverName.compare(suffixPos, g_smoke.roomName.size(), g_smoke.roomName) == 0
+			&& suffixPos > 0 && serverName[suffixPos - 1] == ' ';
+	}
+
 	void WriteResult(bool success, const std::string& detail)
 	{
 		if (g_smoke.resultPath.empty())
@@ -245,13 +261,16 @@ namespace
 
 				auto match = std::find_if(lobbies.begin(), lobbies.end(), [](const LobbyEntry& entry)
 					{
-						return entry.name == g_smoke.roomName;
+						return MatchesTargetRoomName(entry.name);
 					});
 				if (match == lobbies.end())
 				{
 					g_smoke.nextSearchAt = Clock::now() + std::chrono::seconds(1);
 					return;
 				}
+
+				NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] matched target room server_name='%s' id=%lld",
+					match->name.c_str(), static_cast<long long>(match->lobbyID));
 
 				NetworkLog(ELogVerbosity::LOG_RELEASE,
 					"[GO-SMOKE] CRC local exe=0x%08X ini=0x%08X remote exe=0x%08X ini=0x%08X",
