@@ -2783,19 +2783,30 @@ void GameLogic::processCommandList( CommandList *list )
 			for (std::map<Int, UnsignedInt>::const_iterator crcIt = m_cachedCRCs.begin();
 			     crcIt != m_cachedCRCs.end(); ++crcIt)
 			{
+				// MSG_LOGIC_CRC uses PlayerList indexes. Multiplayer human players start at
+				// index 2 because Neutral and Civilian occupy 0 and 1, while TheNetwork
+				// uses zero-based lobby/network slots. Keep both index spaces explicit.
+				const Int playerIndex = crcIt->first;
+				const Int networkSlot = playerIndex - 2;
+				const Bool connected = networkSlot >= 0 && networkSlot < MAX_SLOTS
+					? TheNetwork->isPlayerConnected(networkSlot)
+					: FALSE;
 				fprintf(stderr,
-				        "[ONLINE-DESYNC] player-crc slot=%d crc=0x%08X connected=%d\n",
-				        crcIt->first,
+				        "[ONLINE-DESYNC] player-crc playerIndex=%d networkSlot=%d crc=0x%08X connected=%d\n",
+				        playerIndex,
+				        networkSlot,
 				        crcIt->second,
-				        TheNetwork->isPlayerConnected(crcIt->first) ? 1 : 0);
+				        connected ? 1 : 0);
 			}
-			for (Int slot = 0; slot < MAX_SLOTS; ++slot)
+			for (Int networkSlot = 0; networkSlot < MAX_SLOTS; ++networkSlot)
 			{
-				if (TheNetwork->isPlayerConnected(slot) && m_cachedCRCs.find(slot) == m_cachedCRCs.end())
+				const Int playerIndex = networkSlot + 2;
+				if (TheNetwork->isPlayerConnected(networkSlot) && m_cachedCRCs.find(playerIndex) == m_cachedCRCs.end())
 				{
 					fprintf(stderr,
-					        "[ONLINE-DESYNC] missing-crc slot=%d connected=1\n",
-					        slot);
+					        "[ONLINE-DESYNC] missing-crc networkSlot=%d playerIndex=%d connected=1\n",
+					        networkSlot,
+					        playerIndex);
 				}
 			}
 #endif
