@@ -2866,23 +2866,6 @@ void GameLogic::processCommandList( CommandList *list )
 			TheGameLogic->writeCRCBuffersToDisk(TheGameLogic->getFrame() - TheNetwork->getRunAhead() - 1);
 			TheNetwork->setSawCRCMismatch(strMismatchDetails);
 #else
-			{
-				fprintf(stderr,
-				        "[ONLINE-DESYNC] player-crc slot=%d crc=0x%08X connected=%d\n",
-				        crcIt->first,
-				        crcIt->second,
-				        TheNetwork->isPlayerConnected(crcIt->first) ? 1 : 0);
-			}
-			for (Int slot = 0; slot < MAX_SLOTS; ++slot)
-			{
-				if (TheNetwork->isPlayerConnected(slot) && m_cachedCRCs.find(slot) == m_cachedCRCs.end())
-				{
-					fprintf(stderr,
-					        "[ONLINE-DESYNC] missing-crc slot=%d connected=1\n",
-					        slot);
-				}
-			}
-#endif
 #ifdef DEBUG_LOGGING
 			DEBUG_LOG(("CRC Mismatch - saw %d CRCs from %d players", m_cachedCRCs.size(), numPlayers));
 			for (std::map<Int, UnsignedInt>::const_iterator crcIt = m_cachedCRCs.begin(); crcIt != m_cachedCRCs.end(); ++crcIt)
