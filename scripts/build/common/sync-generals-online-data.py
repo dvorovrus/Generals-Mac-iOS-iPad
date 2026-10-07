@@ -87,7 +87,7 @@ def main() -> int:
     parser.add_argument("--dest", type=Path, required=True, help="GameData root or staging root")
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--manifest-url", default=DEFAULT_MANIFEST_URL)
-    parser.add_argument("--expected-version", default="100126_QFE6")
+    parser.add_argument("--expected-version", default="100126_QFE6A")
     parser.add_argument("--expected-seed", type=parse_int, default=0x808CB29E)
     parser.add_argument("--refresh", action="store_true")
     args = parser.parse_args()

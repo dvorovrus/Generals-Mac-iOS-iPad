@@ -184,7 +184,7 @@ struct VersionManifestResponse
 
 namespace
 {
-// Current official Generals Online 60 Hz portable client (100126_QFE6).
+// Current official Generals Online 60 Hz portable client (100126_QFE6A).
 // This is the custom Generals shift/add CRC of GeneralsOnlineZH_60.exe before
 // appending version + shared SCB files. Packaging verifies this seed against
 // the official CDN so stale Apple builds fail loudly instead of spoofing parity.
@@ -428,7 +428,7 @@ void NGMP_OnlineServicesManager::PrepareAppleNetworkCRC(std::function<void(void)
 			if (TheWritableGlobalData->m_exeCRC != APPLE_GO_60HZ_EXPECTED_NETWORK_CRC)
 			{
 				NetworkLog(ELogVerbosity::LOG_RELEASE,
-					"Apple GO parity warning: expected 0x%08X for official 100126_QFE6 but generated 0x%08X",
+					"Apple GO parity warning: expected 0x%08X for official 100126_QFE6A but generated 0x%08X",
 					APPLE_GO_60HZ_EXPECTED_NETWORK_CRC, TheWritableGlobalData->m_exeCRC);
 			}
 

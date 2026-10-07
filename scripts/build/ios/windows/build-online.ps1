@@ -118,7 +118,7 @@ Require-Path $Shell "Downloaded Online shell"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Output) | Out-Null
 
 Write-Host "Syncing official Generals Online data patch and Windows 60 Hz parity seed..." -ForegroundColor Cyan
-& $Python $SyncOnlineData --dest $OnlineDataStage --cache-dir $OnlineDataCache --expected-version 100126_QFE6 --expected-seed 0x808CB29E
+& $Python $SyncOnlineData --dest $OnlineDataStage --cache-dir $OnlineDataCache --expected-version 100126_QFE6A --expected-seed 0x808CB29E
 if ($LASTEXITCODE -ne 0) { throw "Generals Online data sync/parity verification failed." }
 
 Write-Host "Packaging retail GameData into the Online shell..." -ForegroundColor Cyan
@@ -130,7 +130,7 @@ Write-Host "Verifying final IPA..." -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) { throw "Online IPA verification failed." }
 
 $sizeMb = [math]::Round((Get-Item -LiteralPath $Output).Length / 1MB, 1)
-$SourceInfo = "Run: $RunId`nCommit: $($run.headSha)`nURL: $($run.url)`nShell: $Shell`nBase IPA: $BaseIpa`nOnline data: $OnlineDataStage`nOfficial GO: 100126_QFE6`nWindows 60Hz shift/add seed: 0x808CB29E`n"
+$SourceInfo = "Run: $RunId`nCommit: $($run.headSha)`nURL: $($run.url)`nShell: $Shell`nBase IPA: $BaseIpa`nOnline data: $OnlineDataStage`nOfficial GO: 100126_QFE6A`nWindows 60Hz shift/add seed: 0x808CB29E`n"
 [System.IO.File]::WriteAllText("$Output.source.txt", $SourceInfo)
 
 Write-Host ""

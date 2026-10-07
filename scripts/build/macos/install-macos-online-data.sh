@@ -17,7 +17,7 @@ mkdir -p "${GAME}"
 rsync -a --delete "${APP}/GameData/" "${GAME}/"
 
 # Original Zero Hour IPAs do not contain the Generals Online community data
-# pack. Synchronize the exact official QFE6 payload so the INI CRC matches
+# pack. Synchronize the exact official QFE6A payload so the INI CRC matches
 # the official Windows client before Online is launched.
 SYNC="${SCRIPT_DIR}/GeneralsZH-Online-Dev.app/Contents/Resources/tools/sync-generals-online-data.py"
 [[ -f "${SYNC}" ]] || { echo "Online data sync helper missing: ${SYNC}"; exit 1; }
@@ -25,7 +25,7 @@ command -v python3 >/dev/null 2>&1 || { echo "python3 is required to sync Genera
 python3 "${SYNC}" \
   --dest "${GAME}" \
   --cache-dir "${HOME}/Library/Caches/GeneralsX/GeneralsOnline" \
-  --expected-version 100126_QFE6 \
+  --expected-version 100126_QFE6A \
   --expected-seed 0x808CB29E
 
 PATCH="${GAME}/GeneralsOnlineGameData/500_900_CommunityPatch_CoreINI.big"

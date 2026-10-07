@@ -87,7 +87,7 @@ def main() -> None:
                 parity = json.loads(z.read(parity_actual).decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 fail(f"invalid Generals Online parity metadata: {exc}")
-            if parity.get("version") != "100126_QFE6":
+            if parity.get("version") != "100126_QFE6A":
                 fail(f"unexpected Generals Online data version: {parity.get('version')!r}")
             if int(parity.get("windows_60_shift_add_seed", -1)) != 0x808CB29E:
                 fail("unexpected Windows 60 Hz parity seed")

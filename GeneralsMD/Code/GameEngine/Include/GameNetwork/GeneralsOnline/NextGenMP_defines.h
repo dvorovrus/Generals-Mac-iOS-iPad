@@ -11,7 +11,7 @@
 //#define USE_MAULLER_ONEDRIVE_FIX 1
 //#define USE_STUBBJAX_TRANSPORT_CONTAIN_FIX 1
 
-#define GENERALS_ONLINE_VERSION_STRING "100126_QFE6" // Keep Apple parity aligned with the current official portable client.
+#define GENERALS_ONLINE_VERSION_STRING "100126_QFE6A" // Keep Apple parity aligned with the current official portable client.
 
 #define GENERALS_ONLINE_DISABLE_TEXTURE_FILTERING_AND_AA 1
 

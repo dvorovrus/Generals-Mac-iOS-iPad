@@ -96,7 +96,7 @@ echo "==> Syncing official Generals Online data patch / Windows 60 Hz parity"
 python3 "${GO_DATA_SYNC}" \
   --dest "${GAME_ROOT}" \
   --cache-dir "${GO_DATA_CACHE}" \
-  --expected-version 100126_QFE6 \
+  --expected-version 100126_QFE6A \
   --expected-seed 0x808CB29E
 
 if [[ "${CLEAN}" == "1" ]]; then
