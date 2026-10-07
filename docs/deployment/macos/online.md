@@ -122,6 +122,8 @@ Current validation branch: `feature/online-deterministic-math` (until the determ
 
 For the real compatibility test, use the official Windows Generals Online client as the external peer and run only one automated Mac client.
 
+The runner automatically uses a local dev app when present, otherwise it uses `~/Applications/GeneralsZH-Online-Dev.app` installed by the cloud deployment flow.
+
 Prepare one dedicated macOS Keychain profile once:
 
 ```bash

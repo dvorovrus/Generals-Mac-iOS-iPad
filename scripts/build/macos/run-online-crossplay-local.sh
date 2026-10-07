@@ -3,7 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-APP="${ROOT}/build/macos-online-package/GeneralsZH-Online-Dev.app"
+APP="${GX_MAC_ONLINE_APP:-}"
+if [[ -z "${APP}" ]]; then
+  if [[ -d "${ROOT}/build/macos-online-package/GeneralsZH-Online-Dev.app" ]]; then
+    APP="${ROOT}/build/macos-online-package/GeneralsZH-Online-Dev.app"
+  else
+    APP="${HOME}/Applications/GeneralsZH-Online-Dev.app"
+  fi
+fi
 RUN="${APP}/Contents/MacOS/run.sh"
 RESULT_DIR="${ROOT}/build/online-crossplay-results"
 GAME_ROOT="${GX_GAME_ROOT:-${HOME}/GeneralsX/Online/GeneralsZH}"
@@ -34,6 +41,10 @@ Options:
   --timeout SEC     Global timeout (default 300)
   --map PATH        Map path used when Mac is host
   --profile NAME    macOS Keychain auth profile (default crossplay-mac)
+
+App lookup:
+  GX_MAC_ONLINE_APP, then local build/macos-online-package, then
+  ~/Applications/GeneralsZH-Online-Dev.app from the cloud deploy flow.
 EOF
 }
 
