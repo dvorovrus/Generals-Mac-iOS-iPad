@@ -130,7 +130,7 @@ jobs:
           CXX: clang++
         run: |
           mkdir -p logs
-          cmake --preset macos-vulkan-online -DCMAKE_CXX_FLAGS=-ferror-limit=0 2>&1 | tee logs/configure_macos_online.log
+          cmake --preset macos-vulkan-online -DCMAKE_CXX_FLAGS=-ferror-limit=0 -DRTS_BUILD_OPTION_DEEP_CRC=ON 2>&1 | tee logs/configure_macos_online.log
           test ${PIPESTATUS[0]} -eq 0
 
       - name: Save vcpkg binaries

@@ -2,10 +2,12 @@
 
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
+#include "Common/RandomValue.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GeneralsOnline/NGMPGame.h"
 #include "GameNetwork/GeneralsOnline/NGMP_interfaces.h"
 #include "GameNetwork/GeneralsOnline/NetworkMesh.h"
+#include "GameNetwork/NetworkInterface.h"
 
 #include <algorithm>
 #include <cctype>
@@ -65,6 +67,7 @@ namespace
 		int64_t lobbyID = -1;
 		int64_t userID = -1;
 		UnsignedInt gameplayStartFrame = 0;
+		UnsignedInt lastGameplayProbeFrame = ~0u;
 		Clock::time_point startedAt;
 		Clock::time_point nextSearchAt;
 		Clock::time_point nextMeshCheckAt;
@@ -541,28 +544,87 @@ namespace
 		}
 	}
 
+	void LogGameplayProbe(const char* reason)
+	{
+		if (TheGameLogic == nullptr)
+			return;
+
+		UnsignedInt connectedMask = 0;
+		Int numPlayers = -1;
+		Int localSlot = -1;
+		if (TheNetwork != nullptr)
+		{
+			numPlayers = TheNetwork->getNumPlayers();
+			localSlot = static_cast<Int>(TheNetwork->getLocalPlayerID());
+			for (Int slot = 0; slot < MAX_SLOTS; ++slot)
+			{
+				if (TheNetwork->isPlayerConnected(slot))
+					connectedMask |= (1u << slot);
+			}
+		}
+
+		const UnsignedInt frame = TheGameLogic->getFrame();
+		const UnsignedInt stateCRC = TheGameLogic->getCRC(CRC_RECALC);
+		NetworkLog(ELogVerbosity::LOG_RELEASE,
+			"[GO-SMOKE] gameplay-probe reason=%s frame=%u stateCRC=0x%08X rngBase=0x%08X rngCRC=0x%08X localSlot=%d numPlayers=%d connectedMask=0x%02X",
+			reason, frame, stateCRC, GetGameLogicRandomSeed(), GetGameLogicRandomSeedCRC(),
+			localSlot, numPlayers, connectedMask);
+	}
+
 	void TickGameplay()
 	{
 		if (TheGameLogic == nullptr)
 			return;
+
+		if (TheNetwork != nullptr && TheNetwork->sawCRCMismatch())
+		{
+			LogGameplayProbe("local-crc-mismatch");
+			Finish(false, "local network reported CRC mismatch");
+			return;
+		}
 
 		if (g_smoke.phase == SmokePhase::WaitingForGameplay)
 		{
 			if (!TheGameLogic->isInGame() || TheGameLogic->isInShellGame() || TheGameLogic->IsLoadScreenActive())
 				return;
 
+			if (TheNetwork == nullptr || TheNetwork->getNumPlayers() < 2)
+			{
+				LogGameplayProbe("invalid-network-player-count");
+				Finish(false, "gameplay started without two connected network players");
+				return;
+			}
+
 			g_smoke.gameplayStartFrame = TheGameLogic->getFrame();
+			g_smoke.lastGameplayProbeFrame = g_smoke.gameplayStartFrame;
 			g_smoke.phase = SmokePhase::Playing;
 			NetworkLog(ELogVerbosity::LOG_RELEASE, "[GO-SMOKE] gameplay entered at frame %u; validating %d frames",
 				g_smoke.gameplayStartFrame, g_smoke.gameplayFrames);
+			LogGameplayProbe("gameplay-entered");
 			return;
 		}
 
 		if (g_smoke.phase == SmokePhase::Playing)
 		{
 			const UnsignedInt currentFrame = TheGameLogic->getFrame();
+			if (currentFrame <= 160 && currentFrame >= g_smoke.lastGameplayProbeFrame + 10)
+			{
+				g_smoke.lastGameplayProbeFrame = currentFrame;
+				LogGameplayProbe("periodic");
+			}
+
+			if (TheNetwork == nullptr || TheNetwork->getNumPlayers() < 2)
+			{
+				LogGameplayProbe("peer-lost");
+				Finish(false, "network peer disappeared during gameplay validation");
+				return;
+			}
+
 			if (currentFrame >= g_smoke.gameplayStartFrame + static_cast<UnsignedInt>(g_smoke.gameplayFrames))
-				Finish(true, "two-client Online match reached gameplay frame target");
+			{
+				LogGameplayProbe("frame-target");
+				Finish(true, "two-client Online match reached gameplay frame target without local CRC mismatch");
+			}
 		}
 	}
 }
