@@ -170,6 +170,7 @@ jobs:
           test ${PIPESTATUS[0]} -eq 0
           test -f GeneralsZH-Online-macos-arm64.tar
           tar -tf GeneralsZH-Online-macos-arm64.tar | grep -q 'Install Online Data.command'
+          tar -tf GeneralsZH-Online-macos-arm64.tar | grep -q 'GeneralsZH-Online-Dev.app/Contents/Resources/lib/libopenal.1.dylib'
 
       - name: Upload macOS Online app
         uses: actions/upload-artifact@v7

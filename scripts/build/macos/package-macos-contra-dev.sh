@@ -143,9 +143,20 @@ while [[ -s "${pending}" ]]; do
     if [[ -f "${dep}" ]]; then src="${dep}"; fi
     if [[ -z "${src}" && "${dep}" == @rpath/* ]]; then
       leaf="${dep#@rpath/}"
-      for c in "/opt/homebrew/lib/${leaf}" "/usr/local/lib/${leaf}"; do
+      # Dependencies built by this project (notably OpenAL Soft) live under
+      # the CMake build tree rather than Homebrew. Prefer build-local copies
+      # so the packaged app is self-contained and matches the linked binary.
+      for c in \
+        "${BUILD}/_deps/openal_soft-build/${leaf}" \
+        "${BUILD}/vcpkg_installed/arm64-osx/lib/${leaf}" \
+        "${BUILD}/vcpkg_installed/arm64-osx/debug/lib/${leaf}" \
+        "/opt/homebrew/lib/${leaf}" \
+        "/usr/local/lib/${leaf}"; do
         [[ -f "${c}" ]] && { src="${c}"; break; }
       done
+      if [[ -z "${src}" ]]; then
+        src="$(find "${BUILD}/_deps" -name "${leaf}" -type f 2>/dev/null | head -n1 || true)"
+      fi
       if [[ -z "${src}" ]] && command -v brew >/dev/null 2>&1; then
         src="$(find /opt/homebrew/Cellar -name "${leaf}" -type f 2>/dev/null | head -n1 || true)"
       fi
@@ -157,6 +168,19 @@ while [[ -s "${pending}" ]]; do
   done < <(otool -L "${target}" 2>/dev/null | awk 'NR>1 {print $1}')
 done
 rm -f "${pending}" "${donefile}"
+
+# Fail packaging if the main executable still has an unresolved @rpath dylib.
+# This catches missing runtime libraries before an artifact reaches another Mac.
+missing_rpath=0
+while read -r dep; do
+  [[ "${dep}" == @rpath/* ]] || continue
+  leaf="${dep#@rpath/}"
+  if [[ ! -f "${LIB}/${leaf}" ]]; then
+    echo "ERROR: unresolved bundled runtime dependency: ${dep}" >&2
+    missing_rpath=1
+  fi
+done < <(otool -L "${BIN}/GeneralsXZH" | awk 'NR>1 {print $1}')
+[[ "${missing_rpath}" == "0" ]] || exit 1
 
 cat > "${MACOS}/run.sh" <<'RUNNER'
 #!/usr/bin/env bash
