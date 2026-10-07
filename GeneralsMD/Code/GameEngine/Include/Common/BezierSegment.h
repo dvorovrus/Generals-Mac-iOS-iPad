@@ -40,6 +40,61 @@
 
 #define USUAL_TOLERANCE 1.0f
 
+#ifdef SAGE_USE_GLM
+// GeneralsX @bugfix Copilot 15/08/2026 Match D3DX operation ordering for deterministic Bezier trajectories.
+class BezierMath
+{
+public:
+	static glm::vec4 GLMVec4Transform(const glm::vec4& v, const glm::mat4& m)
+	{
+#if USE_DETERMINISTIC_MATH
+		return glm::vec4(
+			((v.x * m[0][0] + v.y * m[1][0]) + v.z * m[2][0]) + v.w * m[3][0],
+			((v.x * m[0][1] + v.y * m[1][1]) + v.z * m[2][1]) + v.w * m[3][1],
+			((v.x * m[0][2] + v.y * m[1][2]) + v.z * m[2][2]) + v.w * m[3][2],
+			((v.x * m[0][3] + v.y * m[1][3]) + v.z * m[2][3]) + v.w * m[3][3]);
+#else
+		return m * v;
+#endif
+	}
+
+	static float GLMVec4Dot(const glm::vec4& a, const glm::vec4& b)
+	{
+#if USE_DETERMINISTIC_MATH
+		return ((a.x * b.x + a.y * b.y) + a.z * b.z) + a.w * b.w;
+#else
+		return glm::dot(a, b);
+#endif
+	}
+};
+#else
+class BezierMath
+{
+public:
+	static void D3DXVec4Transform(D3DXVECTOR4* out, const D3DXVECTOR4* v, const D3DXMATRIX* m)
+	{
+#if USE_DETERMINISTIC_MATH
+		const float x = v->x, y = v->y, z = v->z, w = v->w;
+		out->x = ((x * m->m[0][0] + y * m->m[1][0]) + z * m->m[2][0]) + w * m->m[3][0];
+		out->y = ((x * m->m[0][1] + y * m->m[1][1]) + z * m->m[2][1]) + w * m->m[3][1];
+		out->z = ((x * m->m[0][2] + y * m->m[1][2]) + z * m->m[2][2]) + w * m->m[3][2];
+		out->w = ((x * m->m[0][3] + y * m->m[1][3]) + z * m->m[2][3]) + w * m->m[3][3];
+#else
+		::D3DXVec4Transform(out, v, m);
+#endif
+	}
+
+	static float D3DXVec4Dot(const D3DXVECTOR4* a, const D3DXVECTOR4* b)
+	{
+#if USE_DETERMINISTIC_MATH
+		return ((a->x * b->x + a->y * b->y) + a->z * b->z) + a->w * b->w;
+#else
+		return ::D3DXVec4Dot(a, b);
+#endif
+	}
+};
+#endif
+
 class BezierSegment
 {
 	protected:
