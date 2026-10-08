@@ -54,11 +54,11 @@
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
-// GeneralsX @build BenderAI 10/02/2026 - Need LoadLibrary/GetProcAddress/FreeLibrary for dynamic loading
-#include "module_compat.h"
-// GeneralsX @build felipebraz 16/02/2026 - Need dlerror() for dlopen() error reporting on Linux
+// Use POSIX dynamic-library compatibility only outside native Windows.
+// Windows already provides LoadLibrary/GetProcAddress/FreeLibrary in its SDK.
 #ifndef _WIN32
-#include <dlfcn.h>
+#include "module_compat.h"
+#include <dlfcn.h> // dlerror() diagnostics on Unix
 #endif
 // GeneralsX @build BenderAI 10/02/2026 - Embedded browser Windows-only (requires COM LPDISPATCH)
 #ifdef _WIN32
