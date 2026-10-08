@@ -52,9 +52,10 @@ typedef signed short	sint16;
     typedef uint32_t uint32;
     typedef int32_t  sint32;
 #else
-    // Windows: long is always 32-bit
-    typedef unsigned long uint32;
-    typedef signed long   sint32;
+    // Match SteamNetworkingSockets' uint32 type on MSVC.
+    // Both int and long are 32-bit on Windows, but distinct C++ types.
+    typedef unsigned int uint32;
+    typedef signed long  sint32;
 #endif
 
 typedef unsigned int    uint;
