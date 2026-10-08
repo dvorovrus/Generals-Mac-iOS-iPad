@@ -63,7 +63,23 @@ jobs:
       - name: Build Windows Online reference
         shell: pwsh
         run: |
-          cmake --build --preset win32-vcpkg-online --parallel 4
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          # Ninja's -k 0 keeps compiling independent targets after an error, so
+          # one CI run exposes the complete batch of Windows portability errors.
+          # Keep the original exit code: diagnostics must not turn a broken build green.
+          cmake --build --preset win32-vcpkg-online --parallel 4 -- -k 0 2>&1 |
+            Tee-Object -FilePath artifacts/windows-online-build.log
+          $buildExitCode = $LASTEXITCODE
+          if ($buildExitCode -ne 0) { exit $buildExitCode }
+
+      - name: Upload failed Windows build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: GeneralsZH-Online-Windows-build-diagnostics
+          path: artifacts/windows-online-build.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Collect reference runtime
         shell: pwsh
