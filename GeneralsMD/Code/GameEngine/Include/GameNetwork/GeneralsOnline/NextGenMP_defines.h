@@ -97,9 +97,9 @@ inline int FRAME_GROUPING_CAP = 64;
 
 #define GENERALS_ONLINE_USE_LARGER_DMAPOOL 1
 
-#if !_DEBUG && defined(_WIN32)
-#define GENERALS_ONLINE_USE_SENTRY 1
-#endif
+// Sentry is optional. Only define GENERALS_ONLINE_USE_SENTRY explicitly in
+// builds that provide both the sentry-native headers and the linked library.
+// The Windows Online reference build intentionally does not bundle this SDK.
 
 #define GENERALS_ONLINE_WIDESCREEN 1
 
