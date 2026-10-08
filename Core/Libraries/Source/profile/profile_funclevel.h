@@ -48,11 +48,11 @@
 #include <Utility/intrin_compat.h>
 #include <cstdint>
 
-// GeneralsX @bugfix fbraz 03/02/2026 Use guard macro to prevent typedef conflicts
-#ifndef _INT64_TYPES_DEFINED
+// MSVC provides __int64 and _int64 natively; keep the Unix compatibility
+// alias separate from the _int64 alias already defined above.
+#if !defined(_MSC_VER) && !defined(_INT64_TYPES_DEFINED)
 	#define _INT64_TYPES_DEFINED
 	typedef int64_t __int64;
-	typedef int64_t _int64;
 #endif
 
 /**

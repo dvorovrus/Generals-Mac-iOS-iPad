@@ -32,7 +32,8 @@
 #include <Utility/intrin_compat.h>
 #include <cstdint>
 
-#ifndef _int64
+// _int64 is native to MSVC and cannot be redefined with a typedef.
+#if !defined(_MSC_VER) && !defined(_int64)
 	typedef int64_t _int64;
 #endif
 
