@@ -70,7 +70,7 @@ set(WW3D2_SRC
     #font3d.h
     #formconv.cpp
     #formconv.h
-    #FramGrab.cpp
+    FramGrab.cpp
     #framgrab.h
     #hanim.cpp
     #hanim.h
