@@ -5,9 +5,8 @@
 #include "GameNetwork/GeneralsOnline/OnlineServices_Auth.h"
 #include "GameNetwork/GeneralsOnline/OnlineServices_LobbyInterface.h"
 
-std::atomic<bool> AnticheatPlugInterface::g_bPendingExitLobby = false;
-
 #if defined(GENERALS_ONLINE_USE_PLUGINS_INTERFACE)
+std::atomic<bool> AnticheatPlugInterface::g_bPendingExitLobby = false;
 
 #define AC_PLUGIN_LOAD_FUNCTION(funcName) \
     AnticheatPlugInterface::Functions.fn##funcName = (FuncDef##funcName)GetProcAddress(g_hACPluginModule, #funcName); \

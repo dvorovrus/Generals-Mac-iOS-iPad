@@ -282,7 +282,7 @@ namespace
 				if (match->exe_crc != TheGlobalData->m_exeCRC || match->ini_crc != TheGlobalData->m_iniCRC)
 				{
 					char detail[192];
-					std::snprintf(detail, sizeof(detail),
+					::snprintf(detail, sizeof(detail),
 						"target room CRC mismatch: local exe=0x%08X ini=0x%08X remote exe=0x%08X ini=0x%08X",
 						TheGlobalData->m_exeCRC, TheGlobalData->m_iniCRC, match->exe_crc, match->ini_crc);
 					Finish(false, detail);

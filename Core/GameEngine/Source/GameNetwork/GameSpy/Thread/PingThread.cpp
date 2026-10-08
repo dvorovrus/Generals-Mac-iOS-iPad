@@ -290,6 +290,7 @@ void PingThreadClass::Thread_Function()
 			else
 			{
 				in_addr *hostNode = (in_addr *) hostStruct->h_addr;
+				IP = hostNode->s_addr;
 				}
 			}
 

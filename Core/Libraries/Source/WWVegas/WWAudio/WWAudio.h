@@ -38,6 +38,7 @@
 
 #include "always.h"
 #ifdef _WIN32
+#include <windows.h>   // WinMM declarations depend on Windows base types.
 #include <mmsystem.h>  // WinMM wave types required by Miles (LPHWAVEOUT, LPWAVEFORMAT)
 #endif
 

@@ -82,6 +82,7 @@
 // Horrible reference, but we really, really need to know if we are windowed.
 extern bool DX8Wrapper_IsWindowed;
 extern HWND ApplicationHWnd;
+extern const Bool TheSystemIsUnicode;
 
 extern const char *gAppPrefix; /// So WB can have a different log file name.
 
