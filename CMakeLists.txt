@@ -40,11 +40,13 @@ else()
     project(genzh LANGUAGES C CXX)
 endif()
 
-# GeneralsX @build BenderAI 10/02/2026
-# Linux port: Make CompatLib headers globally accessible so Core libraries (WWLib, WWMath, etc.)
-# can access platform compatibility types when building for non-Windows platforms
+# Unix ports need compatibility headers; the Windows SDK must never see the
+# Unix windows.h shim. Keep that filename in a Unix-only include directory.
 if(UNIX)
-    include_directories(${CMAKE_SOURCE_DIR}/GeneralsMD/Code/CompatLib/Include)
+    include_directories(
+        ${CMAKE_SOURCE_DIR}/GeneralsMD/Code/CompatLib/Include
+        ${CMAKE_SOURCE_DIR}/GeneralsMD/Code/CompatLib/Include/posix
+    )
 endif()
 
 # Compiler cache (ccache) – must be included before compilers.cmake so the
