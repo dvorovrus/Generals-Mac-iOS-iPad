@@ -70,7 +70,7 @@ set(WW3D2_SRC
     #font3d.h
     #formconv.cpp
     #formconv.h
-    FramGrab.cpp
+    # FrameGrab uses Win32 AVI APIs; its implementation lives in Core/WW3D2.
     #framgrab.h
     #hanim.cpp
     #hanim.h
@@ -232,6 +232,12 @@ set(WW3D2_SRC
     #ww3dids.h
     #ww3dtrig.h
 )
+
+if(WIN32)
+    list(APPEND WW3D2_SRC
+        ${CMAKE_SOURCE_DIR}/Core/Libraries/Source/WWVegas/WW3D2/FramGrab.cpp
+    )
+endif()
 
 add_library(z_ww3d2 STATIC)
 set_target_properties(z_ww3d2 PROPERTIES OUTPUT_NAME ww3d2)

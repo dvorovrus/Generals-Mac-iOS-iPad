@@ -34,6 +34,7 @@
         "SAGE_USE_GENERALS_ONLINE": "ON",
         "SAGE_USE_DETERMINISTIC_MATH": "ON",
         "SAGE_USE_DX8": "ON",
+        "SAGE_USE_GLM": "ON",
         "SAGE_UPDATE_CHECK": "OFF",
         "VCPKG_MANIFEST_FEATURES": "generals-online"
       }

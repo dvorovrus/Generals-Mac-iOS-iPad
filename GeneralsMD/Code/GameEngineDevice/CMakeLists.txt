@@ -192,7 +192,7 @@ if(WIN32)
     list(APPEND GAMEENGINEDEVICE_SRC
 #        Source/Win32Device/Common/Win32BIGFile.cpp
 #        Source/Win32Device/Common/Win32BIGFileSystem.cpp
-        Source/MilesAudioDevice/MilesAudioManager.cpp
+        ${CMAKE_SOURCE_DIR}/Core/GameEngineDevice/Source/MilesAudioDevice/MilesAudioManager.cpp
         Source/VideoDevice/Bink/BinkVideoPlayer.cpp
         Source/Win32Device/Common/Win32GameEngine.cpp
 #        Source/Win32Device/Common/Win32LocalFile.cpp
