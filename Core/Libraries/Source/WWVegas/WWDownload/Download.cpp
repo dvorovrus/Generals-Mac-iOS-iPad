@@ -19,6 +19,7 @@
 // Download.cpp : Implementation of CDownload
 #include "DownloadDebug.h"
 #include "Download.h"
+#include "stringex.h" // Cross-platform strlcpy implementation
 
 // GeneralsX @refactor BenderAI 10/02/2026
 // Added platform guards for Windows-specific headers

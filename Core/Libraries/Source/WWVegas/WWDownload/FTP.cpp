@@ -25,12 +25,15 @@
 // GeneralsX @build fbraz 11/02/2026
 // Must include class declaration BEFORE implementation
 #include "WWDownload/ftp.h"
+#include "WWCommon.h" // ARRAY_SIZE and strlcpy/strlcat declarations
 
 // GeneralsX @build fbraz 10/02/2026
 // Platform headers with socket_compat.h providing Winsock → POSIX mapping
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/timeb.h>
+#include <sys/stat.h> // _S_IWRITE/_S_IREAD on Windows
+#include <time.h> // time()
 #include <stdlib.h>
 #ifdef _WIN32
 #include <process.h>
@@ -1024,8 +1027,12 @@ unsigned long MyIPAddress( int sockfd )
 
 	if( sockfd != -1 )
 	{
-		// GeneralsX @TheSuperHackers @build BenderAI 11/02/2026 Use socklen_t for getsockname (POSIX compatibility)
+		// Winsock takes int*, whereas POSIX getsockname takes socklen_t*.
+#ifdef _WIN32
+		int addrlen = sizeof( sin );
+#else
 		socklen_t addrlen = sizeof( sin );
+#endif
 		getsockname( sockfd, (struct sockaddr *)&sin, &addrlen );
 
 		// GeneralsX @TheSuperHackers @build BenderAI 11/02/2026 POSIX in_addr uses s_addr directly (not S_un.S_addr)
@@ -1147,8 +1154,12 @@ int Cftp::SendNewPort()
 		}
 
 
-		// GeneralsX @TheSuperHackers @build BenderAI 11/02/2026 Use socklen_t for getsockname (POSIX compatibility)
-		socklen_t addrlen = sizeof( m_DataSockAddr);
+		// Winsock takes int*, whereas POSIX getsockname takes socklen_t*.
+#ifdef _WIN32
+		int addrlen = sizeof( m_DataSockAddr );
+#else
+		socklen_t addrlen = sizeof( m_DataSockAddr );
+#endif
 
 		getsockname( m_iDataSocket, (struct sockaddr *)&m_DataSockAddr, &addrlen );
 
