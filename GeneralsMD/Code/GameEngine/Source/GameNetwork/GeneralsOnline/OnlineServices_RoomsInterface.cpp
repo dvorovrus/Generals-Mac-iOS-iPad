@@ -196,12 +196,11 @@ void WebSocket::Connect(const char* url, bool bIsReconnect, std::function<void(v
 			return;
 		}
 
-		char szHeaderBuffer[8192] = { 0 };
-		std::snprintf(szHeaderBuffer, sizeof(szHeaderBuffer), "Authorization: Bearer %s", pAuthInterface->GetAuthToken().c_str());
-		m_pHeaders = curl_slist_append(m_pHeaders, szHeaderBuffer);
+		// Avoid platform-specific snprintf macros and truncating long tokens.
+		const std::string authHeader = std::string("Authorization: Bearer ") + pAuthInterface->GetAuthToken();
+		m_pHeaders = curl_slist_append(m_pHeaders, authHeader.c_str());
 
-        std::snprintf(szHeaderBuffer, sizeof(szHeaderBuffer), "is-reconnect: %s", bIsReconnect ? "true": "false");
-		m_pHeaders = curl_slist_append(m_pHeaders, szHeaderBuffer);
+		m_pHeaders = curl_slist_append(m_pHeaders, bIsReconnect ? "is-reconnect: true" : "is-reconnect: false");
 
 		curl_easy_setopt(m_pCurlWS, CURLOPT_HTTPHEADER, m_pHeaders);
 
