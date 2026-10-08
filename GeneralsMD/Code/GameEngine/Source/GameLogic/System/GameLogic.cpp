@@ -47,8 +47,12 @@
 #include "Common/GameState.h"
 
 #if DEEP_CRC_TO_MEMORY
+#if defined(_WIN32)
+#include <windows.h> // Native Windows OS and memory diagnostics
+#else
 #include <sys/utsname.h>
 #include <SDL3/SDL.h>
+#endif
 #endif
 #include "Common/GameUtility.h"
 #include "Common/INI.h"
@@ -5675,8 +5679,23 @@ void GameLogic::storeCRCBuffer(size_t size)
 void GameLogic::writeCRCBuffersToDisk(UnsignedInt frame) const
 {
 	AsciiString str;
-	// GeneralsX: Generate OS/Arch header
+	// GeneralsX: Generate OS/Arch header without requiring SDL/Unix APIs on Windows.
 	AsciiString headerStr;
+#if defined(_WIN32)
+	SYSTEM_INFO systemInfo{};
+	GetSystemInfo(&systemInfo);
+	MEMORYSTATUSEX memoryInfo{};
+	memoryInfo.dwLength = sizeof(memoryInfo);
+	const bool hasMemoryInfo = (GlobalMemoryStatusEx(&memoryInfo) != FALSE);
+	const char* architecture = "unknown";
+	if (systemInfo.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_INTEL)
+		architecture = "x86";
+	else if (systemInfo.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)
+		architecture = "x64";
+	headerStr.format("GeneralsX: Windows\nArch: %s\nCPU Cores: %lu\nRAM: %llu MB\n\n",
+		architecture, static_cast<unsigned long>(systemInfo.dwNumberOfProcessors),
+		hasMemoryInfo ? static_cast<unsigned long long>(memoryInfo.ullTotalPhys / (1024ULL * 1024ULL)) : 0ULL);
+#else
 	struct utsname sysInfo;
 	if (uname(&sysInfo) == 0) {
 		headerStr.format("GeneralsX: %s %s (%s)\nArch: %s\nCPU Cores: %d\nRAM: %d MB\n\n",
@@ -5685,6 +5704,7 @@ void GameLogic::writeCRCBuffersToDisk(UnsignedInt frame) const
 	} else {
 		headerStr = "GeneralsX: Unknown OS/Arch\n\n";
 	}
+#endif
 
 	// Format filename as deep_crc_YYYY-MM-DD-HH-MM-SS.bin inside user data Debug dir
 	time_t t = time(nullptr);
