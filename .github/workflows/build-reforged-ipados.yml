@@ -3,10 +3,6 @@ on:
   workflow_dispatch:
   push:
     branches: [feature/reforged-ios]
-    paths:
-      - 'ios/reforged/**'
-      - 'scripts/build/ios/build-reforged-ipados.sh'
-      - '.github/workflows/build-reforged-ipados.yml'
 permissions:
   contents: read
 concurrency:
