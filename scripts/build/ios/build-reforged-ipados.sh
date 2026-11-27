@@ -41,7 +41,12 @@ cmake -S "$CODE" -B "$BUILD" -G Ninja \
   -DZH_HOST_FINGERPRINT="$workspace/build_fingerprint"
 cmake --build "$BUILD" --target generals zh_overlay
 
-binary="$BUILD/generals"
+# GeneralsX @bugfix Codex 27/11/2026 CMake's iOS MACOSX_BUNDLE target places the executable inside generals.app.
+binary="$BUILD/generals.app/generals"
+if [[ ! -f "$binary" ]]; then
+  echo "Expected Reforged iPadOS executable not found: $binary" >&2
+  exit 1
+fi
 [[ "$(xcrun lipo -archs "$binary")" == arm64 ]]
 xcrun vtool -show-build "$binary" | awk '$1 == "platform" && $2 == "IOS" { found=1 } END { exit !found }'
 if ! xcrun otool -L "$binary" | awk 'NR > 1 && $1 !~ /^\/(System\/Library\/|usr\/lib\/)/ { bad=1 } END { exit bad }'; then
