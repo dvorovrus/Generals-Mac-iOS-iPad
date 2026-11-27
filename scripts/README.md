@@ -30,6 +30,9 @@ Scripts for Linux native and Docker-based builds:
 #### `build/windows/` - Windows Build (Pending)
 Reserved for modern Windows toolchain (VS2022 + SDL3 + DXVK + OpenAL)
 
+#### `build/ios/` - iPadOS Builds
+- `build-reforged-ipados.sh` - Build an unsigned experimental Reforged device app on macOS with Xcode, CMake, and Ninja. See the [Reforged build guide](../docs/BUILD/REFORGED_IPADOS.md).
+
 ### `env/` - Environment Setup
 
 #### `env/docker/` - Docker Configuration

@@ -1,0 +1,61 @@
+name: Reforged | Experimental iPadOS
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/reforged-ios]
+    paths:
+      - 'ios/reforged/**'
+      - 'scripts/build/ios/build-reforged-ipados.sh'
+      - '.github/workflows/build-reforged-ipados.yml'
+permissions:
+  contents: read
+concurrency:
+  group: reforged-ipados-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Prepare toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          brew install cmake ninja pkg-config autoconf automake libtool nasm meson
+          python3 --version
+      - name: Build experimental iPadOS engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p logs
+          bash scripts/build/ios/build-reforged-ipados.sh 2>&1 | tee logs/reforged-build.log
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find build/reforged-ipados -maxdepth 2 -type d -name Reforged-iPad.app -print)"
+          test -n "$app"
+          test -d "$app"
+          mkdir -p dist/Payload
+          ditto "$app" dist/Payload/Reforged-iPad.app
+          (cd dist && zip -qry Reforged-iPad-unsigned.ipa Payload)
+          unzip -t dist/Reforged-iPad-unsigned.ipa
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reforged-iPad-unsigned
+          path: dist/Reforged-iPad-unsigned.ipa
+          if-no-files-found: error
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reforged-iPad-build-logs
+          path: |
+            logs/
+            build/reforged-ipados/run.*/device/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: warn

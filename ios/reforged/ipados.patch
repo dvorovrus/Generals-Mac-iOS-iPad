@@ -1,0 +1,232 @@
+diff --git a/GeneralsMD/Code/CMakeLists.txt b/GeneralsMD/Code/CMakeLists.txt
+index 9f4b542..4060368 100644
+--- a/GeneralsMD/Code/CMakeLists.txt
++++ b/GeneralsMD/Code/CMakeLists.txt
+@@ -12,6 +12,14 @@ endif()
+ 
+ project(GeneralsMD CXX C)
+ 
++# GeneralsX @build Codex 27/11/2026 Cross-compile the isolated Reforged runtime.
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++  set(ZH_PLATFORM_IOS TRUE)
++  if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR NOT EXISTS "${ZH_HOST_FINGERPRINT}")
++    message(FATAL_ERROR "Use build-reforged-ipados.sh for the arm64 device build.")
++  endif()
++endif()
++
+ # Which operating system this build is for.  MSVC used to answer that question too, because for
+ # twenty years there was only one answer, and this file used the two interchangeably from its first
+ # line to its last.  They are different questions now.  Everything that is really about the
+@@ -904,7 +912,12 @@ if(ZH_PLATFORM_POSIX)
+                    SDL_SENSOR SDL_TRAY SDL_OPENGL SDL_OPENGLES)
+     set(${_sdl_off} OFF CACHE BOOL "" FORCE)
+   endforeach()
+-  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU SDL_DIALOG)
++  if(ZH_PLATFORM_IOS)
++    set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
++  else()
++    set(SDL_DIALOG ON CACHE BOOL "" FORCE)
++  endif()
++  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU)
+     set(${_sdl_on} ON CACHE BOOL "" FORCE)
+   endforeach()
+   add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)
+@@ -918,6 +931,11 @@ if(ZH_PLATFORM_POSIX)
+   # libm on every POSIX system: separate from libc on Linux and the BSDs, part of libSystem on macOS,
+   # where -lm is accepted and does nothing.  Not keyed on Linux, so the next platform needs no edit.
+   target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
++  if(ZH_PLATFORM_IOS)
++    target_compile_definitions(miniaudio PUBLIC MA_NO_RUNTIME_LINKING)
++    target_link_libraries(miniaudio INTERFACE "-framework CoreAudio" "-framework AudioToolbox"
++      "-framework CoreFoundation" "-framework AVFoundation")
++  endif()
+ 
+   # ---- The shader generators and what compiles their SDL3 GPU target (decision 4, D3) -----------
+   # The generators are string building over a description; since ffstate.h they need nothing from
+@@ -1176,7 +1194,12 @@ endif()
+ # the files BuildFingerprint.manifest lists (the tracked sources: Tools/fingerprint-manifest.sh writes it,
+ # build_fingerprint_manifest checks it), line endings normalised.  The header is rewritten only when the
+ # value changes, so a rebuild with nothing changed runs nothing and recompiles nothing.
+-add_executable(build_fingerprint ${CMAKE_CURRENT_SOURCE_DIR}/Tools/fingerprint/build_fingerprint.cpp)
++if(ZH_PLATFORM_IOS)
++  add_executable(build_fingerprint IMPORTED)
++  set_target_properties(build_fingerprint PROPERTIES IMPORTED_LOCATION "${ZH_HOST_FINGERPRINT}")
++else()
++  add_executable(build_fingerprint ${CMAKE_CURRENT_SOURCE_DIR}/Tools/fingerprint/build_fingerprint.cpp)
++endif()
+ set(ZH_FINGERPRINT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/BuildFingerprint.manifest)
+ set(ZH_FINGERPRINT_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/fingerprint)
+ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ZH_FINGERPRINT_MANIFEST})
+@@ -1186,7 +1209,7 @@ add_custom_command(
+   OUTPUT ${ZH_FINGERPRINT_DIR}/BuildFingerprint.stamp
+   BYPRODUCTS ${ZH_FINGERPRINT_DIR}/BuildFingerprint.h
+   COMMAND ${CMAKE_COMMAND} -E make_directory ${ZH_FINGERPRINT_DIR}
+-  COMMAND build_fingerprint ${CMAKE_CURRENT_SOURCE_DIR} ${ZH_FINGERPRINT_MANIFEST} ${ZH_FINGERPRINT_DIR}/BuildFingerprint.h
++  COMMAND $<TARGET_FILE:build_fingerprint> ${CMAKE_CURRENT_SOURCE_DIR} ${ZH_FINGERPRINT_MANIFEST} ${ZH_FINGERPRINT_DIR}/BuildFingerprint.h
+   COMMAND ${CMAKE_COMMAND} -E touch ${ZH_FINGERPRINT_DIR}/BuildFingerprint.stamp
+   DEPENDS build_fingerprint ${ZH_FINGERPRINT_MANIFEST} ${ZH_FINGERPRINT_FILES}
+   COMMENT "Build fingerprint over the tracked sources (N1)" VERBATIM)
+@@ -1798,7 +1821,9 @@ if(ZH_PLATFORM_POSIX)
+   set(FFMPEG_POSIX_LIBS ${FFMPEG_POSIX}/lib/libavformat.a ${FFMPEG_POSIX}/lib/libavcodec.a
+     ${FFMPEG_POSIX}/lib/libswscale.a ${FFMPEG_POSIX}/lib/libswresample.a ${FFMPEG_POSIX}/lib/libavutil.a)
+   set(FFMPEG_POSIX_CFLAGS "")
+-  if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
++  if(ZH_PLATFORM_IOS)
++    set(FFMPEG_POSIX_CFLAGS "-target arm64-apple-ios${CMAKE_OSX_DEPLOYMENT_TARGET}")
++  elseif(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+     set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+   endif()
+   # The SDK CMake gives our own targets.  Only /usr/bin/cc, the xcrun shim, finds one by itself; CMake may
+@@ -2308,7 +2333,7 @@ if(ZH_PLATFORM_POSIX)
+   # the user data folder's ReforgedArt when something has put it there, the licences checked against generals'
+   # link line, the HUD directive, an ad-hoc signature, verified).  Outside ALL: build it with `ninja macos_app`.
+   # The bundle id belongs to whoever ships; the default is the project's home (the README's).
+-  if(APPLE)
++  if(ZH_PLATFORM_MACOS)
+     set(ZH_APP_BUNDLE_ID "io.github.olcayseygan.zero-hour-reforged" CACHE STRING "CFBundleIdentifier of the macOS app")
+     set(ZH_APP_ARGS --generals $<TARGET_FILE:generals> --overlay ${CMAKE_BINARY_DIR}/overlay
+         --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID}
+diff --git a/GeneralsMD/Code/GameEngineDevice/Source/SdlDevice/Common/SdlPanel.cpp b/GeneralsMD/Code/GameEngineDevice/Source/SdlDevice/Common/SdlPanel.cpp
+index c0518c5..36852eb 100644
+--- a/GeneralsMD/Code/GameEngineDevice/Source/SdlDevice/Common/SdlPanel.cpp
++++ b/GeneralsMD/Code/GameEngineDevice/Source/SdlDevice/Common/SdlPanel.cpp
+@@ -22,7 +22,12 @@
+ 
+ #include <math.h>
+ 
++// GeneralsX @build Codex 27/11/2026 Use SDL display modes on iPadOS.
+ #if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
++
++#if defined(__APPLE__) && TARGET_OS_OSX
+ #include <CoreGraphics/CoreGraphics.h>
+ #include <IOKit/graphics/IOGraphicsTypes.h>
+ 
+diff --git a/GeneralsMD/Code/Main/PosixMain.cpp b/GeneralsMD/Code/Main/PosixMain.cpp
+index b072704..0a5f553 100644
+--- a/GeneralsMD/Code/Main/PosixMain.cpp
++++ b/GeneralsMD/Code/Main/PosixMain.cpp
+@@ -44,6 +44,10 @@
+ 	 read-only: a relative write, that deletion included, is refused and logged, so rule 9 holds by
+ 	 construction as well as by how the game is run. */
+ 
++// GeneralsX @build Codex 27/11/2026 Keep SDL as the sole owner of UIApplicationMain.
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
+ #include <SDL3/SDL_main.h>	// SDL3's main: on macOS and Linux an ordinary main
+ 
+ #include "PreRTS.h"
+@@ -112,6 +116,7 @@ static SdlGameEngine::WindowRequest s_windowRequest = { FALSE, FALSE, FALSE, FAL
+ // WinMain's GENERALS_GUID, the name of its one-copy mutex; here the name of a lock file.
+ #define GENERALS_GUID "685EAFF2-3216-4265-B047-251C5F4B82F3"
+ 
++#if !defined(TARGET_OS_IOS) || !TARGET_OS_IOS
+ // The player's choice of folder, through SDL's native dialog (NSOpenPanel on macOS).  The dialog answers
+ // asynchronously, maybe on another thread, so the answer is handed over under a lock.
+ struct FolderAnswer
+@@ -139,7 +144,7 @@ static void SDLCALL onFolderChosen( void *userdata, const char * const *filelist
+ 	}
+ }
+ 
+-#if defined(__APPLE__)
++#if defined(__APPLE__) && TARGET_OS_OSX
+ /** Brings this app to the front.  The chooser runs before any window exists, and without one nothing
+ 	* activates the app (SDL does it when it shows a window, and not at launch on macOS 14 and later), so
+ 	* its message box and its folder panel - modal, owned by no window - would open behind whatever app
+@@ -167,6 +172,8 @@ static void activateThisApp()
+ static void activateThisApp() {}
+ #endif
+ 
++#endif
++
+ /** Whether this runs in the Steam Deck's Game Mode (P3): gamescope's session names itself in
+ 	* XDG_CURRENT_DESKTOP, and Steam's gamepad interface sets SteamGamepadUI for what it starts.  A file
+ 	* dialog may not show there, so PosixMain asks for -root in Steam's launch options instead.  (Both names
+@@ -185,6 +192,7 @@ static const char GAME_MODE_NO_ROOT[] =
+ 	"with the path of your own Zero Hour folder (the one with INIZH.big in it) between the quotes. Or start "
+ 	"the game once from Desktop Mode to choose the folder there; it is remembered after that.";
+ 
++#if !defined(TARGET_OS_IOS) || !TARGET_OS_IOS
+ /** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
+ 	* the folder dialog.  FALSE when the player cancels, or when the dialog cannot be shown; then the reason
+ 	* goes into the std::string the context points at, for the message the caller shows. */
+@@ -225,6 +233,8 @@ static bool chooseFolderWithSdl( PosixInstallQuestion question, const std::strin
+ 	return answer.state == 1;
+ }
+ 
++#endif
++
+ /** The chooser's stand-in for tests (no test run may need a human at any machine).
+ 	* ZH_TEST_CHOOSER_ANSWERS names a file of answers, one folder a line; each time the chooser is asked it
+ 	* takes the next line, and "cancel" or the end of the file cancels.  Nothing is shown: the reason the last
+@@ -303,7 +313,11 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
+ 	request.registryFile = findRegistryFile( buffer, sizeof( buffer ) ) ? buffer : "";
+ 	std::string dialogFailure;
+ 	const bool gameMode = inSteamGameMode();
++	#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
++	request.chooser = NULL;
++#else
+ 	request.chooser = unattended || gameMode ? NULL : chooseFolderWithSdl;
++#endif
+ 	request.chooserContext = &dialogFailure;
+ 	ScriptedAnswers script;
+ 	const char *answers = getenv( "ZH_TEST_CHOOSER_ANSWERS" );
+@@ -331,7 +345,9 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
+ 		fprintf( stderr, "generals: %s\n", problem.c_str() );
+ 		if (request.insideAppBundle && !unattended && !scripted)
+ 		{
++#if !defined(TARGET_OS_IOS) || !TARGET_OS_IOS
+ 			activateThisApp();
++#endif
+ 			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Zero Hour Reforged", problem.c_str(), NULL );
+ 		}
+ 		return FALSE;
+@@ -437,6 +453,35 @@ static Bool takeOneCopyLock( void )
+ //=============================================================================
+ int main( int argc, char *argv[] )
+ {
++#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
++	// Files exposes Documents. Keep writable game state under Application Support.
++	const char *home = getenv( "HOME" );
++	const char *bundle = SDL_GetBasePath();
++	if (home == NULL || home[0] != '/' || bundle == NULL)
++		return 1;
++	std::string retail = std::string( home ) + "/Documents/GameData";
++	std::string state = std::string( home ) + "/Library/Application Support/Zero Hour Reforged";
++	std::string overlay = std::string( bundle ) + "Overlay";
++	if (setenv( "ZH_USER_DATA_DIR", state.c_str(), 1 ) != 0)
++		return 1;
++	const std::vector<std::string> forbidden = { bundle, overlay };
++	const PosixInstallCheck check = PosixCheckInstallFolder( retail, forbidden );
++	if (check != INSTALL_OK)
++	{
++		const std::string problem = PosixInstallCheckMessage( check, retail );
++		fprintf( stderr, "%s\n", problem.c_str() );
++		if (SDL_Init( SDL_INIT_VIDEO ))
++			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Place retail files in Documents/GameData",
++				problem.c_str(), NULL );
++		return 1;
++	}
++	char rootFlag[] = "-root";
++	char overlayFlag[] = "-overlay";
++	char *deviceArgs[] = { argv[0], rootFlag, &retail[0], overlayFlag, &overlay[0], NULL };
++	argc = 5;
++	argv = deviceArgs;
++	SDL_SetHint( SDL_HINT_TOUCH_MOUSE_EVENTS, "1" );
++#endif
+ 	GameSpeed_markMainStarted();
+ #if defined(_DEBUG) || defined(_INTERNAL)
+ 	{
+diff --git a/GeneralsMD/Code/Tools/vendor.sh b/GeneralsMD/Code/Tools/vendor.sh
+index ef4c030..333f2b1 100755
+--- a/GeneralsMD/Code/Tools/vendor.sh
++++ b/GeneralsMD/Code/Tools/vendor.sh
+@@ -759,5 +759,5 @@ install_shadercross
+ install_freetype
+ install_ffmpeg
+ install_mbedtls
+-install_art
++if [ "${ZH_SKIP_ART:-0}" != 1 ]; then install_art; fi
+ step 'everything the build needs is in place'
