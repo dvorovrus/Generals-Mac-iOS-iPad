@@ -31,11 +31,14 @@ index 9f4b542..4060368 100644
      set(${_sdl_on} ON CACHE BOOL "" FORCE)
    endforeach()
    add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)
-@@ -918,6 +931,11 @@ if(ZH_PLATFORM_POSIX)
+@@ -918,6 +931,14 @@ if(ZH_PLATFORM_POSIX)
    # libm on every POSIX system: separate from libc on Linux and the BSDs, part of libSystem on macOS,
    # where -lm is accepted and does nothing.  Not keyed on Linux, so the next platform needs no edit.
    target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
 +  if(ZH_PLATFORM_IOS)
++    # GeneralsX @build Codex 27/11/2026 AVFoundation imports Objective-C syntax on iPhoneOS.
++    enable_language(OBJC)
++    set_source_files_properties(${LIBSRC}/miniaudio/miniaudio.c PROPERTIES LANGUAGE OBJC)
 +    target_compile_definitions(miniaudio PUBLIC MA_NO_RUNTIME_LINKING)
 +    target_link_libraries(miniaudio INTERFACE "-framework CoreAudio" "-framework AudioToolbox"
 +      "-framework CoreFoundation" "-framework AVFoundation")
