@@ -56,7 +56,17 @@ fi
 
 # Use upstream's link-line license inventory so every static dependency is covered.
 . "$CODE/Tools/package-common.sh"
-libraries="$(package_link_libraries "$BUILD/build.ninja" "$workspace/link-libs.txt")"
+# GeneralsX @bugfix Codex 28/11/2026 The upstream helper expects the desktop target name.
+# Isolate the actual iOS executable rule and normalize its name in an inventory-only
+# copy. Keep all LINK_LIBRARIES values intact and never alter the generated build.
+link_manifest="$workspace/package-link.ninja"
+sed -n '/^build generals\.app\/generals: CXX_EXECUTABLE_LINKER/,/^$/p' "$BUILD/build.ninja" \
+  | sed '1s|^build generals\.app/generals:|build generals:|' > "$link_manifest"
+if [[ "$(grep -c '^build generals: CXX_EXECUTABLE_LINKER' "$link_manifest" || true)" != 1 ]]; then
+  echo "Expected exactly one iOS executable linker rule in $BUILD/build.ninja" >&2
+  exit 1
+fi
+libraries="$(package_link_libraries "$link_manifest" "$workspace/link-libs.txt")"
 [[ -n "$libraries" ]]
 library_names=()
 while IFS= read -r library; do library_names+=("$library"); done <<< "$libraries"
